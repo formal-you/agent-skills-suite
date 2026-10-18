@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.5] - 2026-10-19
+
+### Changed
+
+- **Discovery stage in AGENTS.md**: the always-loaded summary now documents the PRD and technical-spec
+  stages before task delivery: PM + `prd-generator` -> PRD artifacts, Architect + `spec-generator` ->
+  ADRs/tech spec, then Planner + `task-decomposition`. The role table gains PM and Architect rows.
+- Documented that four-perspective review, subagents and chain-of-thought are brainstorming techniques,
+  while the traceable PRD/spec is the deliverable; handoff and the distinction between
+  `task-decomposition` (author) and `plan-linter` (Gate 1 validator) are explicit.
+- Added a PRD/spec quality bar: no unresolved placeholders, stable IDs/anchors and every ADR fork
+  resolved or explicitly open before decomposition.
+
+### Fixed
+
+- The always-loaded summary previously started at task bundles and omitted the PRD/spec owners,
+  outputs, handoff and quality bar, so a low-level agent could skip discovery or misattribute the
+  Gate 1/authoring responsibilities.
+
 ## [3.4.4] - 2026-10-19
 
 ### Added

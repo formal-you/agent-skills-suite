@@ -22,19 +22,31 @@
 | `docs/`, `tasks/` | Guides/strategy; per-task bundles used by the delivery pipeline |
 
 ## 2. How to work
-### 2.1 Per-task delivery
-`idea/change -> PRD/spec -> task bundles -> Gate 1 -> Gate 2 -> Dev <-> QA -> Gate 3 -> converge`
+### 2.1 Discovery and specification
+`idea/change -> PRD (PM + prd-generator) -> ADRs/tech spec (Architect + spec-generator) -> task bundles (Planner + task-decomposition) -> Gate 1 -> Gate 2 -> Dev <-> QA -> Gate 3 -> converge`
+
+- PM / `prd-generator` writes `.specs/01-prd.md` and `.specs/01-prd/`: stable `REQ-*/CON-*/NFR-*/FORK-*`
+  IDs and `#sec-*` anchors, with open questions explicit.
+- Architect / `spec-generator` writes `.specs/adr/*.md`, `.specs/02-tech-spec.md` and
+  `.specs/02-tech-spec/`: one ADR per fork, `INV-*`/`#sec-*` IDs, no unresolved placeholders.
+- Four-perspective review, subagents and chain-of-thought are brainstorming techniques; the
+  deliverable is the traceable PRD/spec, not the deliberation itself.
+- Handoff is PRD -> spec -> task bundles. `task-decomposition` authors bundles from spec anchors;
+  `plan-linter` is the Gate 1 validator, not the author; Gate 2 `review` checks semantic alignment;
+  `change` handles bounded brownfield deviations and `converge` writes confirmed deviations back.
+
+### 2.2 Per-task delivery
+`task bundles -> Gate 1 -> Gate 2 -> Dev <-> QA -> Gate 3 -> converge`
 
 - Planner writes `01-contract.md`; Dev writes `02-dev-workspace.md`; QA writes `03-qa-verification.md`;
   `04-process.md` is derived and never hand-edited.
 - Do not start Dev without a contract, start QA without `WAITING_FOR_QA`, or merge with a red required
   gate. Completion = `QA_PASSED` + Gate 3 + clean role audit.
 
-### 2.2 Skill-suite development
+### 2.3 Skill-suite development
 
 Changes to skills, rules, templates, tools, manifests, CI or docs follow §6. Use it when improving
 the suite rather than delivering one task bundle.
-
 ## 3. Task bundles and sizing
 
 - `01` Planner-owned contract; `02` Dev handoff; `03` QA evidence/verdict; `04` derived and
@@ -46,6 +58,8 @@ the suite rather than delivering one task bundle.
 
 | Role | Rule | Owns | Never |
 | :--- | :--- | :--- | :--- |
+| PM | `.agents/rules/pm.md` | `.specs/01-prd.md`, `.specs/01-prd/` | Spec/ADRs, tasks, source, tests |
+| Architect | `.agents/rules/architect.md` | `.specs/adr/*.md`, `.specs/02-tech-spec.md`, `.specs/02-tech-spec/` | PRD content, tasks, source, tests |
 | Planner | `.agents/rules/planner.md` | Task bundles, contracts, DAG | Source, tests, `04` |
 | Dev | `.agents/rules/dev.md` | `src/**`, `02-dev-workspace.md` | Tests, contracts, other roles' docs |
 | QA | `.agents/rules/qa.md` | `tests/acceptance/**`, `tests/integration/**`, `03` | Source, `01`, `02`, `04`; uses bundled Gate 3 pre-check |
@@ -64,14 +78,16 @@ the suite rather than delivering one task bundle.
 | Mutation | `tools/mutation_gate.py` | `MUTATION_COMMAND` report on trunk; fail-closed | Normalized report |
 | Role audit | `tools/rbac_audit.py` | Changed paths vs role scope | CI status |
 
-Quality bar: `V(G) <= 10` per function (`11-15` waiver, `>15` rejected); `Test Cases >= V(G)`;
-`MSI >= 80%` (`>= 90%` for `risk_level: core`); no critical surviving mutant; no fabricated evidence.
-CI plus branch protection (L1/L2) is authoritative; prompt rules are L0 only.
+Quality bar: PRD/spec have no unresolved placeholders, stable IDs/anchors and every ADR fork resolved
+or explicitly open before decomposition. Code: `V(G) <= 10` per function (`11-15` waiver, `>15`
+rejected); `Test Cases >= V(G)`; `MSI >= 80%` (`>= 90%` for `risk_level: core`); no critical surviving
+mutant; no fabricated evidence. CI plus branch protection (L1/L2) is authoritative; prompt rules are
+L0 only.
 
 ## 6. Skill change workflow (authoring -> optimization -> tests -> git flow)
 
 This section applies when changing the suite itself (`SKILL.md`, `references/`, assets, scripts,
-rules, templates, manifests, CI or docs). It does not replace §2.1. Principles: small, reviewable,
+rules, templates, manifests, CI or docs). It does not replace §2.2. Principles: small, reviewable,
 reversible; evidence over claims; one writer per file; no bypassed gates.
 
 1. **Intent and issue (risk-based).** Behavior, security, gate, CI, release or multi-file changes
@@ -133,7 +149,7 @@ git diff --check
 ```
 
 ## 8. Maintaining this file
-- Keep this always-loaded summary under 150 lines; move detail to role rules/skill docs/guides and
+- Keep this always-loaded summary at most 165 lines; move detail to role rules/skill docs/guides and
   do not duplicate role permissions, gate internals or pinned tool versions here.
 - Changes need a docs PR, the workflow guard tests and the same review rules as §6. If this file
   conflicts with a role rule, the role rule wins for permissions; fix the stale source in the PR.
