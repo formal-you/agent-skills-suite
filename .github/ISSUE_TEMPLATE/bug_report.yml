@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a broken skill, helper script or gate behaviour
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: "Thanks for the report. Do not include secrets or private repository content."
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "VERSION file or the plugin version shown by your harness"
+    validations:
+      required: true
+  - type: dropdown
+    id: harness
+    attributes:
+      label: Harness
+      options:
+        - Claude Code (plugin)
+        - Claude Code (skills directory)
+        - Codex
+        - DeepSeek Harness (DSH)
+        - Antigravity
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour and reproduction
+      description: "Steps, command, exit code and the relevant output"
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: "Optional: test command output, JSON report or file:line references"

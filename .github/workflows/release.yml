@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Unit tests
+        run: python -m unittest discover -s tests/unit -p "test_*.py"
+      - name: Build source archive
+        run: git archive --format=zip --output="agent-skills-suite-${GITHUB_REF_NAME}.zip" HEAD
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: agent-skills-suite-*.zip
+          generate_release_notes: true

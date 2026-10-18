@@ -1,0 +1,64 @@
+name: RBAC Audit
+
+# Authoritative enforcement layer (L2).
+# Copy this file to .github/workflows/rbac-gate.yml in the adopting repository.
+# See templates/ci/README.md for installation, permissions and troubleshooting.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rbac-audit-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  rbac-audit:
+    name: RBAC audit (authoritative)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Audit role permissions across the pull request diff
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # Optional: pin one role for the pull request through a repository variable.
+          # Leave it unset to let tools/rbac_audit.py read the 'Agent-Role: <role>' trailer.
+          RBAC_ROLE: ${{ vars.RBAC_ROLE }}
+        run: |
+          set -uo pipefail
+          args=(--base "$BASE_SHA" --head "$HEAD_SHA" --tasks-dir tasks --json)
+          if [ -n "${RBAC_ROLE:-}" ]; then
+            args+=(--role "$RBAC_ROLE")
+          fi
+          status=0
+          python tools/rbac_audit.py "${args[@]}" > rbac-report.json 2> rbac-error.log || status=$?
+          {
+            echo "## RBAC audit report"
+            echo ""
+            echo '```json'
+            if [ -s rbac-report.json ]; then cat rbac-report.json; else cat rbac-error.log; fi
+            echo '```'
+            echo ""
+            if [ "$status" -eq 0 ]; then
+              echo "Result: **PASSED**"
+            else
+              echo "Result: **FAILED** (exit $status)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -s rbac-report.json ]; then cat rbac-report.json; fi
+          if [ -s rbac-error.log ]; then cat rbac-error.log >&2; fi
+          exit "$status"

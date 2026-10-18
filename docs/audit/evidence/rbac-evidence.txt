@@ -1,0 +1,139 @@
+# rbac_guard.py empirical matrix
+repo: D:\WorkSpace\Agent研究
+script: D:\WorkSpace\Agent研究\.agents\scripts\rbac_guard.py
+AGY_AGENT_ROLE present in parent env: None
+
+### p01 04-process absolute path (no role)
+env AGY_AGENT_ROLE=None
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "D:/WorkSpace/Agent研究/tasks/task-001/04-process.md"}}}
+exit_code: 0  stdout: {"decision": "deny", "reason": "\u3010\u7269\u7406 RBAC \u62e6\u622a\u301104-process.md \u4e13\u5c5e\u4e8e\u7cfb\u7edf\u8c03\u5ea6\u5185\u6838\u4e8b\u4ef6\u603b\u7ebf\uff0c\u7981\u6b62\u4efb\u4f55\u5927\u6a21\u578b\u76f4\u63a5\u4fee\u6539\uff01"}
+
+### p02 04-process relative path (no role)
+env AGY_AGENT_ROLE=None
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "tasks/task-001/04-process.md"}}}
+exit_code: 0  stdout: {"decision": "deny", "reason": "\u3010\u7269\u7406 RBAC \u62e6\u622a\u301104-process.md \u4e13\u5c5e\u4e8e\u7cfb\u7edf\u8c03\u5ea6\u5185\u6838\u4e8b\u4ef6\u603b\u7ebf\uff0c\u7981\u6b62\u4efb\u4f55\u5927\u6a21\u578b\u76f4\u63a5\u4fee\u6539\uff01"}
+
+### p03 the 04-process TEMPLATE source file
+env AGY_AGENT_ROLE=None
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": ".agents/skills/task-decomposition/resources/templates/04-process.template.md"}}}
+exit_code: 0  stdout: {"decision": "deny", "reason": "\u3010\u7269\u7406 RBAC \u62e6\u622a\u301104-process.md \u4e13\u5c5e\u4e8e\u7cfb\u7edf\u8c03\u5ea6\u5185\u6838\u4e8b\u4ef6\u603b\u7ebf\uff0c\u7981\u6b62\u4efb\u4f55\u5927\u6a21\u578b\u76f4\u63a5\u4fee\u6539\uff01"}
+
+### p04 harmless file that merely contains the name
+env AGY_AGENT_ROLE=None
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "docs/04-process.md.notes.txt"}}}
+exit_code: 0  stdout: {"decision": "deny", "reason": "\u3010\u7269\u7406 RBAC \u62e6\u622a\u301104-process.md \u4e13\u5c5e\u4e8e\u7cfb\u7edf\u8c03\u5ea6\u5185\u6838\u4e8b\u4ef6\u603b\u7ebf\uff0c\u7981\u6b62\u4efb\u4f55\u5927\u6a21\u578b\u76f4\u63a5\u4fee\u6539\uff01"}
+
+### p05 DEV writes tests/acceptance/ RELATIVE path (documented deny)
+env AGY_AGENT_ROLE='DevAgent'
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "tests/acceptance/test_auth.ts"}}}
+exit_code: 0  stdout: {"decision": "allow"}
+
+### p06 DEV writes tests/acceptance/ ABSOLUTE path
+env AGY_AGENT_ROLE='DevAgent'
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "D:/WorkSpace/Agent研究/tests/acceptance/test_auth.ts"}}}
+exit_code: 0  stdout: {"decision": "deny", "reason": "\u3010\u7269\u7406 RBAC \u62e6\u622a\u3011DevAgent \u4e25\u7981\u7be1\u6539 tests/acceptance/ \u4e0b\u7684\u9a8c\u6536\u6d4b\u8bd5\u7528\u4f8b\uff01"}
+
+### p07 DEV writes 01-contract.md RELATIVE
+env AGY_AGENT_ROLE='DevAgent'
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "tasks/task-001/01-contract.md"}}}
+exit_code: 0  stdout: {"decision": "deny", "reason": "\u3010\u7269\u7406 RBAC \u62e6\u622a\u301101-contract.md \u4e3a\u5168\u5c40\u53ea\u8bfb\u5951\u7ea6\uff0c\u7981\u6b62 devagent \u7be1\u6539\u9700\u6c42\uff01"}
+
+### p08 DEV writes 03-qa-verification.md RELATIVE
+env AGY_AGENT_ROLE='DevAgent'
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "tasks/task-001/03-qa-verification.md"}}}
+exit_code: 0  stdout: {"decision": "deny", "reason": "\u3010\u7269\u7406 RBAC \u62e6\u622a\u3011DevAgent \u4e25\u7981\u4fee\u6539 03-qa-verification.md\uff08\u7981\u6b62\u8003\u751f\u81ea\u5df1\u8bc4\u5206\uff09\uff01"}
+
+### p09 DEV writes src/ (allowed)
+env AGY_AGENT_ROLE='DevAgent'
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "src/auth.py"}}}
+exit_code: 0  stdout: {"decision": "allow"}
+
+### p10 NO ROLE writes 01-contract.md (documented immutable)
+env AGY_AGENT_ROLE=None
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "tasks/task-001/01-contract.md"}}}
+exit_code: 0  stdout: {"decision": "allow"}
+
+### p11 role=planner writes 01-contract.md
+env AGY_AGENT_ROLE='PlannerAgent'
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "tasks/task-001/01-contract.md"}}}
+exit_code: 0  stdout: {"decision": "allow"}
+
+### p12 NO ROLE writes tests/acceptance/
+env AGY_AGENT_ROLE=None
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "tests/acceptance/test_auth.ts"}}}
+exit_code: 0  stdout: {"decision": "allow"}
+
+### p13 QA writes src/ RELATIVE path (documented deny)
+env AGY_AGENT_ROLE='QAAgent'
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "src/auth.py"}}}
+exit_code: 0  stdout: {"decision": "allow"}
+
+### p14 QA writes src/ ABSOLUTE path
+env AGY_AGENT_ROLE='QAAgent'
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "D:/WorkSpace/Agent研究/src/auth.py"}}}
+exit_code: 0  stdout: {"decision": "deny", "reason": "\u3010\u7269\u7406 RBAC \u62e6\u622a\u3011QAAgent \u4e25\u7981\u76f4\u63a5\u4fee\u6539\u4e1a\u52a1\u4ee3\u7801 (src/)\uff0c\u53d1\u73b0 Bug \u5fc5\u987b\u56de\u9000\u8ba9 Dev \u4fee\u590d\uff01"}
+
+### p15 QA writes 02-dev-workspace.md RELATIVE
+env AGY_AGENT_ROLE='QAAgent'
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "tasks/task-001/02-dev-workspace.md"}}}
+exit_code: 0  stdout: {"decision": "deny", "reason": "\u3010\u7269\u7406 RBAC \u62e6\u622a\u3011QAAgent \u4e25\u7981\u4fee\u6539 02-dev-workspace.md \u5de5\u4f5c\u533a\uff01"}
+
+### p16 QA writes tests/acceptance/ (allowed)
+env AGY_AGENT_ROLE='QAAgent'
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "tests/acceptance/test_auth.ts"}}}
+exit_code: 0  stdout: {"decision": "allow"}
+
+### p17 DEV tests/acceptance with WINDOWS backslashes (relative)
+env AGY_AGENT_ROLE='DevAgent'
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "tests\\acceptance\\test_auth.ts"}}}
+exit_code: 0  stdout: {"decision": "allow"}
+
+### p18 DEV tests/acceptance absolute backslash path
+env AGY_AGENT_ROLE='DevAgent'
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "D:\\WorkSpace\\Agent研究\\tests\\acceptance\\test_auth.ts"}}}
+exit_code: 0  stdout: {"decision": "deny", "reason": "\u3010\u7269\u7406 RBAC \u62e6\u622a\u3011DevAgent \u4e25\u7981\u7be1\u6539 tests/acceptance/ \u4e0b\u7684\u9a8c\u6536\u6d4b\u8bd5\u7528\u4f8b\uff01"}
+
+### p19 04-process UPPERCASE absolute
+env AGY_AGENT_ROLE=None
+stdin: {"toolCall": {"name": "write_to_file", "args": {"TargetFile": "C:/WORK/TASKS/TASK-001/04-PROCESS.MD"}}}
+exit_code: 0  stdout: {"decision": "deny", "reason": "\u3010\u7269\u7406 RBAC \u62e6\u622a\u301104-process.md \u4e13\u5c5e\u4e8e\u7cfb\u7edf\u8c03\u5ea6\u5185\u6838\u4e8b\u4ef6\u603b\u7ebf\uff0c\u7981\u6b62\u4efb\u4f55\u5927\u6a21\u578b\u76f4\u63a5\u4fee\u6539\uff01"}
+
+### p20 alternate key target_file, 04-process
+env AGY_AGENT_ROLE=None
+stdin: {"toolCall": {"name": "write_to_file", "args": {"target_file": "tasks/task-001/04-process.md"}}}
+exit_code: 0  stdout: {"decision": "deny", "reason": "\u3010\u7269\u7406 RBAC \u62e6\u622a\u301104-process.md \u4e13\u5c5e\u4e8e\u7cfb\u7edf\u8c03\u5ea6\u5185\u6838\u4e8b\u4ef6\u603b\u7ebf\uff0c\u7981\u6b62\u4efb\u4f55\u5927\u6a21\u578b\u76f4\u63a5\u4fee\u6539\uff01"}
+
+### p21 args has file_path only (other tool schema)
+env AGY_AGENT_ROLE=None
+stdin: {"toolCall": {"name": "write_to_file", "args": {"file_path": "tasks/task-001/04-process.md"}}}
+exit_code: 0  stdout: {"decision": "allow"}
+
+### p22 DSH-style payload write 04-process
+env AGY_AGENT_ROLE=None
+stdin: {"tool_name": "write", "tool_input": {"file_path": "tasks/task-001/04-process.md", "content": "x"}}
+exit_code: 0  stdout: {"decision": "allow"}
+
+### p23 DSH-style payload edit 04-process
+env AGY_AGENT_ROLE=None
+stdin: {"hook_event_name": "PreToolUse", "tool_name": "edit", "tool_input": {"file_path": "tasks/task-001/04-process.md"}}
+exit_code: 0  stdout: {"decision": "allow"}
+
+### p24 empty object payload
+env AGY_AGENT_ROLE=None
+stdin: {}
+exit_code: 0  stdout: {"decision": "allow"}
+
+### p25 empty stdin
+env AGY_AGENT_ROLE=None
+stdin: 
+exit_code: 0  stdout: {"decision": "allow"}
+
+### p26 malformed JSON
+env AGY_AGENT_ROLE=None
+stdin: {not json
+exit_code: 0  stdout: {"decision": "ask", "reason": "RBAC \u6821\u9a8c\u53d1\u751f\u5185\u90e8\u5f02\u5e38: Expecting property name enclosed in double quotes: line 1 column 2 (char 1)"}
+
+### p27 toolCall without args
+env AGY_AGENT_ROLE=None
+stdin: {"toolCall": {"name": "write_to_file"}}
+exit_code: 0  stdout: {"decision": "allow"}

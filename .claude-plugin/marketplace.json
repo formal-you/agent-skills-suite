@@ -1,0 +1,15 @@
+{
+  "name": "agent-skills-market",
+  "description": "Agent Skills Suite: spec-driven development skills for coding agents.",
+  "owner": {
+    "name": "Agent Skills Suite contributors"
+  },
+  "plugins": [
+    {
+      "name": "agent-skills-suite",
+      "source": "./",
+      "description": "Nine prompt-first skills with deterministic gates and convergence.",
+      "version": "3.1.0"
+    }
+  ]
+}

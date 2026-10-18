@@ -1,0 +1,61 @@
+name: Plan Gate (Gate 1)
+
+# Gate 1 - deterministic plan lint (plan-linter).
+# Copy this file to .github/workflows/plan-gate.yml in the adopting repository.
+# See templates/ci/README.md for installation, permissions and troubleshooting.
+
+on:
+  pull_request:
+    paths:
+      - "tasks/**"
+      - ".specs/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plan-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  plan-gate:
+    name: Gate 1 - plan linter
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Gate 1 plan-linter
+        shell: bash
+        run: |
+          set -uo pipefail
+          status=0
+          python .agents/skills/plan-linter/scripts/plan_linter.py \
+            --tasks-dir tasks \
+            --spec .specs/02-tech-spec.md \
+            --json > plan-lint-report.json 2> plan-lint-error.log || status=$?
+          {
+            echo "## Gate 1 plan-linter report"
+            echo ""
+            echo '```json'
+            if [ -s plan-lint-report.json ]; then
+              cat plan-lint-report.json
+            else
+              cat plan-lint-error.log
+            fi
+            echo '```'
+            echo ""
+            if [ "$status" -eq 0 ]; then
+              echo "Result: **PASSED**"
+            else
+              echo "Result: **FAILED** (exit $status)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -s plan-lint-report.json ]; then cat plan-lint-report.json; fi
+          if [ -s plan-lint-error.log ]; then cat plan-lint-error.log >&2; fi
+          exit "$status"

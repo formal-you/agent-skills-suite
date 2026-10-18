@@ -1,0 +1,459 @@
+# portability + documented-CLI-claims matrix
+repo: D:\WorkSpace\Agent研究
+python: D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe
+
+## A. portability: copy each skill dir outside the repo and run its run.py
+
+copied .agents\skills\plan-linter -> artifacts\skill-audit\scripts\portability\plan-linter
+
+### A-plan-linter run.py OUTSIDE repo
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\portability\plan-linter\scripts\run.py --help
+cwd: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\portability
+exit_code: 0
+--- stdout ---
+usage: plan_linter.py [-h] [--tasks-dir TASKS_DIR]
+
+Plan Linter (Gate 1 Static Checker) for task bundles.
+
+options:
+  -h, --help            show this help message and exit
+  --tasks-dir TASKS_DIR, -t TASKS_DIR
+                        Path to tasks directory containing task bundles
+                        (default: ./tasks)
+
+### A-plan-linter run.py INSIDE repo
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe D:\WorkSpace\Agent研究\.agents\skills\plan-linter\scripts\run.py --help
+exit_code: 0
+--- stdout ---
+usage: plan_linter.py [-h] [--tasks-dir TASKS_DIR]
+
+Plan Linter (Gate 1 Static Checker) for task bundles.
+
+options:
+  -h, --help            show this help message and exit
+  --tasks-dir TASKS_DIR, -t TASKS_DIR
+                        Path to tasks directory containing task bundles
+                        (default: ./tasks)
+
+copied .agents\skills\prd-generator -> artifacts\skill-audit\scripts\portability\prd-generator
+
+### A-prd-generator run.py OUTSIDE repo
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\portability\prd-generator\scripts\run.py --help
+cwd: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\portability
+exit_code: 1
+--- stdout ---
+(empty)
+--- stderr ---
+Traceback (most recent call last):
+  File "D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\portability\prd-generator\scripts\run.py", line 15, in <module>
+    from prd_generator.cli import main
+ModuleNotFoundError: No module named 'prd_generator'
+
+### A-prd-generator run.py INSIDE repo
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe D:\WorkSpace\Agent研究\.agents\skills\prd-generator\scripts\run.py --help
+exit_code: 0
+--- stdout ---
+usage: prd-generator [-h] [--version] {run,lint} ...
+
+prd-generator: Antigravity Multi-Agent Product Brainstorming & PRD Generation
+Engine.
+
+positional arguments:
+  {run,lint}     Available subcommands
+    run          Run full PRD brainstorming & synthesis pipeline
+    lint         Lint an existing PRD specification file or directory
+
+options:
+  -h, --help     show this help message and exit
+  --version, -v  show program's version number and exit
+
+copied .agents\skills\spec-generator -> artifacts\skill-audit\scripts\portability\spec-generator
+
+### A-spec-generator run.py OUTSIDE repo
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\portability\spec-generator\scripts\run.py --help
+cwd: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\portability
+exit_code: 1
+--- stdout ---
+(empty)
+--- stderr ---
+Traceback (most recent call last):
+  File "D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\portability\spec-generator\scripts\run.py", line 14, in <module>
+    from spec_generator.cli import main
+ModuleNotFoundError: No module named 'spec_generator'
+
+### A-spec-generator run.py INSIDE repo
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe D:\WorkSpace\Agent研究\.agents\skills\spec-generator\scripts\run.py --help
+exit_code: 0
+--- stdout ---
+usage: spec_generator [-h] [--prd PRD] [--output-dir OUTPUT_DIR]
+                      [--mode {deterministic,replay,live}] [--dry-run]
+                      [--recursive] [--version]
+                      {run} ...
+
+spec_generator: Antigravity Multi-Agent Deliberation & Spec-Generator Engine.
+
+options:
+  -h, --help            show this help message and exit
+  --prd PRD             Path to single PRD markdown file or directory
+                        containing PRD files.
+  --output-dir OUTPUT_DIR, -o OUTPUT_DIR
+                        Target output directory for generated specification
+                        bundle (.specs).
+  --mode {deterministic,replay,live}, -m {deterministic,replay,live}
+                        Deliberation execution mode: deterministic (<100ms
+                        offline), replay (fixtures), or live (LLM).
+  --dry-run             Run parsing, deliberation, and validation in-memory
+                        without writing files to disk.
+  --recursive, -r       Recursively scan subdirectories when --prd specifies a
+                        directory.
+  --version, -v         Show program version and exit.
+
+commands:
+  Available commands
+
+  {run}
+    run                 Execute the multi-agent deliberation and spec
+                        generation pipeline.
+
+copied .agents\skills\task-decomposition -> artifacts\skill-audit\scripts\portability\task-decomposition
+(no scripts/run.py in this skill)
+
+copied .agents\skills\diagnose-windows-sandbox-acl -> artifacts\skill-audit\scripts\portability\diagnose-windows-sandbox-acl
+(no scripts/run.py in this skill)
+
+## A2. plan-linter copied skill still enforces rules (functional check)
+
+### A2-copy-linter valid
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\portability\plan-linter\scripts\run.py --tasks-dir D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\plan-linter\c03_valid_filled
+cwd: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\portability
+exit_code: 0
+--- stdout ---
+🔍 [Plan Linter] 正在静态扫描任务目录: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\plan-linter\c03_valid_filled
+------------------------------------------------------------
+✅ [Gate 1 PASSED] 静态门禁全部通过！
+   已扫描 1 个任务包，爆炸半径、黄金代码行、DoD 及 DAG 拓扑无环校验均合规。
+
+### A2-copy-linter missing lint
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\portability\plan-linter\scripts\run.py --tasks-dir D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\plan-linter\c04_missing_lint_cmd
+cwd: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\portability
+exit_code: 0
+--- stdout ---
+🔍 [Plan Linter] 正在静态扫描任务目录: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\plan-linter\c04_missing_lint_cmd
+------------------------------------------------------------
+✅ [Gate 1 PASSED] 静态门禁全部通过！
+   已扫描 1 个任务包，爆炸半径、黄金代码行、DoD 及 DAG 拓扑无环校验均合规。
+
+## A3. run.py resolved dependencies from repo
+
+### A3-prd-runpy-from-foreign-cwd
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe D:\WorkSpace\Agent研究\.agents\skills\prd-generator\scripts\run.py --version
+exit_code: 0
+--- stdout ---
+prd-generator 0.1.0
+
+### A3-spec-runpy-from-foreign-cwd
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe D:\WorkSpace\Agent研究\.agents\skills\spec-generator\scripts\run.py --version
+cwd: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\portability
+exit_code: 0
+--- stdout ---
+spec_generator 0.1.0
+
+## B. prd-generator documented CLI claims
+
+### B01 global prd-generator on PATH (subprocess lookup)
+$ prd-generator --version
+exit_code: 127(not found)
+--- stdout ---
+(empty)
+--- stderr ---
+[WinError 2] 系统找不到指定的文件。
+
+### B02 global prd_generator on PATH
+$ prd_generator --version
+exit_code: 127(not found)
+--- stdout ---
+(empty)
+--- stderr ---
+[WinError 2] 系统找不到指定的文件。
+
+### B03 platform wrapper --version
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/prd_generator.py --version
+exit_code: 0
+--- stdout ---
+prd-generator 0.1.0
+
+### B04 skill run.py --version
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/skills/prd-generator/scripts/run.py --version
+exit_code: 0
+--- stdout ---
+prd-generator 0.1.0
+
+### B05 root shortcut --version
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe scripts/prd_generator.py --version
+exit_code: 0
+--- stdout ---
+prd-generator 0.1.0
+
+### B06 no args (documented default: help, exit 0)
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/prd_generator.py
+exit_code: 0
+--- stdout ---
+usage: prd-generator [-h] [--version] {run,lint} ...
+
+prd-generator: Antigravity Multi-Agent Product Brainstorming & PRD Generation
+Engine.
+
+positional arguments:
+  {run,lint}     Available subcommands
+    run          Run full PRD brainstorming & synthesis pipeline
+    lint         Lint an existing PRD specification file or directory
+
+options:
+  -h, --help     show this help message and exit
+  --version, -v  show program's version number and exit
+
+### B07 run --idea --dry-run --mode deterministic
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/prd_generator.py run --idea Enterprise multi-tenant audit platform with immutable event log --mode deterministic --dry-run
+exit_code: 0
+--- stdout ---
+[DRY-RUN] PRD deliberation & synthesis succeeded for: 'Enterprise multi-tenant audit platform with immutable event' (0 disk writes).
+
+### B08 run --idea --output-dir (real write)
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/prd_generator.py run --idea Enterprise multi-tenant audit platform with immutable event log --mode deterministic --output-dir D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\prd-bundle
+exit_code: 0
+--- stdout ---
+Successfully generated PRD specification in: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\prd-bundle
+ - Master: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\prd-bundle\01-prd.md
+ - Modular components: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\prd-bundle\01-prd
+
+B08 files on disk after run:
+  01-prd\00-overview.md  1255 bytes
+  01-prd\01-features.md  2110 bytes
+  01-prd\02-constraints.md  658 bytes
+  01-prd\03-nfr.md  712 bytes
+  01-prd\04-forks.md  1902 bytes
+  01-prd.md  5833 bytes
+
+### B09 lint generated master
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/prd_generator.py lint D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\prd-bundle\01-prd.md
+exit_code: 0
+--- stdout ---
+Lint passed: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\prd-bundle\01-prd.md is compliant with PRD quality gate standards.
+
+### B10 lint generated modular dir
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/prd_generator.py lint D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\prd-bundle\01-prd
+exit_code: 0
+--- stdout ---
+Lint passed: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\prd-bundle\01-prd is compliant with PRD quality gate standards.
+
+### B11 lint placeholder file must exit 1
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/prd_generator.py lint D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\bad-prd\01-prd.md
+exit_code: 1
+--- stdout ---
+(empty)
+--- stderr ---
+Lint failed with 2 error(s):
+ - [PRD-001-MUSTACHE-PLACEHOLDER] 01-prd.md:3 Unfilled mustache placeholder detected: '{{FEATURE_NAME}}'
+ - [PRD-002-STUB-TOKEN] 01-prd.md:3 Incomplete stub marker detected: '[TBD]'
+
+### B12 run --idea-file
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/prd_generator.py run --idea-file D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\idea.txt --dry-run
+exit_code: 0
+--- stdout ---
+[DRY-RUN] PRD deliberation & synthesis succeeded for: 'A developer tool that indexes monorepos and answers code que' (0 disk writes).
+
+### B13 run --answers (documented JSON or semicolon string)
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/prd_generator.py run --idea Audit platform --answers scope=internal;compliance=soc2 --dry-run
+exit_code: 0
+--- stdout ---
+[DRY-RUN] PRD deliberation & synthesis succeeded for: 'Audit platform' (0 disk writes).
+
+### B14 invalid --mode must exit 1
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/prd_generator.py run --idea x --mode nope
+exit_code: 1
+--- stdout ---
+(empty)
+--- stderr ---
+Error: argument --mode/-m: invalid choice: 'nope' (choose from deterministic, replay, live)
+
+### B15 lint nonexistent target must exit 1
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/prd_generator.py lint no/such/file.md
+exit_code: 1
+--- stdout ---
+(empty)
+--- stderr ---
+Error: Target path does not exist: no\such\file.md
+
+## C. spec-generator documented CLI claims
+
+### C01 global spec-generator on PATH --version
+$ spec-generator --version
+exit_code: 0
+--- stdout ---
+spec_generator 0.1.0
+
+### C02 platform wrapper --version
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/spec_generator.py --version
+exit_code: 0
+--- stdout ---
+spec_generator 0.1.0
+
+### C03 skill run.py --version
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/skills/spec-generator/scripts/run.py --version
+exit_code: 0
+--- stdout ---
+spec_generator 0.1.0
+
+### C04 no args must exit 1 with missing --prd
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/spec_generator.py
+exit_code: 1
+--- stdout ---
+(empty)
+--- stderr ---
+Error: Missing required argument '--prd'.
+usage: spec_generator [-h] [--prd PRD] [--output-dir OUTPUT_DIR]
+                      [--mode {deterministic,replay,live}] [--dry-run]
+                      [--recursive] [--version]
+                      {run} ...
+
+### C05 run --prd FILE --mode deterministic --dry-run
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/spec_generator.py run --prd D:\WorkSpace\Agent研究\tests\fixtures\sample_ecommerce_prd.md --mode deterministic --dry-run
+exit_code: 0
+--- stdout ---
+[Dry-Run] spec_generator completed successfully.
+  - Processed PRD: D:\WorkSpace\Agent研究\tests\fixtures\sample_ecommerce_prd.md
+  - Deliberated forks: 4
+  - Synthesized ADRs: 4
+  - Verified 02-tech-spec.md, 02-tech-spec/ modular assets, and ADRs in-memory (0 disk mutations).
+
+### C06 top-level --prd FILE --dry-run (skill doc mode 2 style)
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/spec_generator.py --prd D:\WorkSpace\Agent研究\tests\fixtures\sample_ecommerce_prd.md --dry-run
+exit_code: 0
+--- stdout ---
+[Dry-Run] spec_generator completed successfully.
+  - Processed PRD: D:\WorkSpace\Agent研究\tests\fixtures\sample_ecommerce_prd.md
+  - Deliberated forks: 4
+  - Synthesized ADRs: 4
+  - Verified 02-tech-spec.md, 02-tech-spec/ modular assets, and ADRs in-memory (0 disk mutations).
+
+### C07 --prd DIR -r --dry-run (recursive batch)
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/spec_generator.py --prd D:\WorkSpace\Agent研究\tests\fixtures\sample_batch_prds -r --dry-run
+exit_code: 0
+--- stdout ---
+[Dry-Run] spec_generator completed successfully.
+  - Processed PRD: D:\WorkSpace\Agent研究\tests\fixtures\sample_batch_prds
+  - Deliberated forks: 5
+  - Synthesized ADRs: 5
+  - Verified 02-tech-spec.md, 02-tech-spec/ modular assets, and ADRs in-memory (0 disk mutations).
+
+### C08 global spec-generator run --prd --dry-run
+$ spec-generator run --prd D:\WorkSpace\Agent研究\tests\fixtures\sample_ecommerce_prd.md --dry-run
+exit_code: 0
+--- stdout ---
+[Dry-Run] spec_generator completed successfully.
+  - Processed PRD: D:\WorkSpace\Agent研究\tests\fixtures\sample_ecommerce_prd.md
+  - Deliberated forks: 4
+  - Synthesized ADRs: 4
+  - Verified 02-tech-spec.md, 02-tech-spec/ modular assets, and ADRs in-memory (0 disk mutations).
+
+### C09 global spec-generator --prd (no subcommand) --dry-run
+$ spec-generator --prd D:\WorkSpace\Agent研究\tests\fixtures\sample_ecommerce_prd.md --dry-run
+exit_code: 0
+--- stdout ---
+[Dry-Run] spec_generator completed successfully.
+  - Processed PRD: D:\WorkSpace\Agent研究\tests\fixtures\sample_ecommerce_prd.md
+  - Deliberated forks: 4
+  - Synthesized ADRs: 4
+  - Verified 02-tech-spec.md, 02-tech-spec/ modular assets, and ADRs in-memory (0 disk mutations).
+
+### C10 run real write
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/spec_generator.py run --prd D:\WorkSpace\Agent研究\tests\fixtures\sample_ecommerce_prd.md --output-dir D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\spec-bundle
+exit_code: 0
+--- stdout ---
+spec_generator completed successfully.
+  - Output directory: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\spec-bundle
+  - Generated Tech Spec: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\spec-bundle\02-tech-spec.md
+  - Generated Modular Tech Spec: D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\spec-bundle\02-tech-spec
+  - Generated ADRs: 4 records in D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\spec-bundle\adr
+
+C10 files on disk after run:
+  02-tech-spec\01-topology.md  4974 bytes
+  02-tech-spec\02-database-schema.sql  4795 bytes
+  02-tech-spec\03-api-contracts.ts  3141 bytes
+  02-tech-spec\04-system-invariants.md  4158 bytes
+  02-tech-spec\README.md  4725 bytes
+  02-tech-spec.md  22359 bytes
+  adr\001-asynchronous-payment-event-streaming-outbox-pattern.md  4466 bytes
+  adr\002-authentication-payment-tokenization.md  4415 bytes
+  adr\003-database-order-persistence-strategy.md  4336 bytes
+  adr\004-distributed-inventory-locking-strategy.md  4376 bytes
+
+### C11 run with nonexistent prd must exit 1
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/scripts/spec_generator.py run --prd no/such/prd.md
+exit_code: 1
+--- stdout ---
+(empty)
+--- stderr ---
+Error: PRD path not found: Target path not found: D:\WorkSpace\Agent研究\no\such\prd.md
+
+### C12 spec-generator help
+$ spec-generator --help
+exit_code: 0
+--- stdout ---
+usage: spec_generator [-h] [--prd PRD] [--output-dir OUTPUT_DIR]
+                      [--mode {deterministic,replay,live}] [--dry-run]
+                      [--recursive] [--version]
+                      {run} ...
+
+spec_generator: Antigravity Multi-Agent Deliberation & Spec-Generator Engine.
+
+options:
+  -h, --help            show this help message and exit
+  --prd PRD             Path to single PRD markdown file or directory
+                        containing PRD files.
+  --output-dir, -o OUTPUT_DIR
+                        Target output directory for generated specification
+                        bundle (.specs).
+  --mode, -m {deterministic,replay,live}
+                        Deliberation execution mode: deterministic (<100ms
+                        offline), replay (fixtures), or live (LLM).
+  --dry-run             Run parsing, deliberation, and validation in-memory
+                        without writing files to disk.
+  --recursive, -r       Recursively scan subdirectories when --prd specifies a
+                        directory.
+  --version, -v         Show program version and exit.
+
+commands:
+  Available commands
+... (4 more lines)
+
+## D. wrapper argument plumbing
+
+### D1 prd run.py lint placeholder
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/skills/prd-generator/scripts/run.py lint D:\WorkSpace\Agent研究\artifacts\skill-audit\scripts\fixtures\cli-out\bad-prd\01-prd.md
+exit_code: 1
+--- stdout ---
+(empty)
+--- stderr ---
+Lint failed with 2 error(s):
+ - [PRD-001-MUSTACHE-PLACEHOLDER] 01-prd.md:3 Unfilled mustache placeholder detected: '{{FEATURE_NAME}}'
+ - [PRD-002-STUB-TOKEN] 01-prd.md:3 Incomplete stub marker detected: '[TBD]'
+
+### D2 spec run.py missing prd
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/skills/spec-generator/scripts/run.py
+exit_code: 1
+--- stdout ---
+(empty)
+--- stderr ---
+Error: Missing required argument '--prd'.
+usage: spec_generator [-h] [--prd PRD] [--output-dir OUTPUT_DIR]
+                      [--mode {deterministic,replay,live}] [--dry-run]
+                      [--recursive] [--version]
+                      {run} ...
+
+### D3 plan-linter run.py bad tasks dir
+$ D:\DEV\uv\python\cpython-3.12-windows-x86_64-none\python.exe .agents/skills/plan-linter/scripts/run.py --tasks-dir no/such/dir
+exit_code: 1
+--- stdout ---
+🔍 [Plan Linter] 正在静态扫描任务目录: no/such/dir
+❌ 目录不存在: no/such/dir
