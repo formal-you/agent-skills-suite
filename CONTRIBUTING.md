@@ -60,17 +60,20 @@ All tests must pass on Windows and Linux. CI runs the matrix in `.github/workflo
 ## Git flow
 
 The canonical workflow is in [`AGENTS.md`](AGENTS.md#skill-change-workflow-authoring---optimization---tests---git-flow).
-In short: issue -> branch from `main` -> author/optimize -> test -> conventional commit -> PR
-(`Closes #<issue>`) -> green checks -> merge -> sync `main` -> annotated `vX.Y.Z` tag and release
-when a version is published. Do not commit directly to `main` and do not force-push shared branches.
+In short: risk-based issue -> branch from `main` -> author/optimize -> tests + evidence -> conventional
+commit -> PR (`Closes #<issue>`) -> green checks + independent review where required -> merge ->
+watch post-merge CI -> sync `main` -> annotated `vX.Y.Z` tag and release with SemVer. Do not commit
+directly to `main`, do not force-push shared branches, and never move or delete a published tag; a bad
+release gets a new patch release.
 
 ## Pull requests
 
 - One focused change per PR; keep unrelated reformatting out.
-- Link the issue with `Closes #<issue>` and describe the skill/script affected.
-- Include the evidence (test command + result) and any risk/rollback notes.
-- Update `CHANGELOG.md`, `VERSION` and plugin manifests for user-visible releases.
-- Do not weaken a gate to make a test pass; fix the artifact instead.
+- Fill the PR template: `Closes #<issue>`, summary, test evidence, risk/rollback and release/tag plan.
+- Behavior, security, gate or CI changes need an independent reviewer (not the author); docs-only
+  changes may self-merge only if branch protection permits it.
+- Update `CHANGELOG.md`, `VERSION`, plugin manifests and skill metadata for user-visible releases.
+- Do not weaken a gate or test to make a change pass; fix the artifact instead.
 
 ## Reporting issues
 
