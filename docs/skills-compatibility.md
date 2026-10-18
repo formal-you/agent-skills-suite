@@ -104,9 +104,11 @@ uv run tools/quickstart.py --target ../adopting-repo --copy --with-ci
 
 It installs skills into `--dest` (default `.agents/skills/`), the rules,
 `tools/rbac_audit.py`, and, with `--with-ci`, the GitHub Actions workflows from
-`templates/ci/`: `rbac-gate.yml` (L1 RBAC audit on every pull request) and
-`plan-gate.yml` (Gate 1 on `tasks/**` and `.specs/**` changes). Both need only
-`permissions: contents: read`; `rbac-gate.yml` also needs `fetch-depth: 0`. The audit
+`templates/ci/`: `rbac-gate.yml` (L1 RBAC audit on every pull request),
+`plan-gate.yml` (Gate 1 on `tasks/**` and `.specs/**` changes), and `quality-gate.yml`
+(multi-stage quality gate owned by `quality-engineering`: Gate 1, RBAC, complexity check,
+acceptance tests, and Gate 3 audit). All workflows need only `permissions: contents: read`;
+`rbac-gate.yml` and `quality-gate.yml` also need `fetch-depth: 0`. The audit
 workflow resolves the role from the repository variable `RBAC_ROLE` or from the
 `Agent-Role:` commit trailer. Installation, pinning and troubleshooting are documented
 in `templates/ci/README.md`.

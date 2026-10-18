@@ -22,7 +22,7 @@ v2 解决了"从零到交付"：想法 → PRD → 规格 → 任务 → Gate 1/
 | brownfield 没有轻量入口 | 增量提案（delta）+ 单个任务包 + 归档 | change |
 | 规格是一次性交付物 | QA 通过后把确认的实现偏差 append-only 写回规格 | converge |
 | Gate 2 完全靠人读 | 锚点覆盖率矩阵、真实路径拓扑、change proposal 一致性 | plan-linter 3.x |
-| 只能手工拷贝采用 | 一条命令分发 + 可直接抄的 CI 工作流 | tools/quickstart.py、templates/ci/ |
+| 只能手工拷贝采用 | 一条命令分发 + 可直接抄的 CI 工作流 | tools/quickstart.py、templates/ci/（quality-engineering） |
 
 设计原则与 v2 一致：**提示词负责判断，脚本只做确定性的事，CI 才是强制层。**
 
@@ -292,14 +292,15 @@ python tools/quickstart.py --target ../r --json
 
 退出码：0 成功、1 安装失败、2 用法或路径不安全。所有目标路径都做包含性检查，默认不覆盖已有文件（--force 才替换）。
 
-### 5.2 两个可直接抄的 GitHub Actions
+### 5.2 可直接采纳的 GitHub Actions 门禁模板（由 quality-engineering 统一维护）
 
 | 模板 | 触发 | 作用 |
 | :--- | :--- | :--- |
 | templates/ci/rbac-gate.yml | pull_request | 用 tools/rbac_audit.py 按事件 base/head 检查角色越权（L1 权威层） |
-| templates/ci/plan-gate.yml | pull_request（tasks/**、.specs/**） | 跑 Gate 1 + 覆盖率矩阵，JSON 写进 step summary |
+| templates/ci/plan-gate.yml | pull_request（tasks/**、.specs/**） | 跑 Gate 1 plan-linter + 覆盖率矩阵，JSON 写进 step summary |
+| templates/ci/quality-gate.yml | pull_request | 质量工程完整门禁流水线：Gate 1 规划校验 + RBAC 越权审计 + 圈复杂度（`complexity_check.py`） + 验收测试套件 + Gate 3 静态审计（`verification_linter.py`） |
 
-两者只需 permissions: contents: read；rbac-gate 还需要 fetch-depth: 0，角色取自仓库变量 RBAC_ROLE 或提交 trailer Agent-Role:。安装、权限、版本固定与排错见 [templates/ci/README.md](../templates/ci/README.md)。
+三者只需 permissions: contents: read；rbac-gate 与 quality-gate 还需要 fetch-depth: 0，角色取自仓库变量 RBAC_ROLE 或提交 trailer Agent-Role:。安装、权限、版本固定与排错见 [templates/ci/README.md](../templates/ci/README.md)。
 
 CI 是强制层；发布包不包含宿主 hook 适配器。采用时请固定到 tag/commit 并提交复制结果，让升级成为可审查的 diff。
 
@@ -332,7 +333,7 @@ python .agents/skills/converge/scripts/converge.py apply --task tasks/CHG-002-42
 ```bash
 python tools/quickstart.py --target ../another-repo --copy --with-ci
 # 目标仓库里：git add .agents tools templates .github && git commit -m "adopt agent-spec suite"
-# 之后每个 PR：rbac-gate（角色越权）+ plan-gate（Gate 1 / 覆盖率）自动运行
+# 之后每个 PR：rbac-gate（角色越权）+ plan-gate（Gate 1 / 覆盖率）或 quality-gate（全量门禁）自动运行
 ```
 
 ---
@@ -341,7 +342,7 @@ python tools/quickstart.py --target ../another-repo --copy --with-ci
 
 | 变化 | 影响 | 迁移动作 |
 | :--- | :--- | :--- |
-| 技能 7 → 9（新增 change、converge） | 旧任务流程不受影响 | 无需动作；可按需逐步采用 |
+| 技能 7 → 10（新增 change、converge、quality-engineering） | 旧任务流程不受影响 | 无需动作；可按需逐步采用 |
 | 02-dev-workspace.md 新增偏差表 | 旧模板生成的任务包没有该表 | 新任务用新模板；旧任务收敛前由 Dev 补一行 None 或按手工步骤写回 |
 | plan-linter 3.0 默认新增拓扑 warning | 通过/失败语义不变，只是多 warning | 需要严格时用 --strict-topology；不需要时 --no-topology |
 | --spec / --coverage-out / --changes-dir 默认不启用 | 旧 CI 命令行为不变 | 需要覆盖率矩阵时显式加参数 |

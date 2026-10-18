@@ -1,24 +1,28 @@
-# 技能使用指南（v2 基础 + v3 增量）：从想法到交付验收
+# 技能使用指南（v2 基础 + v3 增量 + 现代质量工程）：从想法到交付验收
 
-> 适用对象：使用 `.agents/skills/` 的开发者、Planner、Dev、QA 与 Reviewer Agent。  
-> 对应版本：技能 `metadata.version` 2.x（基础流程）与 3.x（brownfield/收敛/分发）；v3 用法见 [`brownfield-convergence.zh-CN.md`](brownfield-convergence.zh-CN.md)。  
-> 本文说明九个技能（规划五个 + 审查一个 + 执行两个 + 收敛一个）**如何工作、如何使用**，以及**为什么已经不再依赖 `prd_generator` / `spec_generator` 源码**。
+> 适用对象：使用 `.agents/skills/` 的开发者、Planner、Dev、QA、Reviewer Agent 与 CI/CD 运维工程师。  
+> 对应版本：技能 `metadata.version` 2.x（基础流程）、3.x（brownfield/收敛/分发）与 4.x（现代质量工程：BDD + 圈复杂度 + 变异测试 + 4 阶段分层测试流水线）。  
+> v3 用法见 [`brownfield-convergence.zh-CN.md`](brownfield-convergence.zh-CN.md)；CI 门禁与工作流模板见 [`templates/ci/README.md`](../templates/ci/README.md)。  
+> 本文系统说明十个技能如何协同工作、现代质量工程三支柱如何落地、四阶段测试流水线与 CI 权威门禁如何运转。
 
 ---
 
 ## 1. 一句话结论
 
-**技能本身是"提示词 + 模板 + 纯标准库小工具"的自包含包；确定性引擎 `prd_generator` / `spec_generator` 已降级为可选加速器，不再是运行前提。**
+**技能本身是"提示词 + 模板 + 纯标准库小工具"的自包含包；现代质量工程三支柱（BDD 可执行契约、圈复杂度控制流分析、变异测试杀伤力审计）深度内嵌于任务生命周期中；本地提示词规则仅为辅助引导，CI 流水线是不可绕过的权威强制层。**
 
-具体来说：
+核心要点：
 
-- 技能不再通过 `run.py`、`parents[4]`、`sys.path.insert` 去 import 仓库根目录的引擎包；
-- PRD、技术规格、任务契约的模板全部随技能放在 `assets/templates/`；
-- 脚手架、结构校验、任务门禁都是 **Python 标准库** 脚本，路径从脚本自身位置解析；
-- 没有 Python、没有引擎、没有网络时，仍可按 SKILL.md 的**手工降级路径**完成交付；
-- 引擎只在需要"确定性生成/回放"时可选安装，缺失时 `engine.py` 以退出码 `2` 给出安装指引，不阻塞流程。
-
-已通过"把技能目录复制到仓库外再运行"的迁移测试：技能仍可 `scaffold` / `lint` / `--help`，不会出现 `ModuleNotFoundError`。
+- **自包含与免安装**：技能不再强依赖外部重型引擎；脚手架、占位符校验、Gate 1 规划门禁（`plan_linter.py`）与 Gate 3 验收门禁（`verification_linter.py`）均为 **Python 标准库** 脚本，无第三方依赖；
+- **现代质量工程三支柱**：
+  1. **BDD 行为驱动规格**：任务契约 `01-contract.md` 采用结构化 Given-When-Then 定义验收场景，QA 验收测试严格对齐；
+  2. **圈复杂度控制流分析**：Dev 编码严格遵循单函数 McCabe $V(G) \le 10$；QA 遵循基本路径测试基线规则（用例数 $\ge V(G)$），数学上覆盖所有线性独立路径；
+  3. **变异测试与 MSI 审计**：QA 必须对变更代码执行变异测试，变异得分 $\text{MSI} \ge 80\%$，彻底消除无断言与弱断言假阳性；
+- **门禁职责解耦**：
+  - **Gate 1（规划期门禁）**：`plan_linter.py` 专职审计任务切片、DAG 拓扑、规格锚点与 BDD 契约格式；
+  - **Gate 2（语义审查门禁）**：只读 Reviewer Agent 审查正向覆盖率、反幻觉与 ADR 架构合规性；
+  - **Gate 3（验收期门禁）**：`verification_linter.py` 专职审计 `03-qa-verification.md` 中的圈复杂度覆盖与变异测试杀伤力证据；
+- **四阶段分层测试流水线**：涵盖本地测试、测试环境、合并前 PR 权威门禁与合并后主干回归/规格收敛，提供开箱即用的 GitHub Actions 工作流模板（`templates/ci/quality-gate.yml`）。
 
 ---
 
@@ -36,495 +40,676 @@
 │   ├── assets/templates/   # adr + 02-tech-spec + 02-tech-spec/
 │   ├── references/         # 架构评审协议、规格格式、团队约定、中文参考
 │   └── scripts/            # scaffold.py / lint_spec.py / engine.py(可选)
-├── task-decomposition/     # 规格 → 任务包（4 文档）
+├── task-decomposition/     # 规格 → 任务包（4 文档，BDD 可执行契约）
 │   ├── SKILL.md
 │   ├── assets/templates/   # 01-contract / 02-dev-workspace / 03-qa-verification / 04-process
-│   ├── references/         # 黄金切片、反幻觉、门禁细则
+│   ├── references/         # 黄金切片、反幻觉、BDD 场景推导规则
 │   └── scripts/scaffold_task.py
 ├── change/                 # brownfield：增量 proposal + 单个任务包 + 归档
 │   ├── SKILL.md
 │   ├── assets/templates/proposal.template.md
 │   ├── references/brownfield-protocol.md
 │   └── scripts/            # scaffold_change.py / standards_extract.py / lint_change.py
-├── plan-linter/            # Gate 1 确定性静态门禁
+├── plan-linter/            # Gate 1 确定性静态门禁（规划期：契约、BDD、DAG、切片）
 │   ├── SKILL.md
 │   ├── references/gate-2-review.md  # 未安装 review 时的自包含备用清单
 │   └── scripts/plan_linter.py
 ├── review/                 # Gate 2 语义审查 / 变更审查
 │   ├── SKILL.md
 │   └── references/{plan-review,code-review}.md
-├── dev/                    # 执行：按契约实现、自测、填 02、交接
+├── dev/                    # 执行：按契约实现、控制 V(G) <= 10、自测、填 02、交接
 │   ├── SKILL.md
 │   └── references/dev-protocol.md
-├── qa/                     # 执行：独立黑盒验收、证据、签署/退回
+├── qa/                     # 本地开发阶段测试：集成测试、BDD E2E、变异测试、Lint、圈复杂度、自主 review
 │   ├── SKILL.md
-│   └── references/qa-protocol.md
+│   ├── references/qa-protocol.md
+│   └── references/role-boundaries.md
+├── quality-engineering/    # CI 质量工程：构建 CI 流水线、测试环境准备、代码合并前/后门禁与测试
+│   ├── SKILL.md
+│   ├── references/verification-protocol.md
+│   └── scripts/            # complexity_check.py (圈复杂度门禁) / verification_linter.py (Gate 3 审计)
 └── converge/               # 收敛：QA_PASSED 后写回规格、归档任务包与 change
     ├── SKILL.md
     ├── references/convergence-protocol.md
     └── scripts/converge.py
 ```
 
-每个技能只做一件事：
+每个技能的核心输入、输出与判定主体：
 
-| 技能 | 输入 | 输出 | 由谁判断 |
+| 技能 | 输入 | 输出 | 判定/驱动主体 |
 | :--- | :--- | :--- | :--- |
 | `prd-generator` | 模糊创意、笔记、旧 PRD | `.specs/01-prd.md` + `.specs/01-prd/` | Agent（澄清、4 角色评审、收敛） |
-| `spec-generator` | PRD | `.specs/adr/*.md` + `.specs/02-tech-spec.md` + `.specs/02-tech-spec/` | Agent（架构权衡、ADR） |
-| `task-decomposition` | PRD + ADR + Tech Spec | `tasks/<task-id>/` 四份文档 | Agent（垂直切片、追溯、DoD） |
+| `spec-generator` | PRD | `.specs/adr/*.md` + `.specs/02-tech-spec.md` + `.specs/02-tech-spec/` | Agent（架构权衡、ADR 决策） |
+| `task-decomposition` | PRD + ADR + Tech Spec | `tasks/<task-id>/` 四份文档（含 BDD Gherkin 契约） | Agent（垂直切片、BDD 行为规范、追溯） |
 | `change` | 现有规格 + 一个有界变更 | `.specs/changes/<id>/proposal.md` + 1 个任务包 + standards 报告 | Agent（增量提案、隐式约束、升级判断） |
-| `plan-linter` | `tasks/` | Gate 1 报告 | 脚本（结构） |
-| `review` | 计划/任务包，或 diff + 证据 | 发现清单 + PASS/REQUEST CHANGES/BLOCKED | Agent（只读语义审查） |
-| `dev` | `01-contract.md` + 项目命令 | 代码变更、填好的 `02`、`WAITING_FOR_QA` | Agent（实现与自测） |
-| `qa` | `01`、填好的 `02`、测试命令 | `tests/acceptance/**`、填好的 `03`、唯一裁决 | Agent（独立验证） |
-| `converge` | `01`、带偏差表的 `02`、勾选 `QA_PASSED` 的 `03` | 写回 `.specs/02-tech-spec.md`、`CONVERGED` 状态、归档任务包 | 脚本 + Agent（append-only 写回） |
-
-前五个技能负责"规划与门禁"（`change` 是 brownfield 入口，复用 `task-decomposition` 的模板），`dev` / `qa` 负责"执行与验收"，`converge` 负责"实现结果回写规格"。
+| `plan-linter` | `tasks/` | Gate 1 静态检查报告（含 BDD 场景校验） | 脚本（`plan_linter.py`，结构与格式） |
+| `review` | 计划/任务包，或 diff + 证据 | 发现清单 + PASS/REQUEST CHANGES/BLOCKED | Agent（只读语义审查，防幻觉/违规） |
+| `dev` | `01-contract.md` + 项目命令 | 代码变更（$V(G) \le 10$）、填好的 `02`、`WAITING_FOR_QA` | Agent（业务实现、重构自测、自证） |
+| `qa` | `01`、填好的 `02`、测试命令 | `tests/acceptance/**`、`tests/integration/**`、填好的 `03`（本地测试与审计证据）、唯一裁决 | Agent（本地集成、BDD E2E、变异杀伤、静态 Lint/复杂度、自主 review） |
+| `quality-engineering` | CI 触发事件、PR diff、`tasks/` 交付包、CI 模板 | CI 流水线状态、门禁报告（Gate 1、RBAC、圈复杂度、验收测试、Gate 3）、合并前/合并后测试结果 | CI / 脚本（`quality-gate.yml`、`complexity_check.py`、`verification_linter.py`） |
+| `converge` | `01`、带偏差表的 `02`、勾选 `QA_PASSED` 的 `03` | 写回 `.specs/02-tech-spec.md`、`CONVERGED` 状态、归档任务包 | 脚本（`converge.py`，append-only 写回） |
 
 ---
 
 ## 3. 工作模型：判断 vs 确定性
 
-改造后的分层非常明确：
+整个研发流水线由“智能判断层”与“确定性门禁层”交织构成：
 
-| 层 | 负责什么 | 载体 |
-| :--- | :--- | :--- |
-| **Skill** | 业务理解、角色博弈、权衡、写作 | `SKILL.md` + `references/` |
-| **Template** | 机器可解析的格式契约 | `assets/templates/` |
-| **Script** | 脚手架、占位符/锚点/DAG/结构校验 | `scripts/*.py`（仅标准库） |
-| **CI** | 真正强制的 RBAC 与质量门禁 | `tools/rbac_audit.py` + 分支保护 |
+| 分层 | 负责内容 | 核心载体 | 判定机制 |
+| :--- | :--- | :--- | :--- |
+| **智能协商层 (Skill)** | 需求理解、架构权衡、BDD 设计、编码实现、黑盒设计 | `SKILL.md` + `references/` | Agent 提示词推理 |
+| **数据契约层 (Template)** | 结构化、机器可解析的角色契约与证据表单 | `assets/templates/` | 标准 Markdown/YAML |
+| **规划门禁 (Gate 1)** | 契约合法性、BDD 三段式格式、切片爆炸半径、DAG 无环 | `plan_linter.py` | 确定性脚本（exit 0/1） |
+| **语义门禁 (Gate 2)** | 正向覆盖、反幻觉审查、ADR 架构红线对齐 | `review` 技能 | 只读 Reviewer Agent |
+| **验收门禁 (Gate 3)** | 圈复杂度用例覆盖 $V(G) \le \text{用例数}$、变异测试得分 $\text{MSI} \ge 80\%$ | `verification_linter.py` | 确定性脚本（exit 0/1） |
+| **权威强制层 (CI / L2)** | 角色 RBAC 边界审计、全量门禁串联、分支合并保护 | `tools/rbac_audit.py` + `quality-gate.yml` | GitHub Actions / 平台 CI |
 
-- **Gate 1** 是确定性脚本，检查结构；**Gate 2** 是只读 Reviewer 的语义审查，不做自动化承诺。
-- 发布包不包含宿主 hook 适配器；本地提示词规则只是提示层，**权威强制层是 CI**（`tools/rbac_audit.py`）+ 分支保护。
+> **关键原则**：本地提示词规则与 Agent 自律仅为辅助（L0），**权威强制层是 CI 与分支保护（L2）**。任何任务必须在 CI 中通过 RBAC 审计、Gate 1、Gate 3 及验收测试，才允许合入主干。
 
 ---
 
-## 4. 快速开始（不安装引擎）
+## 4. 快速开始（端到端实战流程）
 
-以下命令都在目标仓库根目录执行。首次使用建议先复制模板、再填写、最后校验。
+以下命令均在目标仓库根目录执行。
 
 ### 4.1 生成并填写 PRD
 
 ```bash
-# 1) 复制 PRD 模板到 .specs/（默认输出目录就是 .specs）
+# 1) 复制 PRD 模板到 .specs/
 python .agents/skills/prd-generator/scripts/scaffold.py --out .specs
 
-# 2) Agent 按 SKILL.md 与 references/prd-format.md 填写：
-#    .specs/01-prd.md
-#    .specs/01-prd/00-overview.md ... 04-forks.md
+# 2) Agent 依据 SKILL.md 与 references/prd-format.md 编写：
+#    .specs/01-prd.md 及 .specs/01-prd/*.md
 
-# 3) 结构校验（会拦截未替换的 {{...}}、[TBD]、缺失 #sec-* 等）
-python .agents/skills/prd-generator/scripts/lint_prd.py .specs/01-prd.md
-# 或校验整个目录
+# 3) 静态校验结构
 python .agents/skills/prd-generator/scripts/lint_prd.py .specs
 ```
 
-> 刚 scaffold 完直接 lint 会失败，这是预期行为：模板里的 `{{UPPER_SNAKE}}` 必须由 Agent 替换。
-
-### 4.2 生成并填写技术规格
+### 4.2 生成并填写技术规格与 ADR
 
 ```bash
 # 1) 复制 ADR / Tech Spec 模板
 python .agents/skills/spec-generator/scripts/scaffold.py --out .specs
 
-# 2) 填写 .specs/adr/*.md、.specs/02-tech-spec.md 与 .specs/02-tech-spec/
+# 2) 编写 .specs/adr/*.md、.specs/02-tech-spec.md 与 .specs/02-tech-spec/
 
-# 3) 结构校验
+# 3) 静态校验技术规格
 python .agents/skills/spec-generator/scripts/lint_spec.py .specs
 ```
 
-模板是中立的：不再默认 PostgreSQL/Redis/Kafka/Envoy、`tenant_id` 或 TypeScript 专属假设；技术栈必须来自当前 PRD 与 ADR。
-
-### 4.3 拆任务并填契约
+### 4.3 拆分任务并生成 BDD 契约
 
 ```bash
-# 为每个任务生成一个目录和四份文档
+# 为任务生成标准四文档
 python .agents/skills/task-decomposition/scripts/scaffold_task.py \
   --tasks-dir tasks \
   --task-id task-001-auth \
-  --title "用户认证"
-
-# 只填写 01-contract.md；02/03 保持空白表单；04 已初始化，不要手改
+  --title "用户认证与凭据校验"
 ```
 
-- `--task-id` 会同时作为目录名和契约的 `task_id`，两者必须一致；
-- `02-dev-workspace.md` / `03-qa-verification.md` 是**无占位符的空白角色表单**，由 Dev/QA 后续填写；
-- `04-process.md` 是派生文件，模板已初始化为 `macro_status: TODO`、`micro_phase: UNASSIGNED`、`current_lock_holder: None`、`retry_count: 0`，事件表只有表头；由可选事件工具或 CI 维护；
-- 脚手架结束时会打印 `remaining placeholders to fill`：**只有 01 的占位符需要 Planner 填完**；02/03 没有 token，04 不需要手工填。
-
-### 4.4 运行 Gate 1
-
-```bash
-python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks
-# 机器可读
-python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks --json
-```
-
-只有 `01-contract.md`、`02-dev-workspace.md`、`03-qa-verification.md` 会被占位符扫描，`04-process.md` 不扫描。
-
-### 4.5 Gate 2（语义审查）
-
-Gate 1 通过后，由**只读 Reviewer Agent** 使用 `review` 技能的 **plan-review 模式**执行
-（[`review/SKILL.md`](../.agents/skills/review/SKILL.md)）：
-
-1. 正向覆盖率：PRD/规格中的接口与需求是否都有任务承接；
-2. 反向反幻觉：任务是否脑补了上游不存在的实体；
-3. ADR 红线：实现是否违背架构决策。
-
-若未安装 review 技能，可用 `plan-linter/references/gate-2-review.md` 作为自包含的备用清单。
-Gate 2 的结论必须由 Reviewer 输出，不能写成"脚本已自动验证"。
-
-### 4.6 开发与验收（dev / qa）
-
-Gate 2 通过后，任务进入执行阶段：
-
-- **Dev**：按 `.agents/skills/dev/SKILL.md` 实现 `01-contract.md` 定义的切片；只改 `touch_files`，跑 `dod`，填 `02-dev-workspace.md`，全部通过后勾选 `WAITING_FOR_QA`。
-- **QA**：按 `.agents/skills/qa/SKILL.md` 独立设计黑盒测试，写 `tests/acceptance/**`，填 `03-qa-verification.md`，二选一勾选 `QA_PASSED` 或 `REWORK_REQUIRED`。
-- 返工循环：QA 退回 → Dev 在契约内修复并重新交接 → QA 更新尝试轮次后重验。
-
----
-
-### 4.7 brownfield 增量（change）
-
-不用重写 PRD，直接对现有规格做有界变更：
-
-```bash
-python .agents/skills/change/scripts/standards_extract.py --repo-root .
-python .agents/skills/change/scripts/scaffold_change.py --change-id CHG-001-rate-limit \
-  --title "Rate limit login attempts" --anchor "#sec-auth-tokens" \
-  --size-class micro --estimated-lines 40 \
-  --touch-files "modify:src/auth/rate_limit.py" --repo-root .
-```
-
-之后走同样的 Gate 1 / Gate 2 / dev / qa；QA 通过后由 `converge` 写回。完整流程、proposal 格式与 micro/standard 预算见 [brownfield-convergence.zh-CN.md](brownfield-convergence.zh-CN.md)。
-
-### 4.8 收敛（converge）
-
-```bash
-# 1) 分类：哪些任务包可以收敛
-python .agents/skills/converge/scripts/converge.py check --tasks-dir ./tasks --json
-# 2) 先预览，再执行（幂等；只追加，不改写历史）
-python .agents/skills/converge/scripts/converge.py apply --task tasks/CHG-001-rate-limit --dry-run
-python .agents/skills/converge/scripts/converge.py apply --task tasks/CHG-001-rate-limit
-```
-
-`apply` 会把 `02` 的 Implementation deviations 表追加进 `.specs/02-tech-spec.md` 的 Converged changes 章节，把 `04` 置为 `CONVERGED`，并把任务包移动到 `tasks/archive/`。
-
----
-
-## 5. 各技能详解
-
-### 5.1 `prd-generator`
-
-- **何时用**：用户要 PRD、功能范围、MVP 边界、需求修订；还处于"想清楚要做什么"的阶段。
-- **何时不用**：要做架构决策/ADR/工程规格（→ `spec-generator`）；只是实现或改代码。
-- **流程**：澄清 → 4 角色评审（宿主支持 SubAgent 就独立评审，否则同一上下文内显式模拟）→ 收敛 → 可选 scaffold → 填写 → 可选 lint → 交给 spec-generator。
-- **输出**：`.specs/01-prd.md`（权威聚合版）+ `.specs/01-prd/`（模块化副本）。
-- **脚本**：
-  - `scaffold.py --out .specs [--dry-run] [--force] [--json]`
-  - `lint_prd.py [文件或目录] [--json]`
-  - `engine.py ...`（可选，未安装时 exit 2）
-- **Lint 拦截**：未替换占位符、缺失/非法 `#sec-*`、必需的 REQ/CON/NFR/FORK 结构、无效内部链接；重复锚点给 warning。
-
-### 5.2 `spec-generator`
-
-- **何时用**：已有 PRD，需要 ADR、拓扑、接口/数据契约、技术规格。
-- **何时不用**：需求还在发散（→ `prd-generator`）；已进入实现。
-- **流程**：摄入 PRD → 4 角色架构评审 → 对每个 `FORK-*` 形成 ADR → 设计拓扑/数据/接口/不变量 → 可选 scaffold → 填写 → 可选 lint → 交给 task-decomposition。
-- **输出**：`.specs/adr/*.md`、`.specs/02-tech-spec.md`、`.specs/02-tech-spec/`。
-- **脚本**：`scaffold.py`、`lint_spec.py`、`engine.py`（可选）。
-- **Lint 拦截**：占位符、缺失锚点、Mermaid 围栏/括号不平衡、ADR 必需章节、失效链接；重复锚点 warning。
-
-### 5.3 `task-decomposition`
-
-- **何时用**：规格已经评审通过，需要切成可独立开发、可独立验收的任务。
-- **何时不用**：规格还在设计；改动小到单文件；只是审查已有任务（→ `plan-linter`）。
-- **流程**：建立追溯矩阵 → 规划垂直切片与 DAG → 用 `scaffold_task.py` 生成四文档 → 填 01 → Gate 1 → Gate 2。
-- **黄金切片默认值**：1–3 个 touch files、50–250 行预估变更；阈值可在 linter config 覆盖。
-- **契约 frontmatter（01 的权威部分）**：
+Planner 在 `01-contract.md` 中编写结构化的 BDD 验收场景：
 
 ```yaml
 ---
-task_id: task-001-auth          # 必须等于目录名
-title: "User authentication"
+task_id: task-001-auth
+title: "用户认证与凭据校验"
 module: auth
-dependencies: []                # 或 [task-000-bootstrap]
+dependencies: []
 estimated_lines: 120
 touch_files:
-  - action: create              # create | modify
+  - action: create
     path: src/auth/service.py
   - action: modify
     path: src/auth/routes.py
-origin_spec_anchor: "#sec-auth" # 必填，#sec-[a-z0-9-]+
-adherence_adrs: [ADR-001]       # 至少一个
+origin_spec_anchor: "#sec-auth"
+adherence_adrs: [ADR-001]
 dod:
   type_check: "npm run type-check"
   lint: "npm run lint"
-  test_file: "tests/acceptance/test_auth.ts"
+  test_file: "tests/acceptance/test_auth.py"
   edge_cases:
-    - "空凭据返回 400"
-    - "过期 token 返回 401"
+    - "Given empty credentials, When login requested, Then return 400 with invalid parameters error"
+    - "Given expired session token, When profile requested, Then return 401 unauthorized"
+    - "Given locked account, When credentials submitted, Then return 403 account locked"
 ---
 ```
 
-- 01 必须没有未替换占位符；02/03 是空白角色表单；04 初始化为 `TODO/UNASSIGNED/None/0`，不手写、由工具/CI 更新。
+同时在 `01-contract.md` 第 4 节定义详细的 Gherkin Feature 行为不变量。
 
-### 5.4 `plan-linter`（Gate 1）
+### 4.4 运行 Gate 1（规划门禁）
 
-- **Gate 1 检查项**：
-  1. `touch_files` 数量（默认 ≤3）与禁止前缀（默认 `tests/acceptance/`）；
-  2. `estimated_lines` 区间（默认 50–250）；
-  3. `origin_spec_anchor` 必须是合法 `#sec-*`；
-  4. `adherence_adrs` 非空；
-  5. `dod.type_check` / `lint` / `test_file` 齐全且无占位符；
-  6. `edge_cases` 至少 2 个；
-  7. 02/03/04 文档存在；
-  8. `task_id` 与目录名一致、无重复 ID；
-  9. 依赖图无环、无悬空依赖；
-  10. 01/02/03 无占位符（04 除外）；
-11. `size_class: micro` 的预算与 `change_id`（v3）；
-12. change proposal 处于 `proposed`/`applied`（传 `--changes-dir` 时）。
-- **CLI**：
-  ```bash
-  python .agents/skills/plan-linter/scripts/plan_linter.py \
-    --tasks-dir ./tasks [--config plan-linter.json] [--json] [--legacy] [--no-placeholder-scan] \
-    [--repo-root .] [--spec .specs/02-tech-spec.md] [--changes-dir .specs/changes] \
-    [--coverage-out artifacts/coverage.json] [--strict-topology] [--strict-anchor] \
-    [--require-full-coverage]
-  ```
-- **Gate 2 启发式（v3）**：`--spec` 输出锚点覆盖率矩阵（JSON `coverage`），`--repo-root` 做真实路径拓扑检查（`modify` 必须存在、`create` 不能已存在），`--changes-dir` 校验 proposal 是否存在且未关闭。它们只提供线索，Gate 2 结论仍由只读 Reviewer 给出。
-- **退出码**：`0` 通过；`1` 违规；`2` 用法/配置错误；`3` 未预期错误。
-- **JSON 形状**：`{"gate":"1","passed":bool,"tasks_scanned":n,"errors":[{task,code,message,file,line}],"warnings":[...]}`。
-- 旧的中文表格契约可通过 `--legacy` 或自动回退解析，但会输出 `LEGACY_FORMAT` warning；新任务应使用 frontmatter。
+```bash
+# 本地运行 Gate 1 静态检查（检查切片大小、BDD 格式、DAG 等）
+python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks
 
-### 5.5 `review`
+# 输出机器可读 JSON（CI 门禁模式）
+python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks --json
+```
 
-- **何时用**：Gate 1 已通过、需要 Gate 2 语义审查；或 Dev 提交变更后需要代码/变更审查。
-- **何时不用**：你本人是作者；Gate 1 未通过；需要实现或 QA 验证；被要求改代码来让它通过。
-- **两种模式**：plan review（PRD/ADR/规格 ↔ 任务契约）与 code review（契约 ↔ diff/测试证据）。
-- **流程**：确认独立性 → 选模式 → 先读上游 → 按清单审查 → 分级（blocker/major/minor/nit）→ 给出唯一裁决。
-- **输出**：带文件/行号证据的发现清单；`PASS` / `REQUEST CHANGES` / `BLOCKED`；**不修改任何产物**。
-- **细节**：[`review/references/plan-review.md`](../.agents/skills/review/references/plan-review.md)、
-  [`review/references/code-review.md`](../.agents/skills/review/references/code-review.md)。
+### 4.5 运行 Gate 2（语义审查）
 
-### 5.6 `dev`
+由只读 Reviewer Agent 执行，核对任务切片是否如实反映规格、是否发明未授权实体、是否遵循 ADR 架构红线。
 
-- **何时用**：`01-contract.md` 已完成、你被指派为 Dev，需要实现并交接。
-- **何时不用**：契约缺失/有争议；你被要求规划或验收；所需改动超出 `touch_files`。
-- **流程**：读契约 → 确认爆炸半径 → 只改白名单文件 → 跑类型检查/Lint/已有测试 → 填 `02` → 全部通过后勾 `WAITING_FOR_QA`（验收测试由 QA 运行）。
-- **输出**：代码变更；`02-dev-workspace.md`；唯一交接标记；不改 `01/03/04` 与 `tests/acceptance/`。
-- **细节**：[`dev/references/dev-protocol.md`](../.agents/skills/dev/references/dev-protocol.md)。
+### 4.6 开发、自测与独立验收（Dev & QA）
 
-### 5.7 `qa`
+1. **Dev 实现与复杂度控制**：
+   - 严格在 `touch_files` 白名单内编码；
+   - 保持单函数圈复杂度 McCabe $V(G) \le 10$；若分支过深，应用提炼函数或策略模式重构；
+   - 运行本地 `dod.type_check`、`dod.lint` 与单元自测；
+   - 填写 `02-dev-workspace.md`，确认无误后勾选 `- [x] WAITING_FOR_QA` 交接。
 
-- **何时用**：`02` 中 `- [x] WAITING_FOR_QA` 已勾选，需要独立验收。
-- **何时不用**：尚未交接；被要求实现/规划；契约或上游规格缺失。
-- **流程**：验证交接 → 设计黑盒矩阵（正常/边界/回放/安全）→ 只写 `tests/acceptance/**` → 执行并记录证据 → 审计爆炸半径 → 二选一裁决。
-- **输出**：验收测试；`03-qa-verification.md`；`QA_PASSED` 或 `REWORK_REQUIRED`；不改源码 `01/02/04`。
-- **细节**：[`qa/references/qa-protocol.md`](../.agents/skills/qa/references/qa-protocol.md)。
+2. **QA 本地开发阶段测试（集成测试、BDD E2E、变异测试、静态分析、自主 Review）**：
+   - **集成测试**：在 `tests/integration/` 编写跨模块协作与接口集成用例；
+   - **基于 BDD 模式的端到端测试**：基于 `01-contract.md` 的 Given-When-Then 场景，自主引入各技术栈知名开源 BDD 工具（Python `pytest-bdd`/`behave`、JS/TS `Cucumber.js`、Go `Godog`、Java `Cucumber-JVM` 等）在 `tests/acceptance/` 编写黑盒验收与 E2E 测试；
+   - **代码静态分析**：使用跨语言 AST 引擎 **Tree-sitter** 与开源分析工具（`tree-sitter`、`lizard`、`radon`、`eslint` 等），审查变更函数的独立路径，确保用例数 $\ge V(G)$，严禁 $V(G) > 15$；
+   - **自主调用 review 技能**：自行决定调用 `review` skill 评审变更代码规范（可读性、命名与可维护性）；
+   - **引入知名开源工具与变异测试**：针对不同项目类型**必须优先引入知名开源变异测试工具**（`mutmut`、`Stryker`、`go-mutesting`、`PITest`、`cargo-mutants`、`Mull` 等），击杀存活弱断言，确保 $\text{MSI} \ge 80\%$；合成变异仅作为无开源工具环境的灾备后备方案；
+   - 填写 `03-qa-verification.md` 中的复杂度表、变异审计表与执行证据，勾选 `- [x] QA_PASSED` 或 `REWORK_REQUIRED`。
 
-### 5.8 `change`
+3. **运行 Gate 3（验收门禁本地预检）**：
 
-- **何时用**：已有规格/代码库要做有界增量（bugfix、小功能、行为调整），不值得重写 PRD。
-- **何时不用**：greenfield（→ `prd-generator`）；需要新章节/新组件/新 ADR（→ `spec-generator`）；只是切片任务（→ `task-decomposition`）。
-- **流程**：standards 提取 → proposal + 1 个任务包 → Planner 填字段 → Gate 1/Gate 2 → dev/qa → converge 归档。
-- **输出**：`.specs/changes/<id>/proposal.md`、`tasks/<id>/` 四文档、`.specs/change-context/standards.md`。
-- **细节**：[`change/SKILL.md`](../.agents/skills/change/SKILL.md)、[`brownfield-protocol.md`](../.agents/skills/change/references/brownfield-protocol.md)、[v3 使用说明](brownfield-convergence.zh-CN.md)。
+```bash
+# 校验 03 文档中的圈复杂度与变异测试杀伤力证据（由 quality-engineering 提供并维护）
+python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir tasks --strict --json
+```
 
-### 5.9 `converge`
+### 4.7 规格收敛与归档（converge）
 
-- **何时用**：`03` 已勾选 `QA_PASSED`，且 `02` 的偏差表已写好（无偏差写一行 `None`）。
-- **何时不用**：实现/验收仍在进行；偏差表为空（打回 Dev，而不是猜）；需要发明规格内容（那是重新规划）。
-- **流程**：`check` 分类 → `apply --dry-run` → `apply` → 复跑 `check` 与 `--spec-sha256` 验证。
-- **输出**：规格末尾的 Converged changes 记录 + marker；`04` 的 `CONVERGED`；`tasks/archive/<task-id>/`；proposal `archived`。
-- **细节**：[`converge/SKILL.md`](../.agents/skills/converge/SKILL.md)、[v3 使用说明](brownfield-convergence.zh-CN.md)。
+Gate 3 与 CI 均通过后，触发收敛技能：
+
+```bash
+# 预览收敛写回内容
+python .agents/skills/converge/scripts/converge.py apply --task tasks/task-001-auth --dry-run
+
+# 正式执行收敛（将 02 偏差表追加进 02-tech-spec.md 并将任务包移至 tasks/archive/）
+python .agents/skills/converge/scripts/converge.py apply --task tasks/task-001-auth
+```
 
 ---
 
-## 6. 四文档与角色边界
+## 5. 现代质量工程三支柱核心规范
 
-`tasks/<task-id>/`：
+现代质量工程的三大核心支柱贯穿从需求分解到最终收敛的全流程：
 
-| 文档 | 归属 | 规则 |
-| :--- | :--- | :--- |
-| `01-contract.md` | Planner | 权威 frontmatter + 人类可读契约；对 Dev/QA 只读 |
-| `02-dev-workspace.md` | Dev | 实施记录、实际变更、自测；全部通过后勾选 `- [x] WAITING_FOR_QA` 交接 |
-| `03-qa-verification.md` | QA | 独立黑盒用例、执行证据、爆炸半径审计；二选一勾选 `QA_PASSED` 或 `REWORK_REQUIRED` |
-| `04-process.md` | 工具/CI | 派生状态与审计；初始 `TODO/UNASSIGNED/None/0`，Agent 不手写 |
+```text
+               ┌─────────────────────────────────────────────────────┐
+               │         现代质量工程三大核心支柱 (Quality Triad)         │
+               └─────────────────────────────────────────────────────┘
+                                          │
+         ┌────────────────────────────────┼────────────────────────────────┐
+         ▼                                ▼                                ▼
+┌──────────────────┐            ┌──────────────────┐            ┌──────────────────┐
+│  BDD 行为驱动规格 │            │  圈复杂度控制流   │            │   变异测试与 MSI  │
+│ Executable Spec  │            │ McCabe V(G) <= 10│            │   Kill Ratio >= 80% │
+└──────────────────┘            └──────────────────┘            └──────────────────┘
+│ • 01 edge_cases  │            │ • Dev 函数复杂度  │            │ • 6 步变异测试流程│
+│ • Given-When-Then│            │ • 4 大重构设计模式│            │ • 多语言变异引擎   │
+│ • Gherkin 场景   │            │ • QA 用例数 >= V(G│            │ • 5 大合成变异算子│
+│ • Gate 1 静态门禁│            │ • Gate 3 静态审计 │            │ • 消除无力断言假阳│
+└──────────────────┘            └──────────────────┘            └──────────────────┘
+```
 
-> v3 起 `02` 末尾有 `Implementation deviations` 表（`DEV-001 / #sec-* / add|modify|remove / 确认行为`）。无偏差时写一行 `None`，供 `converge` 写回规格使用；Dev 仍不直接编辑规格。
+### 5.1 BDD 行为驱动规格与可执行契约
 
-### 6.1 DevAgent 如何工作
+#### 核心理念
+传统研发流程中，需求描述常因自然语言歧义导致实现与验收脱节。BDD（Behavior-Driven Development）将业务期望形式化为统一的领域行为规范（Given-When-Then），成为研发（Dev）、测试（QA）与业务方共同遵循的“可执行活文档”。
 
-1. **读契约**：读 `01-contract.md` 的 frontmatter（权威）、继承的 ADR 与对应 `#sec-*` 规格；不改 01。
-2. **在爆炸半径内实现**：只创建/修改 `touch_files` 列出的路径；需要越界时停下来升级/拆任务。
-3. **跑 DoD**：执行 `dod.type_check`、`dod.lint` 与项目已有测试，逐条考虑 `dod.edge_cases`；`dod.test_file` 是 QA 所有，若尚未创建则在 02 中注明交给 QA，Dev 只运行、不创建/不改 `tests/acceptance/`。
-4. **填写 02**：记录分支/提交、实现说明、逐文件实际变更与行数、自测勾选。
-5. **只在全部通过后交接**：把 `- [ ] WAITING_FOR_QA` 改成 `- [x] WAITING_FOR_QA`；这是唯一交接触发信号。
-6. **不动 03/04**：03 归 QA，04 由工具派生。
+#### 契约规范与格式要求
+1. **Frontmatter `dod.edge_cases` 结构化约束**：
+   契约头部数组中的每个用例必须遵循严格的英文或中英文三段式结构：
+   ```yaml
+   dod:
+     edge_cases:
+       - "Given [前置条件], When [触发动作], Then [预期结果与副作用]"
+   ```
+   *有效示例*：
+   - `"Given user with insufficient balance, When transfer initiated, Then return 402 and keep balance unchanged"`
+   - `"Scenario: Rate limit exceeded | Given 100 requests in 1 minute, When 101st request sent, Then return 429 Too Many Requests"`
 
-### 6.2 QAAgent 如何工作
+2. **Section 4 行为不变量（Behavioral Invariants）**：
+   在 `01-contract.md` 正文中使用 Gherkin 语法详细定义主要场景（Happy Path）与异常场景（Corner Cases）：
+   ```gherkin
+   Feature: User Token Authentication
+     Scenario: Successful token validation
+       Given a valid and unexpired JWT token for user "alice"
+       When the client requests protected resource "/api/v1/profile"
+       Then response status is 200
+       And response body contains user profile data
+   ```
 
-1. **读契约与交接**：读 01 的 DoD/ADR 和 02 的交接声明；黑盒设计用例，尽量不先读实现。
-2. **写验收测试**：只允许写 `tests/acceptance/**` 与 `03-qa-verification.md`。
-3. **执行并记录**：填测试矩阵（正常/边界/重复回放/安全）、执行命令、通过/失败数、覆盖率与失败 trace。
-4. **审计**：确认实际变更都在 `touch_files` 内、Dev 没改测试或 01、实现遵守 `adherence_adrs`。
-5. **给出唯一裁决**：全部通过才勾 `- [x] QA_PASSED`；否则勾 `- [x] REWORK_REQUIRED` 并附完整失败痕迹与修复期望。
-6. **不动源码/01/02/04**：缺陷退回 Dev 修，QA 只更新 03 的下一轮尝试与证据。
+3. **Gate 1 静态校验**：
+   `plan_linter.py` 内置 BDD 场景解析引擎，严格拦截：
+   - `BDD_MISSING_PRECONDITION`：缺少 Given 前置条件声明；
+   - `BDD_MISSING_ACTION`：缺少 When 动作声明；
+   - `BDD_MISSING_OUTCOME`：缺少 Then 结果断言；
+   - `BDD_EMPTY_SCENARIO`：场景包含未替换的 `[TBD]` 或空白字符串。
 
-### 6.3 `04-process.md` 初始记录与事件映射
+4. **各技术栈知名开源 BDD 工具推荐与运行范式**：
+   QA 编写验收测试时，应将契约中的 Gherkin 场景映射为对应技术栈成熟的开源 BDD 框架测试：
+   - **Python**: `pytest-bdd` (`pytest tests/acceptance/`) 或 `behave` (`behave tests/acceptance/features/`)
+   - **JavaScript / TypeScript**: `Cucumber.js` (`npx cucumber-js tests/acceptance/features/*.feature`) 或 `playwright-bdd`
+   - **Go**: `Godog` (`godog run tests/acceptance/features/`)
+   - **Java**: `Cucumber-JVM` (`mvn test -Dcucumber.filter.tags="@acceptance"`)
+   - **Rust**: `cucumber-rs` (`cargo test --test cucumber`)
+   - **C# / .NET**: `Reqnroll` / `SpecFlow` (`dotnet test --filter Category=Acceptance`)
 
-初始文件由模板生成，只包含状态卡和空事件表：
+---
+
+### 5.2 圈复杂度控制流分析与基本路径覆盖门禁
+
+#### 核心理念与 McCabe 计算公式
+圈复杂度（Cyclomatic Complexity，McCabe 度量衡）衡量程序控制流中的独立线性路径数量。控制流图表示为有向图 $G = (V, E)$，公式为：
+$$V(G) = E - N + 2P$$
+对于单函数（连通分量 $P = 1$），$V(G) = \text{判定节点数（if, while, for, case, &&, || 等）} + 1$。
+高圈复杂度意味着极高的认知负荷、高缺陷率与极难完全测试的代码。
+
+#### 复杂度阈值与红线标准
+- **$V(G) \le 10$（健康 / STANDARD）**：单函数圈复杂度推荐上限。结构清晰，易于理解与测试。
+- **$11 \le V(G) \le 15$（告警 / WARNING）**：黄色预警，Dev 需在 `02` 中详细说明控制流合理性，并考虑重构。
+- **$V(G) > 15$（严重违规 / CRITICAL）**：红色门禁直接阻断！严禁合入代码库，必须通过设计模式进行函数拆解。
+
+#### Dev 角色 4 大重构模式
+当单函数圈复杂度逼近或超过 10 时，Dev 应当采用以下标准模式重构：
+1. **提炼函数（Extract Method）**：将循环体内部复杂的条件分支逻辑抽取为独立命名的纯函数；
+2. **策略模式 / 多态分发（Strategy / Dispatch Table）**：用字典表映射（Dictionary Dispatch）或多态子类替代深层嵌套的 `switch-case` 或多分支 `if-elif-else`；
+3. **卫语句早期返回（Guard Clauses）**：在函数前部对非法参数、边界条件与错误状态执行 `return`，消除多层缩进嵌套；
+4. **表驱动设计（Table-driven Design）**：将复杂的多条件映射关系提取为数据驱动规则表，将控制流复杂度转化为数据结构。
+
+#### QA 基本路径测试基线规则（Basis Path Testing Baseline Rule）
+- **数学覆盖铁律**：QA 设计的黑盒验收用例数量，在数学上**不得低于变更函数的基本路径数总和**：
+  $$\text{Test Cases} \ge \sum V(G)_{\text{modified\_functions}}$$
+- **03 产物证据**：在 `03-qa-verification.md` 的 `Section 3. Complexity and basis path coverage` 表格中，明确记录被测函数名、圈复杂度、独立路径描述及对应测试用例编号（如 `TC-001`, `TC-002`）。
+
+#### 跨语言开源解析引擎（Tree-sitter 与知名开源工具）
+圈复杂度计算必须覆盖实际项目的多种主流编程语言，严禁局限于 Python 单语言。体系采用知名开源项目 [Tree-sitter](https://github.com/tree-sitter/tree-sitter) 作为多语言抽象语法树（CST）统一分析引擎，并深度集成各语言生态的成熟工具：
+- **通用跨语言引擎（内置）**：`quality-engineering` 提供的 `complexity_check.py` 基于 Tree-sitter 解析 Python、JavaScript、TypeScript、Go、Rust、Java、C、C++、C#，统一判定控制流分支并统计 $V(G)$；同时原生支持开源多语言复杂度工具 [Lizard](https://github.com/terryyin/lizard)；
+- **Python**: `tree-sitter`、`lizard`、`radon cc`、`ruff`
+- **JavaScript / TypeScript**: `tree-sitter`、`eslint`（`complexity` 规则）、`lizard`
+- **Go**: `tree-sitter`、`gocyclo`、`gocognit`、`lizard`
+- **Rust**: `tree-sitter`、`cargo clippy -- -D clippy::cognitive_complexity`、`lizard`
+- **Java**: `tree-sitter`、`pmd`（`CyclomaticComplexity` 规则）、`checkstyle`
+- **C / C++**: `tree-sitter`、`lizard`
+
+---
+
+### 5.3 变异测试杀伤力审计与假阳性消除
+
+#### 为什么必须做变异测试？
+代码行覆盖率（Line Coverage）与分支覆盖率（Branch Coverage）存在致命盲区：**只要代码被执行过，覆盖率即记为 100%，哪怕测试中没有写任何 `assert` 断言，或者只写了毫无约束力的弱断言**。
+变异测试通过在被测代码中自动注入微小语法变异（如改写比较符、翻转布尔值、替换常量），检验测试套件能否及时报错失败。若变异注入后测试依然全部通过，证明存在严重的“无力断言”与“假阳性测试”。
+
+#### 核心指标与计算公式
+变异得分指示器（Mutation Score Indicator, MSI）定义为被杀伤或超时的变异体占有效变异体总数的百分比：
+$$\text{MSI} = \frac{\text{Killed} + \text{TimedOut}}{\text{Total} - \text{Equivalent}} \times 100\%$$
+- **门禁红线**：标准交付任务必须达到 **$\text{MSI} \ge 80\%$**；核心安全与高危模块推荐 **$\text{MSI} \ge 90\%$**。
+
+#### 6 步变异测试标准工作流
+```text
+1. 选取目标 (touch_files) ──> 2. 注入变异体 ──> 3. 执行测试套件
+                                                      │
+                                                      ▼
+6. 门禁审计 (MSI >= 80%) <── 5. 杀伤弱断言 <── 4. 变异分类 (K/S/T/E)
+```
+1. **限定目标**：仅针对本次任务 `touch_files` 中变更的代码函数进行变异测试，避免全仓运行的性能开销；
+2. **注入变异**：调用变异引擎或由 QA Agent 注入变异算子；
+3. **执行测试**：针对每个变异体运行黑盒验收用例；
+4. **分类结果**：
+   - **Killed（击杀）**：测试断言捕获错误并失败（优秀断言）；
+   - **Survived（存活）**：测试全部通过（暴露弱断言或测试盲区）；
+   - **TimedOut（超时）**：引发死循环或超时被强杀（视同有效击杀）；
+   - **Equivalent（等价）**：变异后语义并未改变（如冗余边界条件），不计入分母；
+5. **杀伤弱断言**：分析所有 Survived 变异体，精准补强或新增黑盒验收断言，直到将存活变异体彻底击杀；
+6. **门禁审计**：将最终变异数据写入 `03-qa-verification.md`，由 Gate 3 静态门禁脚本校验。
+
+#### 各技术栈知名开源变异测试工具（首选与强制执行标准）
+进行变异测试时，**必须优先引入各技术栈成熟权威的开源变异测试工具**。开源工具具备标准变异算子库与严格的沙箱运行机制，确保变异杀伤证据客观真实：
+- **Python**: `mutmut`（标准首选）或 `cosmic-ray`
+  ```bash
+  mutmut run --paths-to-mutate src/auth/service.py --runner "pytest tests/acceptance/"
+  mutmut results
+  ```
+- **JavaScript / TypeScript**: `Stryker`（前端与 Node.js 工业标准）
+  ```bash
+  npx stryker run --mutate "src/auth/**/*.ts"
+  ```
+- **Go**: `go-mutesting`
+  ```bash
+  go-mutesting ./src/auth/...
+  ```
+- **Rust**: `cargo-mutants`
+  ```bash
+  cargo mutants --file src/auth/service.rs
+  ```
+- **Java / Kotlin**: `PITest (PIT)`
+  ```bash
+  mvn org.pitest:pitest-maven:mutationCoverage
+  ```
+- **C / C++**: `Mull` (`mull-runner`)
+- **C# / .NET**: `Stryker.NET` (`dotnet stryker --mutate "src/auth/**"`)
+
+#### 极端无工具环境下的合成变异灾备方案（Synthetic Mutation Disaster Fallback）
+仅当项目技术栈属于极其罕见或无任何开源变异测试工具支持的极少数特殊场景时，才允许将合成变异作为灾备后备方案。QA Agent 必须严格按照 5 大标准变异算子执行手工/脚本注入与验证：
+1. **ROR (Relational Operator Replacement)**：关系操作符替换（如 `>` 变 `<=`, `==` 变 `!=`）；
+2. **AOR (Arithmetic Operator Replacement)**：算术操作符替换（如 `+` 变 `-`, `*` 变 `/`）；
+3. **LCR (Logical Connector Replacement)**：逻辑连接词替换（如 `and` 变 `or`）；
+4. **ABS (Absolute Value / Negation)**：正负值与空值反转（如 `count` 变 `-count`, `user` 变 `None`）；
+5. **UOI (Unary Operator Insertion)**：一元操作符插入（如 `x` 变 `!x`, `x++` 变 `x--`）。
+
+---
+
+## 6. 四阶段分层测试流水线与 CI 权威门禁
+
+为确保代码在从开发机到生产环境的每一层级均具备确定性的质量保障，体系定义了严格的四阶段分层测试流水线：
+
+```text
+┌─────────────────────────────────────────────────────────────────────────────────────────┐
+│                        四阶段分层测试流水线 (4-Stage Layered Pipeline)                    │
+└─────────────────────────────────────────────────────────────────────────────────────────┘
+   │
+   ├─► 阶段 1：本地测试（Local Testing — Dev 与 QA 闭环）
+   │    ├─ Dev 自测：dod.type_check / lint / test_file，单函数 V(G) <= 10
+   │    ├─ QA 本地测试：集成测试 (tests/integration/)、BDD E2E 测试 (tests/acceptance/)
+   │    ├─ QA 质量保障：变异测试 (MSI >= 80%)、静态分析 (Lint/圈复杂度)、自主调用 review 评审
+   │    └─ 本地预检：运行 plan_linter.py (Gate 1) 与 verification_linter.py (Gate 3)
+   │
+   ├─► 阶段 2：测试环境（Test Environment — quality-engineering 负责）
+   │    ├─ 环境配置与验证：容器沙箱隔离、运行时依赖验证、网络隔离与 Mock 就绪
+   │    └─ 契约验证：验证真实拓扑连通性与 ADR 架构契约兼容性
+   │
+   ├─► 阶段 3：合并前测试（Pre-merge / PR Gate — quality-engineering 自动化门禁）
+   │    ├─ 1. RBAC 越权审计：tools/rbac_audit.py (Dev 禁碰测试，QA 禁改源码)
+   │    ├─ 2. Gate 1 静态门禁：plan_linter.py --json (BDD 格式、切片、DAG)
+   │    ├─ 3. 圈复杂度门禁：检查增量函数 V(G) <= 10
+   │    ├─ 4. 验收测试执行：运行全量 tests/acceptance/ 与 tests/integration/ 用例
+   │    ├─ 5. 变异测试杀伤力审计：验证 MSI >= 80%
+   │    ├─ 6. Gate 3 验证门禁：verification_linter.py --strict --json
+   │    └─ 7. Gate 2 Reviewer 语义签署：人工或只读 Reviewer 签署 PASS
+   │
+   └─► 阶段 4：代码合并后测试（Post-merge & Staging/Release — quality-engineering 流水线）
+        ├─ 主干全量回归：执行主干全套端到端回归用例，拦截并发冲突
+        ├─ 自动化规格收敛：converge.py apply 回写 02-tech-spec.md 并归档
+        └─ 基线更新：更新全仓变异测试基线与 Benchmark 性能指标
+```
+
+### 6.1 阶段一：本地测试（Local Testing）
+- **目标**：在代码提交到远端分支前，完成开发者的局部自闭环与 QA 的本地端到端与集成验证。
+- **Dev 自测**：
+  - 运行 `01-contract.md` 中声明的 `dod.type_check`、`dod.lint`；
+  - 检查自己编写的每个函数，通过 AST 分析或静态工具确认 $V(G) \le 10$；
+  - 逐项自测 BDD `dod.edge_cases` 中的所有场景；
+  - 填写 `02-dev-workspace.md`。
+- **QA 本地开发阶段测试**：
+  - **集成测试**：在 `tests/integration/**` 编写跨模块与服务边界集成用例；
+  - **BDD 端到端测试**：依据 `01-contract.md` Section 4 BDD 场景在 `tests/acceptance/**` 编写黑盒验收测试；
+  - **静态代码分析**：引入栈相关知名 Lint 工具与圈复杂度分析工具，确保用例数 $\ge V(G)$，拒绝 $V(G) > 15$；
+  - **变异测试**：执行变异测试（`mutmut`、`Stryker` 等），确保 $\text{MSI} \ge 80\%$；
+  - **自主代码评审**：自主调用 `review` skill 评估代码可读性与可维护性；
+  - 填写 `03-qa-verification.md` 并签署本地裁决。
+- **本地静态预检**：
+  ```bash
+  python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks
+  python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir tasks
+  ```
+
+### 6.2 阶段二：测试环境（Test Environment — quality-engineering 负责）
+- **目标**：由 `quality-engineering` skill 负责测试环境的搭建、配置与就绪验证，在纯净沙箱或容器环境中验证分布式拓扑与依赖。
+- **执行内容**：
+  - 针对微服务、数据库、外部 API 依赖，拉起 Ephemeral / Sandbox 独立容器与环境；
+  - 验证运行依赖、环境变量、网络连通性与服务 Mock，排除环境就绪缺陷；
+  - 验证 ADR 中规定的架构约束与拓扑协议。
+
+### 6.3 阶段三：合并前测试（Pre-merge / PR Gate — quality-engineering 自动化门禁）
+- **目标**：由 `quality-engineering` 构建的 CI 流水线作为拉取请求（PR）合入主干的绝对权威守门人，执行不可绕过的确定性门禁。
+- **门禁清单**：
+  1. **RBAC 角色越权审计**：
+     ```bash
+     python tools/rbac_audit.py --base origin/main --head HEAD --tasks-dir tasks --json
+     ```
+     严格拦截跨权限提交（如 Dev 修改了 `tests/acceptance/`，或 QA 修改了 `src/**`）。
+  2. **Gate 1 规划与 BDD 契约检查**：
+     ```bash
+     python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks --spec .specs/02-tech-spec.md --json
+     ```
+     验证切片大小（$\le 3$ 文件、50–250 行）、DAG 无环、Given-When-Then BDD 结构无缺失。
+  3. **圈复杂度门禁**：
+     ```bash
+     python .agents/skills/quality-engineering/scripts/complexity_check.py --json
+     ```
+     由 `quality-engineering` 提供的静态分析脚本对 PR 中新增/修改的每个函数执行控制流复杂度计算，若存在 $V(G) > 10$ 则告警，存在 $V(G) > 15$ 则直接构建失败。
+  4. **验收与集成测试套件全量跑通**：执行 `tests/acceptance/**` 与 `tests/integration/**` 用例，必须 100% 通过。
+  5. **变异测试杀伤力审计（MSI $\ge 80\%$）**：针对 `touch_files` 执行变异测试，未能有效击杀变异体则构建失败。
+  6. **Gate 3 验收证据静态审计**：
+     ```bash
+     python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir tasks --strict --json
+     ```
+     严格核查 `03-qa-verification.md` 中圈复杂度与变异得分表格的存在性与合法性。
+  7. **Gate 2 Reviewer 语义签署**：由具有审查权限的只读 Agent 或人工 Reviewer 审查无误后签署 PASS。
+
+### 6.4 阶段四：代码合并后测试（Post-merge & Staging / Release — quality-engineering 流水线）
+- **目标**：合并入主干后的全局完整性维护与技术规格闭环。
+- **执行内容**：
+  1. **主干全量回归测试**：在主干执行全部服务、模块与集成验收用例，防止不同分支并发合并产生隐式破坏；
+  2. **自动化触发规格收敛（Converge）**：
+     ```bash
+     python .agents/skills/converge/scripts/converge.py apply --task tasks/<task-id>
+     ```
+     自动将 Dev 记录在 `02` 中的偏差表以追加模式写回 `.specs/02-tech-spec.md`，更新状态至 `CONVERGED`，并将任务包归档至 `tasks/archive/`；
+  3. **基线更新与性能跟踪**：全量更新仓库变异测试基线与 Benchmark 性能指标。
+
+### 6.5 CI 权威强制门禁实战指南
+
+仓库在 `templates/ci/` 提供了开箱即用的 GitHub Actions 门禁模板：
 
 ```yaml
-task_id: "task-001-auth"
-macro_status: "TODO"
-micro_phase: "UNASSIGNED"
-current_lock_holder: "None"
-retry_count: 0
-last_heartbeat: ""
+# templates/ci/quality-gate.yml
+name: Quality Engineering Gate (Authoritative)
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  quality-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 1. RBAC Role Audit (Authoritative L1)
+        run: |
+          python tools/rbac_audit.py --base ${{ github.event.pull_request.base.sha }} \
+            --head ${{ github.event.pull_request.head.sha }} --tasks-dir tasks --json
+
+      - name: 2. Gate 1 - Plan Linter & BDD Validation
+        run: |
+          python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks \
+            --spec .specs/02-tech-spec.md --json
+
+      - name: 3. Static Cyclomatic Complexity Check (Tree-sitter / Lizard Multi-Language Engine)
+        run: |
+          pip install "tree-sitter<0.22" tree-sitter-languages lizard
+          python .agents/skills/quality-engineering/scripts/complexity_check.py --json
+
+      - name: 4. Run Acceptance Tests
+        run: |
+          python -m pytest tests/acceptance/
+
+      - name: 5. Gate 3 - QA Verification Linter (Complexity & MSI Audit)
+        run: |
+          python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir tasks --strict --json
 ```
 
-- **不写初始化事件、不写示例行、不写假时间戳**；第一条真实事件出现在角色勾选生命周期框后；
-- 只有真正勾选的 `- [x]` 行才触发，事件按任务+事件码幂等追加；
-- 映射：
-
-| 勾选标记 | 事件码 | macro_status | current_lock_holder | retry |
-| :--- | :--- | :--- | :--- | :--- |
-| `- [x] WAITING_FOR_QA`（02） | `HANDOFF_QA_REQUESTED` | `VERIFYING` | `QAAgent` | 不变 |
-| `- [x] QA_PASSED`（03） | `TASK_TERMINATED_DONE` | `DONE` | `None` | 不变 |
-| `- [x] REWORK_REQUIRED`（03） | `REWORK_TRIGGERED` | `REWORKING` | `DevAgent` | +1（有上限） |
-
-- 没有事件工具时，保持 04 初始化状态，以 git/CI 为权威；**不要手写事件**。
-- 细节见 [`.agents/skills/task-decomposition/references/role-lifecycle.md`](../.agents/skills/task-decomposition/references/role-lifecycle.md)。
-
-补充角色规则：[`.agents/rules/reviewer.md`](../.agents/rules/reviewer.md)（Gate 2 只读审查）与
-[`.agents/rules/orchestrator.md`](../.agents/rules/orchestrator.md)（编排、门禁顺序与单一 owner）。规则总览见
-[`.agents/rules/enforcement.md`](../.agents/rules/enforcement.md)。
+#### 一键集成到新仓库
+```bash
+# 使用 quickstart 一键集成全套技能、规则、审计工具与 CI 门禁
+python tools/quickstart.py --target ../my-new-repo --copy --with-ci
+```
 
 ---
 
-## 7. 可选引擎：保留，但不再被依赖
+## 7. 各技能详解
 
-仓库里仍然保留 `prd_generator/` 与 `spec_generator/`，它们只是**可选的确定性生成器**：
+### 7.1 `task-decomposition`
+- **输入**：PRD、ADR 与技术规格。
+- **职责**：将架构规格拆解为小步可控的任务包（1–3 个 touch_files，50–250 行变更）。
+- **现代质量工程升级**：
+  - 从 PRD 业务需求与 ADR 架构契约推导出结构化的 Given-When-Then BDD 场景，写入 `01-contract.md` 的 `dod.edge_cases` 与 Section 4 行为不变量；
+  - 自动脚手架生成规范四文档，02 与 03 保持标准空白表单，04 保持派生状态。
 
-```bash
-# 可选安装（会注册 prd-generator / spec-generator 命令）
-uv tool install --editable .
-# 或
-pip install agent-spec-suite
-```
+### 7.2 `plan-linter`（Gate 1 规划期静态门禁）
+- **核心定位**：专职单一职责的规划期确定性静态门禁。在代码开发开始前，核查任务契约是否结构完整、尺寸合规、DAG 无环、Given-When-Then BDD 格式有效。
+- **职责边界与非目标**：
+  - **单一职责**：只负责 Gate 1 静态任务包契约验证；
+  - **明确不负责**：不执行业务代码或测试命令；不构建或维护 CI 流水线；不进行 AST/代码圈复杂度分析（非源码复杂度分析工具）；不审计测试执行证据与变异测试杀伤力。所有 CI 流水线编排、环境配置与门禁脚本资产均归属 `quality-engineering`，本地测试由 `qa` 负责。
+- **检查项**：
+  1. `touch_files` 数量与目录白名单（默认 $\le 3$，严禁包含 `tests/acceptance/`）；
+  2. `estimated_lines` 切片尺寸（50–250 行，micro 模式 10–50 行）；
+  3. `origin_spec_anchor`（合法 `#sec-*`）与 `adherence_adrs`（非空）；
+  4. `dod` 中 `type_check`、`lint`、`test_file` 齐全且无占位符；
+  5. `dod.edge_cases` 至少 2 个，且全部符合 Given-When-Then 结构；
+  6. 四文档齐全性、`task_id` 目录名一致性、依赖图无环；
+  7. 真实拓扑检查（`modify` 路径必须存在，`create` 路径不能已存在）。
 
-安装后可以用：
+### 7.3 `review`（Gate 2 语义审查门禁）
+- **核心定位**：只读 Reviewer 独立执行防幻觉、正向覆盖率与 ADR 红线审查。
+- **两种模式**：
+  - **Plan Review**：审查任务切片是否完整覆盖 PRD/规格，是否发明未定义实体；
+  - **Code Review**：审查 Dev 提交的代码变更是否超出契约爆炸半径，是否遵守 ADR。
+- **裁决**：输出包含行号证据的审计发现，给出唯一裁决（`PASS` / `REQUEST CHANGES` / `BLOCKED`）。
 
-```bash
-prd-generator run --idea "你的构想" --output-dir .specs --mode deterministic
-spec-generator run --prd .specs/01-prd.md --output-dir .specs --mode deterministic
-```
+### 7.4 `dev`（开发角色）
+- **核心职责**：在契约白名单内高质量实现业务，控制复杂度。
+- **核心铁律**：
+  - 严禁越界修改 `touch_files` 之外的文件；严禁修改 `tests/acceptance/**`；
+  - **单函数圈复杂度必须控制在 $V(G) \le 10$ 以内**；超标必须运用重构模式拆分；
+  - 跑通 `dod` 自测命令，填写 `02-dev-workspace.md`；
+  - 全部自测通过后，勾选 `- [x] WAITING_FOR_QA` 触发交接。
 
-也可以通过技能内的 `engine.py` 代理调用：
+### 7.5 `qa`（本地开发阶段测试）
+- **核心职责**：专注本地开发阶段测试，涵盖集成测试、基于 BDD 模式的端到端测试、变异测试（MSI $\ge 80\%$）、代码静态分析（本地 Lint 与圈复杂度分析）、自主决定调用 `review` skill 评审代码规范（可读性与可维护性）、针对不同项目类型自主引入知名开源工具，并在 `03-qa-verification.md` 记录本地测试证据与裁决。
+- **核心铁律**：
+  - 严禁修改业务源码 `src/**`；可写范围为 `tests/acceptance/**`、`tests/integration/**` 与 `tasks/<task-id>/03-qa-verification.md`；
+  - **集成测试**：在 `tests/integration/` 编写验证跨模块接口契约与协作行为的集成用例；
+  - **BDD 端到端测试**：依据 `01-contract.md` Section 4 BDD 场景与 `dod.edge_cases` 在 `tests/acceptance/` 编写黑盒验收与 E2E 测试；
+  - **静态分析与圈复杂度**：本地引入代码检查工具（flake8、ruff、eslint 等）与复杂度分析工具（lizard、radon 等），确保修改函数单函数 $V(G) \le 10$，严禁 $V(G) > 15$，且严格执行基本路径测试基线（$\text{Test Cases} \ge V(G)$）；
+  - **自主调用 review 技能**：自行决定调用 `review` skill 评估代码可读性、代码规范与可维护性；
+  - **变异测试杀伤力基线**：针对不同项目栈自主引入知名工具（`mutmut`、`Stryker`、`go-mutesting`、`PITest`、`cargo-mutants`），击杀存活弱断言，确保 $\text{MSI} \ge 80\%$（核心模块 $\ge 90\%$）且无关键逻辑变异体存活；
+  - 在 `03` 中记录完整执行证据与度量表，二选一勾选 `QA_PASSED` 或 `REWORK_REQUIRED`；
+  - 本地运行 Gate 3 静态审计（由 `quality-engineering` 提供的 `verification_linter.py`）确认合规后签署。
 
-```bash
-python .agents/skills/prd-generator/scripts/engine.py run --idea "..." --output-dir .specs
-```
+### 7.6 `quality-engineering`（CI 流水线构建与多阶段测试门禁）
+- **核心职责**：构建 CI 流水线，确保测试环境隔离与就绪，管理代码合并前测试与合并后测试，权威拥有并维护全套 CI 工作流模板与 CI 门禁脚本（`complexity_check.py`、`verification_linter.py`、`quality-gate.yml` 等）。
+- **核心任务**：
+  - **测试环境就绪**：搭建与验证隔离、可复现的测试容器/沙箱环境，验证外部依赖、运行时版本、服务 Mock 与网络拓扑；
+  - **代码合并前测试（Pre-merge PR 自动化门禁）**：在拉取请求阶段编排执行权威流水线：
+    1. Gate 1 Plan Linter 任务契约与 BDD 规范检查；
+    2. RBAC 角色越权审计（拦截 Dev 改测试、QA 改源码）；
+    3. 圈复杂度静态门禁（调用基于 Tree-sitter / Lizard 多语言解析的 `complexity_check.py` 严格校验 $V(G) \le 10$，拦截 $V(G) > 15$）；
+    4. 验收与集成测试套件执行（100% 通过要求）；
+    5. Gate 3 验收静态审查（调用 `verification_linter.py` 严格核查 `03` 中的基本路径覆盖与 MSI $\ge 80\%$ 变异证据）。
+  - **代码合并后测试（Post-merge 流水线）**：主干合入后执行全量主干回归测试、自动化触发规格收敛（Converge）、持续追踪变异基线与性能 Benchmark；
+  - **CI 资产与工具唯一归属**：权威维护 CI 工作流模板（`quality-gate.yml`、`plan-gate.yml`、`rbac-gate.yml`）与确定性门禁检查工具（`complexity_check.py`、`verification_linter.py`）。
 
-- 未安装时：`engine.py` **exit 2**，打印"继续 prompt-only / 如何安装"的指引；技能流程不受影响；
-- 不安装、甚至删除这两个引擎目录，`scaffold` / `lint` / `plan_linter` 仍然可用；
-- 引擎的 `--mode deterministic` 适合快速骨架与回归基线；真实业务判断仍应按 SKILL.md 由 Agent 完成。
-
-> 注意：`engine.py` 不做 `sys.path` 注入，所以即使引擎源码就在仓库里，没有安装时它也检测不到——这是有意的隔离。
+### 7.7 `converge`（规格收敛）
+- **核心职责**：在任务达到 `QA_PASSED` 后，闭环写回规格并归档。
+- **机制**：
+  - 读取 `02-dev-workspace.md` 中的偏差表，以 append-only 方式追加至 `.specs/02-tech-spec.md` 末尾的 Converged changes 章节；
+  - 更新 `04-process.md` 状态为 `CONVERGED`；
+  - 将任务包安全归档至 `tasks/archive/<task-id>/`。
 
 ---
 
-## 8. 安装到不同宿主
+## 8. 四文档与角色边界
 
-| 宿主 | 原生发现路径 | 说明 |
-| :--- | :--- | :--- |
-| Codex | `.agents/skills/<name>/` | 从当前目录向上到仓库根、以及 `~/.agents/skills` |
-| Antigravity | `.agents/skills/<name>/` | 全局为 `~/.gemini/config/skills/` |
-| DeepSeek Harness | `.agents/skills/<name>/` | 直接加载工作区技能 |
-| Claude Code | `.claude/skills/<name>/` | 用安装工具链接或复制 |
-
-```bash
-# 预览
-python tools/install_skills.py --dry-run
-
-# 装到 Claude Code（Windows 无符号链接权限时用 --copy）
-python tools/install_skills.py --dest .claude/skills --copy
-
-# 只装指定技能
-python tools/install_skills.py --dest ~/.agents/skills --skills prd-generator,task-decomposition,plan-linter
-
-# 整仓采用到另一个仓库：技能 + 规则 + 审计脚本 + CI 工作流
-python tools/quickstart.py --target ../another-repo --copy --with-ci
+```text
+tasks/<task-id>/
+├── 01-contract.md          # Planner 拥有：只读契约（权威 frontmatter + BDD 场景）
+├── 02-dev-workspace.md     # Dev 拥有：实现说明、自测记录、偏差表、交接标记
+├── 03-qa-verification.md   # QA 拥有：黑盒用例、复杂度表、变异得分、唯一裁决
+└── 04-process.md           # 工具/CI 拥有：派生状态与审计日志（禁止手工编辑）
 ```
 
-更完整的矩阵与降级说明见 [`skills-compatibility.md`](skills-compatibility.md)。
+### 8.1 角色职责与读写隔离矩阵
+
+| 角色 | 可写路径 | 严禁触碰路径 | 核心质量指标 |
+| :--- | :--- | :--- | :--- |
+| **Planner** | `tasks/<id>/01-contract.md` | `src/**`, `tests/**`, `04` | 黄金切片、Given-When-Then BDD 规范 |
+| **Dev** | `src/**` (白名单), `02-dev-workspace.md` | `tests/acceptance/**`, `01`, `03`, `04` | 单函数圈复杂度 $V(G) \le 10$, DoD 全通 |
+| **QA** | `tests/acceptance/**`, `tests/integration/**`, `03-qa-verification.md` | `src/**`, `01`, `02`, `04` | 本地集成/BDD E2E、用例数 $\ge V(G)$, 变异得分 $\text{MSI} \ge 80\%$ |
+| **Quality Engineering** | CI 工作流 (`.github/workflows/*`, `templates/ci/*`) | `tasks/`, `src/`, `tests/` (CI 中只读门禁与回归) | 测试环境就绪、CI 门禁与回归全绿、Gate 3 审计全通 |
+| **Reviewer** | 只读（输出 Review 报告至独立终端/文件） | 任何工程与任务产物 | 反幻觉、正向覆盖率、ADR 架构红线 |
 
 ---
 
 ## 9. 强制与安全（诚实模型）
 
-| 层 | 机制 | 适用 | 保证 |
+系统采用诚实的四层防护模型（L0–L3）：
+
+| 级别 | 机制 | 适用环境 | 防护力度与保证 |
 | :--- | :--- | :--- | :--- |
-| L0 | `AGENTS.md` / 角色规则 / SKILL.md | 所有宿主 | 提示性 |
-| L1 | `tools/rbac_audit.py` + CI | 所有 git 仓库 | 对已提交变更强约束 |
-| L2 | 分支保护 / CODEOWNERS | 仓库设置 | 强约束 |
+| **L0** | 提示词规则（`AGENTS.md`、角色 rules、SKILL.md） | 所有 AI Agent / 宿主 | 建议性引导；Agent 易产生幻觉或越界 |
+| **L1** | 本地静态预检脚本（`plan_linter.py`、`verification_linter.py`） | 本地开发环境 | 快速排错；可被开发者手动跳过 |
+| **L2** | CI 自动化门禁流水线（`tools/rbac_audit.py` + `quality-gate.yml`） | Git 托管平台（GitHub/GitLab） | **绝对权威强制**；基于 commit diff，不可篡改 |
+| **L3** | 分支保护规则（Protected Branches & Required Checks） | 代码仓库设置 | 最终安全屏障；无绿标禁止 Merge |
 
-```bash
-# CI 示例：检查 base 之后的提交里，dev 是否碰了验收测试
-python tools/rbac_audit.py --base origin/main --role dev
-
-# 角色也可以来自 commit trailer：Agent-Role: dev
-python tools/rbac_audit.py --base HEAD~1 --json
-```
-
-- `04-process.md` 是派生文件；不要把它当作手工台账；未安装工具时保持初始化状态，以 git/CI 与勾选标记为权威。
+> **严禁声称**：切勿宣称本地提示词能实现“物理强制隔离”。团队的绝对安全必须建立在 L2 CI RBAC 审计与 L3 分支保护之上。
 
 ---
 
 ## 10. 故障排查
 
-| 现象 | 原因 / 处理 |
-| :--- | :--- |
-| `lint_prd.py` / `lint_spec.py` 刚 scaffold 就失败 | 预期：模板占位符还没替换。填完后重跑 |
-| `engine.py` 退出 2 | 可选引擎未安装。继续 prompt-only，或按提示安装 |
-| Gate 1 报缺 02/03/04 | 用 `scaffold_task.py` 生成完整四文档，或补齐文件 |
-| Gate 1 报 `task_id` 与目录不一致 | 把契约 frontmatter 的 `task_id` 改成目录名 |
-| 事件总线不写 `04` | 04 是派生文件；优先用工具/CI，不要手改 |
-| Windows 下安装技能失败 | 加 `--copy` 避免符号链接权限问题 |
-| `converge` 拒绝执行（exit 1） | 检查 `03` 是否勾选 `QA_PASSED`、`02` 偏差表是否有 DEV 行或 `None` 行、归档目录是否已存在（需 `--force`） |
-| `scaffold_change.py` 拒绝锚点 | 锚点必须已存在于基座规格；需要新章节请走 `spec-generator` |
-| Gate 1 报 `CHANGE_PROPOSAL_MISSING` / `CHANGE_NOT_OPEN` | 提案不存在或已关闭；用 `change` 重新生成，或先归档/新开一个提案 |
-| `standards_extract.py --check` 退出 1 | 报告已过期；重新生成 `.specs/change-context/standards.md` |
-| Gate 1 把 `tasks/archive/` 当任务包 | 升级到 plan-linter 3.x；默认 `ignore_task_dirs: ["archive"]` 会跳过归档目录 |
-
-所有脚本统一退出码：`0` 成功、`1` 内容/门禁失败、`2` 可选依赖或用法不可用、`3` 未预期错误。先跑 `--help`，把脚本当黑盒使用。
+| 故障现象 | 根因分析 | 推荐处理步骤 |
+| :--- | :--- | :--- |
+| Gate 1 报 `BDD_MISSING_PRECONDITION` / `BDD_MISSING_ACTION` | `01-contract.md` 中 `edge_cases` 未严格遵循 Given-When-Then 格式 | 检查每条 edge_case，修正为 `"Given ..., When ..., Then ..."` 三段式 |
+| Gate 1 报 `TOUCH_FILE_FORBIDDEN` | `touch_files` 中包含了 `tests/acceptance/` | 移除验收测试路径，验收测试专属于 QA 角色 |
+| Gate 3 报 `COMPLEXITY_MISSING_SECTION` / `COMPLEXITY_EMPTY_TABLE` | 勾选了 `QA_PASSED` 但 `03` 未包含或未填复杂度表 | 在 `03` 第 3 节填写修改函数的圈复杂度与路径映射 |
+| Gate 3 报 `BASIS_PATH_DEFICIT` | 验收测试用例数量少于函数圈复杂度 $V(G)$ | 补充独立路径的黑盒测试用例，使 $\text{用例数} \ge V(G)$ |
+| Gate 3 报 `MUTATION_SCORE_BELOW_THRESHOLD` | 变异得分低于 80%（$\text{MSI} < 80\%$） | 检查未杀伤的变异体，消除弱断言，补充强校验断言并重新变异 |
+| CI RBAC 报 `DEV_TOUCHED_ACCEPTANCE_TESTS` | Dev 提交的变更中包含了验收测试文件 | 将验收测试从 Dev 提交中剥离，交由 QA 编写 |
+| `converge` 拒绝执行（exit 1） | `03` 未勾选 `QA_PASSED`，或 `02` 偏差表为空 | 确保 QA 验收通过，并在 `02` 偏差表中写明偏差记录（无偏差填 `None` 行） |
 
 ---
 
 ## 11. 验证你的改动
 
+在向代码库提交变更前，运行以下确定性验证套件：
+
 ```bash
-# 技能与门禁测试
+# 1. 运行现代质量工程与全部核心单元测试
 python -m unittest discover -s tests/unit -p "test_*.py"
 
-# 引擎 E2E（可选）
-python -m unittest discover -s tests/e2e -p "test_*.py"
+# 2. 运行 Gate 1 规划期静态检查
+python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks --json
 
-# 目录迁移自检：把技能拷到仓库外，确认仍可 --help / scaffold / lint
+# 3. 运行圈复杂度静态检查（McCabe V(G) <= 10）
+python .agents/skills/quality-engineering/scripts/complexity_check.py --json
+
+# 4. 运行 Gate 3 验收期静态检查
+python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir tasks --strict --json
+
+# 5. 运行 RBAC 角色边界审计
+python tools/rbac_audit.py --base HEAD~1 --role dev --tasks-dir tasks
 ```
-
-当前基线：发布包内置 `231` 个单元测试（1 skip）；上游开发仓库另有完整套件（`539` 个单元测试 + `109` 个 E2E），不随发布包分发。新增专项：change 32、converge 27、distribution 28、plan-linter v3 26。
 
 ---
 
 ## 12. 相关文档
 
-- [技能索引（英文）](../.agents/skills/README.md)
-- [v3：brownfield 增量与规格收敛](brownfield-convergence.zh-CN.md)
-- [宿主兼容与安装](skills-compatibility.md)
-- [评分与开源对标](skills-benchmark.zh-CN.md)
-- [角色规则与强制模型](../.agents/rules/enforcement.md)
+- [英文技能索引与流水线说明（README.md）](../.agents/skills/README.md)
+- [技能类别索引（skills/README.md）](../skills/README.md)
+- [Brownfield 增量变更与规格收敛指南](brownfield-convergence.zh-CN.md)
+- [CI 自动化门禁配置与工作流模板](../templates/ci/README.md)
+- [宿主兼容性与工具安装指南](skills-compatibility.md)
+- [角色规则与权威强制模型](../.agents/rules/enforcement.md)
 
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
