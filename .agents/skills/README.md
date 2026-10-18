@@ -51,7 +51,10 @@ diagnostic skill when installed). They are not part of the specification pipelin
 | Codex | `.agents/skills/<name>/` | Discovered from the current directory up to the repo root, and from `~/.agents/skills`. |
 | Antigravity | `.agents/skills/<name>/` | Workspace scope; global scope is `~/.gemini/config/skills/`. |
 | DeepSeek Harness (DSH) | `.agents/skills/<name>/` | Workspace skills are loaded directly. |
-| Claude Code | `.claude/skills/<name>/` | Use `tools/install_skills.py` to link or copy the same directories. |
+| Claude Code | `.claude/skills/<name>/` | Does **not** read `.agents/skills/`; use `tools/install_skills.py` to link or copy the same directories, or install the plugin. |
+
+> Claude Code also supports symlinked skill directories, so one `install_skills.py` run keeps
+> `.claude/skills/` pointing at `.agents/skills/` without duplicating files.
 
 ```bash
 # Optional: install for personal / Claude Code use

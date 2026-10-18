@@ -59,6 +59,21 @@ python tools/install_skills.py --dest .claude/skills --copy   # Windows fallback
 python tools/quickstart.py --target ../another-repo --copy --with-ci
 ```
 
+## After cloning: who sees the skills automatically
+
+`.agents/skills/` is the Codex/AGENTS convention. Claude Code does **not** read it:
+its project location is `.claude/skills/`, its personal location is `~/.claude/skills/`,
+and plugins load from `<plugin>/skills/` (this repository ships both layouts, generated
+from one source).
+
+| Harness | Cloning this repo is enough? | What to do |
+| :--- | :--- | :--- |
+| Codex | yes | `.agents/skills/` is scanned from the current directory up to the repo root; user scope is `~/.agents/skills/` |
+| DSH / Antigravity | yes | workspace `.agents/skills/` |
+| Claude Code | no | install the plugin, or run `python tools/install_skills.py --dest .claude/skills` (add `--copy` on Windows); `claude --plugin-dir .` also works |
+| Gemini CLI | no | `gemini skills install <repo-url>.git --path skills/workflow` |
+| Any skill-aware agent | no | `npx skills@latest add formal-you/agent-skills-suite` |
+
 ## What is inside
 
 | Directory | Contents |

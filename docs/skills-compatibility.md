@@ -27,6 +27,31 @@ copies at the repository root.
 | DeepSeek Harness (DSH) | `.agents/skills/` | `AGENTS.md` | no hook contract used; rely on CI audit |
 | Generic agent | manual paste / skill directory | project prompt | none |
 
+### After cloning: who sees what automatically
+
+`.agents/skills/` is the AGENTS/Codex convention. **Claude Code does not read it**: its
+project location is `.claude/skills/`, its personal location is `~/.claude/skills/`, and
+plugins load skills from `<plugin>/skills/`. That is why this repository ships three
+equivalent surfaces (all generated from one source):
+
+| Surface in this repo | Used by |
+| :--- | :--- |
+| `.agents/skills/<name>/` | Codex, DSH, Antigravity: scanned automatically from the CWD up to the repo root (and `~/.agents/skills` for user scope) |
+| `skills/<category>/<name>/` | skills.sh / `npx skills`, Gemini `--path`, and the plugin manifest; this is the installable layout |
+| `.claude-plugin/plugin.json` | Claude Code plugin: `/plugin marketplace add ...` then install; or `claude --plugin-dir <repo>` |
+
+| Harness | Clone the repo and open it | One extra command (optional) |
+| :--- | :--- | :--- |
+| Codex | Skills are found in `.agents/skills/` automatically | none (or add `~/.agents/skills`) |
+| DSH / Antigravity | Skills are found in `.agents/skills/` automatically | none |
+| Claude Code | **Not automatic**: `.agents/skills/` is ignored | `python tools/install_skills.py --dest .claude/skills` (symlinks; add `--copy` on Windows) or install the plugin |
+| Gemini CLI | Repo layout is `skills/<category>/` | `gemini skills install <repo-url>.git --path skills/workflow` |
+| Any skill-aware agent | - | `npx skills@latest add <owner>/<repo>` |
+
+Claude Code **does** follow symlinked skill directories (one symlink per skill is the
+supported form), so the installer can link each `.claude/skills/<name>` to
+`.agents/skills/<name>` and updates stay in one place.
+
 ## Installation
 
 The skills are always usable in place. `tools/install_skills.py` adds per-user or
