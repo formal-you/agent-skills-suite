@@ -51,8 +51,17 @@ REMAINING_CONTRACT_TOKENS = {
     "TYPE_CHECK_COMMAND": "python -m mypy src",
     "LINT_COMMAND": "python -m ruff check src",
     "TEST_FILE_PATH": "tests/acceptance/test_rate_limit.py",
-    "EDGE_CASE_1": "a sixth request within the window returns 429",
-    "EDGE_CASE_2": "a request for an unknown user returns 404",
+    "EDGE_CASE_1": "Given a sixth request within the window, When rate limit checked, Then return 429",
+    "EDGE_CASE_2": "Given a request for an unknown user, When profile requested, Then return 404",
+    "INVARIANT_INPUT_VALIDATION_GIVEN": "an unauthenticated request with malformed identity",
+    "INVARIANT_INPUT_VALIDATION_WHEN": "identity validation is executed",
+    "INVARIANT_INPUT_VALIDATION_THEN": "the request is rejected before any token lookup",
+    "INVARIANT_STATE_TRANSITIONS_GIVEN": "a token in active state",
+    "INVARIANT_STATE_TRANSITIONS_WHEN": "expiry duration elapses",
+    "INVARIANT_STATE_TRANSITIONS_THEN": "the token transitions to expired and is never valid again",
+    "INVARIANT_IDEMPOTENCY_GIVEN": "an existing valid token",
+    "INVARIANT_IDEMPOTENCY_WHEN": "repeated requests with the same token are received",
+    "INVARIANT_IDEMPOTENCY_THEN": "the requests do not extend the window",
     "INVARIANT_INPUT_VALIDATION": "Malformed identities are rejected before any token lookup.",
     "INVARIANT_STATE_TRANSITIONS": "A token is either valid or expired, never both.",
     "INVARIANT_IDEMPOTENCY": "Repeated valid requests with the same token do not extend the window.",
@@ -208,6 +217,13 @@ class ScaffoldChangeTests(TempRepoTestCase):
         self.assertNotIn("{{NOTES}}", contract)
         self.assertIn("{{MODULE_NAME}}", contract, "Planner-only placeholders must stay")
         self.assert_token_free_role_forms(bundle)
+        self.assertIn("### Feature: Rate limit login attempts", contract)
+        self.assertIn("#### Scenario 1: Input validation", contract)
+        self.assertIn("- **Given** {{INVARIANT_INPUT_VALIDATION_GIVEN}}", contract)
+        self.assertIn("- **When** {{INVARIANT_INPUT_VALIDATION_WHEN}}", contract)
+        self.assertIn("- **Then** {{INVARIANT_INPUT_VALIDATION_THEN}}", contract)
+        self.assertIn("#### Scenario 2: State transitions", contract)
+        self.assertIn("#### Scenario 3: Idempotency and data consistency", contract)
 
     def test_missing_base_spec_exits_2(self):
         repo = self.temp / "repo"
@@ -309,6 +325,13 @@ class ScaffoldChangeTests(TempRepoTestCase):
         self.assertIn('size_class: "standard"', contract)
         self.assertIn('origin_spec_anchor: "' + ANCHOR + '"', contract)
         self.assert_token_free_role_forms(bundle)
+        self.assertIn("### Feature: Rate limit login attempts", contract)
+        self.assertIn("#### Scenario 1: Input validation", contract)
+        self.assertIn("- **Given** {{INVARIANT_INPUT_VALIDATION_GIVEN}}", contract)
+        self.assertIn("- **When** {{INVARIANT_INPUT_VALIDATION_WHEN}}", contract)
+        self.assertIn("- **Then** {{INVARIANT_INPUT_VALIDATION_THEN}}", contract)
+        self.assertIn("#### Scenario 2: State transitions", contract)
+        self.assertIn("#### Scenario 3: Idempotency and data consistency", contract)
         lint = run(
             relocated / "scripts" / "lint_change.py",
             "--change-id",
@@ -760,6 +783,63 @@ class PlanLinterCompatibilityTests(TempRepoTestCase):
             if "CHANGE" in error["code"] or "SIZE" in error["code"] or "MICRO" in error["code"]
         }
         self.assertFalse(change_codes, "unexpected brownfield Gate 1 errors: " + repr(change_codes))
+
+    def test_filled_fallback_bundle_passes_gate_1(self):
+        if not PLAN_LINTER.is_file():
+            self.skipTest("plan-linter is not available")
+        help_result = run(PLAN_LINTER, "--help")
+        if "--changes-dir" not in (help_result.stdout or ""):
+            self.skipTest("plan-linter does not support brownfield changes yet")
+        repo = self.make_repo()
+        (repo / "src" / "auth").mkdir(parents=True)
+        (repo / "src" / "auth" / "rate_limit.py").write_text("# implementation\n", encoding="utf-8")
+        relocated = self.temp / "relocated" / "skills" / "change"
+        shutil.copytree(CHANGE_SKILL, relocated, ignore=shutil.ignore_patterns("__pycache__"))
+        result = run(
+            relocated / "scripts" / "scaffold_change.py",
+            "--change-id",
+            CHANGE_ID,
+            "--title",
+            "Rate limit login attempts",
+            "--anchor",
+            ANCHOR,
+            "--kind",
+            "modify",
+            "--size-class",
+            "micro",
+            "--estimated-lines",
+            "40",
+            "--touch-files",
+            "modify:src/auth/rate_limit.py",
+            "--repo-root",
+            str(repo),
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        contract_path = self.bundle_dir(repo) / "01-contract.md"
+        contract_path.write_text(fill_contract_tokens(read_text(contract_path)), encoding="utf-8")
+        linter_result = run(
+            PLAN_LINTER,
+            "--tasks-dir",
+            "tasks",
+            "--changes-dir",
+            ".specs/changes",
+            "--spec",
+            ".specs/02-tech-spec.md",
+            "--repo-root",
+            ".",
+            "--json",
+            cwd=repo,
+        )
+        self.assertEqual(
+            linter_result.returncode,
+            0,
+            "plan-linter rejected the filled fallback change bundle:\n"
+            + linter_result.stdout
+            + "\n"
+            + linter_result.stderr,
+        )
+        payload = json.loads(linter_result.stdout)
+        self.assertTrue(payload["passed"], linter_result.stdout)
 
 
 if __name__ == "__main__":

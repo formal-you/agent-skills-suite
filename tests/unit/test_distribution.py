@@ -22,7 +22,7 @@ QUICKSTART = REPO_ROOT / "tools" / "quickstart.py"
 SKILLS_ROOT = REPO_ROOT / ".agents" / "skills"
 RULES_ROOT = REPO_ROOT / ".agents" / "rules"
 TEMPLATES = REPO_ROOT / "templates" / "ci"
-CI_FILES = ("rbac-gate.yml", "plan-gate.yml")
+CI_FILES = ("plan-gate.yml", "quality-gate.yml", "rbac-gate.yml")
 
 
 def run_quickstart(*arguments, cwd=None):
