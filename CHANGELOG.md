@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Multi-language CI stack profiles**: `templates/ci/profiles/` ships reference fragments for
+  Python, Node/TypeScript, Go, Java/Kotlin, Rust, C#/.NET and C/C++, plus `index.json` and
+  `quality-gate.config.example.json`. `docs/ci-stack-profiles.zh-CN.md` records adoption,
+  mutation-report adapter expectations and real-middleware guidance. `quality-gate.yml` remains the
+  Python reference implementation.
+
 ## [3.2.0] - 2026-10-19
 
 ### Added

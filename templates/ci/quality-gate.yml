@@ -1,8 +1,10 @@
 name: Quality Engineering Gate
 
-# Master CI Quality Gate Workflow Template
+# Master CI Quality Gate Workflow Template (Python reference implementation)
 # Maintained by the quality-engineering skill for building CI pipelines, configuring
-# test environments, and managing pre-merge and post-merge automated verification:
+# test environments, and managing pre-merge and post-merge automated verification.
+# For other stacks, adapt the toolchain/install/acceptance/mutation blocks from
+# templates/ci/profiles/ (Node, Go, Java, Rust, .NET, C/C++) and keep the invariant jobs.
 #   1. BDD Executable Specifications & Contract Validation (Gate 1 - plan_linter.py)
 #   2. Cyclomatic Complexity (McCabe V(G) <= 10) & Basis Path Testing
 #   3. Mutation Testing & MSI Kill Ratio Audit (MSI >= 80% - Gate 3 verification_linter.py)

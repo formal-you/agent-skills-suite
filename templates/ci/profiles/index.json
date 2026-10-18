@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "description": "Reference CI profiles for the quality-gate template. Profiles are fragments to copy/adapt, not standalone workflows.",
+  "normalized_mutation_report": "artifacts/mutation-report.json",
+  "profiles": [
+    {
+      "stack": "python",
+      "file": "python.yml",
+      "display_name": "Python",
+      "acceptance": "pytest",
+      "mutation": "mutmut"
+    },
+    {
+      "stack": "node",
+      "file": "node.yml",
+      "display_name": "Node.js / TypeScript",
+      "acceptance": "Cucumber.js / Jest",
+      "mutation": "Stryker"
+    },
+    {
+      "stack": "go",
+      "file": "go.yml",
+      "display_name": "Go",
+      "acceptance": "go test / gotestsum",
+      "mutation": "go-mutesting"
+    },
+    {
+      "stack": "java",
+      "file": "java.yml",
+      "display_name": "Java / Kotlin",
+      "acceptance": "Maven Surefire / Cucumber-JVM",
+      "mutation": "PITest"
+    },
+    {
+      "stack": "rust",
+      "file": "rust.yml",
+      "display_name": "Rust",
+      "acceptance": "cargo test / cargo-nextest",
+      "mutation": "cargo-mutants"
+    },
+    {
+      "stack": "dotnet",
+      "file": "dotnet.yml",
+      "display_name": "C# / .NET",
+      "acceptance": "dotnet test",
+      "mutation": "Stryker.NET"
+    },
+    {
+      "stack": "cpp",
+      "file": "cpp.yml",
+      "display_name": "C / C++",
+      "acceptance": "CTest",
+      "mutation": "Mull"
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+# Reference profile: Node.js / TypeScript
+stack: node
+display_name: "Node.js / TypeScript"
+
+toolchain:
+  setup:
+    - "uses: actions/setup-node@v4"
+    - "with: {node-version: \"22\", cache: npm}"
+  setup_notes: "Pin the Node major version the project supports; use a matrix for multiple majors."
+
+install:
+  - "npm ci"
+
+acceptance:
+  command: "npx cucumber-js tests/acceptance/features --format junit:artifacts/acceptance-junit.xml"
+  junit: "artifacts/acceptance-junit.xml"
+  alternatives:
+    - "npm test -- --ci"
+    - "npx playwright test --reporter=junit"
+  bdd_tools: ["Cucumber.js", "playwright-bdd", "jest-cucumber"]
+
+mutation:
+  tool: "Stryker"
+  command: "npx stryker run --mutate \"src/**/*.ts\" --reporters json"
+  raw_report: "reports/mutation/mutation.json"
+  report: "artifacts/mutation-report.json"
+  adapter: "Map Stryker files[]/mutants[] into targets[]; include killed/survived/timeout/ignored."
+  min_msi: 80
+
+complexity:
+  command: "python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src --json"
+  engines: ["tree-sitter", "lizard"]
+  source: "src"
+
+services: []
+
+notes:
+  - "The shipped quality-gate.yml is Python-first; add setup-node and replace the Python acceptance step."
+  - "Use npm ci only when package-lock.json is committed; use pnpm/yarn profile variants if the project requires them."
+  - "For real databases/queues, add services: or testcontainers; network isolation is advisory by default."
