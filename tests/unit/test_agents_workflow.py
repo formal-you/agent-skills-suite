@@ -52,7 +52,7 @@ class AgentsWorkflowTests(unittest.TestCase):
 
     def test_agents_is_concise_and_scannable(self) -> None:
         text = read(AGENTS)
-        self.assertLessEqual(len(text.splitlines()), 165, "AGENTS.md must stay at most 165 lines")
+        self.assertLessEqual(len(text.splitlines()), 175, "AGENTS.md must stay at most 175 lines")
         for phrase in (
             "**Purpose.**",
             "**Precedence (highest first).**",
@@ -75,7 +75,38 @@ class AgentsWorkflowTests(unittest.TestCase):
             "plan-linter",
         ):
             self.assertIn(phrase, text, "AGENTS.md misses discovery-stage phrase: " + phrase)
+        self.assertIn("Never commit secrets/PII", text)
+        self.assertIn("Bounded brownfield changes", text)
         self.assertNotIn("v2.0.0", text, "do not pin tool versions in the always-loaded summary")
+
+    def test_agents_role_rules_and_pipeline_skills_exist(self) -> None:
+        text = read(AGENTS)
+        for name in (
+            "pm",
+            "architect",
+            "planner",
+            "dev",
+            "qa",
+            "test-engineering",
+            "reviewer",
+            "orchestrator",
+        ):
+            self.assertTrue(
+                (ROOT / ".agents" / "rules" / (name + ".md")).is_file(),
+                "AGENTS references a missing role rule: " + name,
+            )
+        for name in (
+            "prd-generator",
+            "spec-generator",
+            "task-decomposition",
+            "plan-linter",
+            "quality-engineering",
+        ):
+            self.assertTrue(
+                (ROOT / ".agents" / "skills" / name / "SKILL.md").is_file(),
+                "AGENTS references a missing pipeline skill: " + name,
+            )
+            self.assertIn(name, text)
 
     def test_contributing_points_to_the_canonical_workflow(self) -> None:
         text = flat(read(CONTRIBUTING))
