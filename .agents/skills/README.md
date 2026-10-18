@@ -65,10 +65,10 @@ python tools/install_skills.py --dest .claude/skills --copy   # Windows fallback
 
 # Adopt the whole suite into another repository (skills + rules + audit + CI templates)
 python tools/quickstart.py --target ../another-repo --with-ci
-
-# Build a clean standalone package (skills + rules + tools + docs + tests, no demos/artifacts)
-python tools/package_skills.py --out ../agent-skills-v3 --force
 ```
+
+The packaging tool (`package_skills.py`) is maintainer-only and lives in the upstream development
+repository; this tree is its generated output.
 
 The packaged tree is also a Claude Code plugin + one-plugin marketplace: after publishing it,
 users run `/plugin marketplace add <owner>/agent-skills-suite` then

@@ -17,11 +17,14 @@ skill package: nine skills, their rules, helper scripts, docs and tests.
 .agents/skills/<name>/assets/templates/
 .agents/skills/<name>/scripts/   # optional, stdlib-only, --help/--version, exit 0/1/2/3
 .agents/rules/                   # role rules + enforcement model
-tools/                           # install, adoption, audit, packaging helpers
+tools/                           # install, adoption, audit helpers
 templates/ci/                    # copy-paste GitHub Actions
 docs/                            # user guides, harness compatibility, benchmark report
 tests/unit/                      # black-box tests for the skills and tools
 ```
+
+`tools/package_skills.py` is maintainer-only and stays in the upstream development repository;
+this tree is its generated output. Do not add packaging logic here.
 
 ## Adding or changing a skill
 

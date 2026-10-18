@@ -16,7 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   installs work without the rest of the repository.
 - `docs/agent-rules.md` moved into the rules layer as `.agents/rules/enforcement.md`; `AGENTS.md`,
   the skills guide and the skill index now point there.
-- `tools/package_skills.py` ships only user-facing docs and self-contained skills; the audit archive,
+- `tools/package_skills.py` is maintainer-only and no longer shipped; it stays in the upstream
+  development repository and `RELEASING.md` documents the build. The shipped tools are
+  `quickstart.py`, `install_skills.py` and `rbac_audit.py`.
+- The upstream packaging build ships only user-facing docs and self-contained skills; the audit archive,
   the pilot report, the v2 design contract and the old `docs/agent-rules.md` are not copied.
 - Benchmark report updated for v3.1.0 (nine skills plus the platform helper, plugin distribution,
   self-contained skills and the shipped test baseline); it stays in the release.

@@ -79,9 +79,9 @@ from one source).
 | Directory | Contents |
 | :--- | :--- |
 | `skills/` | **installable layout**: `skills/<category>/<skill>/SKILL.md` (categories: `workflow`, `platform`). This is what skills.sh, Gemini and the plugin manifest read. |
-| `.agents/skills/` | The same skill files under the AGENTS discovery path, kept byte-identical by `tools/package_skills.py` (used by tests and local installers). |
+| `.agents/skills/` | The same skill files under the AGENTS discovery path, kept byte-identical by the upstream packaging build (used by tests and local installers) |
 | `.agents/rules/` | Role rules (Planner, Dev, QA, Reviewer, Orchestrator, PM, Architect) plus the `enforcement.md` role matrix and honest enforcement model |
-| `tools/` | `quickstart.py`, `install_skills.py`, `rbac_audit.py`, `package_skills.py` |
+| `tools/` | `quickstart.py`, `install_skills.py`, `rbac_audit.py` |
 | `templates/ci/` | GitHub Actions: RBAC gate and Gate 1 plan gate |
 | `docs/` | User guides: skills guide, brownfield/convergence guide, harness compatibility, benchmark report |
 | `tests/unit/` | Black-box tests for the skills and helpers |
@@ -126,6 +126,9 @@ claude plugin validate .
 ```
 
 Python 3.9+ is optional: every skill has a manual fallback and no helper calls the network.
+
+The packaging tool that regenerates this tree (`package_skills.py`) is maintainer-only and lives in
+the upstream development repository; it is not shipped here.
 
 ## Layout vs the upstream project
 
