@@ -52,19 +52,29 @@ class AgentsWorkflowTests(unittest.TestCase):
 
     def test_agents_is_concise_and_scannable(self) -> None:
         text = read(AGENTS)
-        self.assertLessEqual(len(text.splitlines()), 150, "AGENTS.md must stay under 150 lines")
+        self.assertLessEqual(len(text.splitlines()), 165, "AGENTS.md must stay at most 165 lines")
         for phrase in (
             "**Purpose.**",
             "**Precedence (highest first).**",
             "**Authority.**",
             "## 1. Repository map",
             "## 2. How to work",
-            "### 2.1 Per-task delivery",
-            "### 2.2 Skill-suite development",
+            "### 2.1 Discovery and specification",
+            "### 2.2 Per-task delivery",
+            "### 2.3 Skill-suite development",
             "## 7. Commands",
             "always-loaded summary",
         ):
             self.assertIn(phrase, text, "AGENTS.md misses structure phrase: " + phrase)
+        for phrase in (
+            "| PM |",
+            "| Architect |",
+            "prd-generator",
+            "spec-generator",
+            "task-decomposition",
+            "plan-linter",
+        ):
+            self.assertIn(phrase, text, "AGENTS.md misses discovery-stage phrase: " + phrase)
         self.assertNotIn("v2.0.0", text, "do not pin tool versions in the always-loaded summary")
 
     def test_contributing_points_to_the_canonical_workflow(self) -> None:
