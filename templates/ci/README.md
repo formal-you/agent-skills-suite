@@ -6,7 +6,7 @@ except `actions/checkout` and `actions/setup-python`.
 
 | File | Trigger | Command | Fails when |
 | :--- | :--- | :--- | :--- |
-| `rbac-gate.yml` | every `pull_request` | `python tools/rbac_audit.py --base <base.sha> --head <head.sha> --tasks-dir tasks --json` | a role touched files it may not touch (L2 audit) |
+| `rbac-gate.yml` | every `pull_request` | `python tools/rbac_audit.py --base <base.sha> --head <head.sha> --tasks-dir tasks --json` | a role touched files it may not touch (L1 audit) |
 | `plan-gate.yml` | `pull_request` touching `tasks/**` or `.specs/**` | `python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks --spec .specs/02-tech-spec.md --json` | Gate 1 finds a structural violation |
 
 The rows above describe the committed templates; the actual SHAs for the audit come from
@@ -64,25 +64,23 @@ Commit the workflows and the suite files (`.agents/skills/`, `.agents/rules/`,
 - **Actions policy**: allow GitHub Actions to run on `pull_request` events for the
   repository. No write permission and no repository secret are required or requested.
 
-## Why the audit is authoritative (and hooks are best effort)
+## Why the audit is authoritative
 
 The repository rules themselves say the honest model, and these templates follow it:
 
 | Layer | Mechanism | Guarantee |
 | :--- | :--- | :--- |
 | L0 | prompt rules (`AGENTS.md`, `.agents/rules/*.md`) | advisory |
-| L1 | `.agents/hooks.json` (Antigravity adapter) | best effort; bypassable through shell or other tools |
-| L2 | `tools/rbac_audit.py` in CI | authoritative for committed changes |
-| L3 | branch protection / CODEOWNERS | authoritative, repository settings |
+| L1 | `tools/rbac_audit.py` in CI | authoritative for committed changes |
+| L2 | branch protection / CODEOWNERS | authoritative, repository settings |
 
-`rbac-gate.yml` is L2: it diffs the merged pull request range and fails the job when a
+`rbac-gate.yml` is L1: it diffs the merged pull request range and fails the job when a
 declared role crossed its write scope (for example Dev editing `tests/acceptance/**` or QA
-editing `src/**`). `plan-gate.yml` is the deterministic half of Gate 1. Hooks remain a
-convenience for Antigravity users only; removing `.agents/hooks.json` must not break
-either workflow, and passing locally under a hook proves nothing about CI.
+editing `src/**`). `plan-gate.yml` is the deterministic half of Gate 1. No local hook
+adapter is shipped; passing a local prompt-file workflow proves nothing about CI.
 
 The audit is a **diff** audit: it judges the files in the range, not the identity of the
-human merging. Do not describe the hooks as physical enforcement, and do not weaken the
+human merging. Do not describe prompt rules as physical enforcement, and do not weaken the
 workflow to make a red pull request green.
 
 ## Roles and the audit CLI
@@ -110,9 +108,8 @@ commit:
 1. Adopt from a tagged release or a recorded commit SHA of the suite repository, not from a
    moving branch: `git checkout <release-tag-or-sha>` in the suite checkout, then run
    `quickstart.py --copy --with-ci`.
-2. Commit the resulting `.agents/skills/`, `.agents/rules/`, `.agents/scripts/`,
-   `.agents/hooks.json`, `tools/rbac_audit.py` and `.github/workflows/` files in one
-   reviewable pull request.
+2. Commit the resulting `.agents/skills/`, `.agents/rules/`, `tools/rbac_audit.py` and
+   `.github/workflows/` files in one reviewable pull request.
 3. Record the versions in that pull request: `python tools/quickstart.py --version`,
    `python tools/rbac_audit.py --version`, `python
    .agents/skills/plan-linter/scripts/plan_linter.py --version`, and the

@@ -1,6 +1,6 @@
 name: RBAC Audit
 
-# Authoritative enforcement layer (L2).
+# Authoritative enforcement layer (L1).
 # Copy this file to .github/workflows/rbac-gate.yml in the adopting repository.
 # See templates/ci/README.md for installation, permissions and troubleshooting.
 

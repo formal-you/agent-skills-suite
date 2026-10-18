@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Harness-neutral RBAC audit (layer L2, authoritative in CI).
+"""Harness-neutral RBAC audit (layer L1, authoritative in CI).
 
 Diffs a git range and fails when a commit changed files its role may not touch:
 
