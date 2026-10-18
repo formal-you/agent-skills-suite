@@ -7,6 +7,7 @@
 > **v3.3.0 新增**：`test-engineering` 全局测试方法学技能（测试策略、测试设计方法、数据/环境与 flakiness 策略、测试指标与独立测试设计评审）；它不接收单任务、不写测试与 `03`、不运行 CI 门禁，详见 §7.8。
 > **v3.4.0 策略接线**：本仓库的测试策略示例落盘为 [`testing-strategy.md`](testing-strategy.md)，采用方应从技能内置模板生成自己的策略；QA 在测试设计前只读读取并在 `03` 记录测试设计摘要，`quality-engineering` 负责把策略映射为 CI 画像/作业选择/阈值/环境服务。该示例文件不属于技能安装包，单独安装 `test-engineering` 不依赖它。
 > **v3.4.1 修复**：`qa` 自带 `scripts/verification_linter.py` 作为本地 Gate 3 预检，不再依赖 quality-engineering 安装；本地预检是 advisory，CI Gate 3 仍是权威。
+> **v3.4.2 流程固化**：技能编写/优化/测试/issue/branch/commit/PR/merge/tag 流程已固化到 [`AGENTS.md`](../AGENTS.md)，无需在提示词中重复；面向人的说明见 [`CONTRIBUTING.md`](../CONTRIBUTING.md)。
 > 本文系统说明十一个技能如何协同工作、现代质量工程三支柱如何落地、四阶段测试流水线与 CI 权威门禁如何运转。
 
 ---
@@ -778,6 +779,8 @@ python tools/mutation_gate.py check --report artifacts/mutation-report.json --mi
 
 ## 12. 相关文档
 
+- [全局规则与技能变更/git-flow 流程（AGENTS.md）](../AGENTS.md)
+- [贡献与测试流程（CONTRIBUTING.md）](../CONTRIBUTING.md)
 - [英文技能索引与流水线说明（README.md）](../.agents/skills/README.md)
 - [技能类别索引（skills/README.md）](../skills/README.md)
 - [Brownfield 增量变更与规格收敛指南](brownfield-convergence.zh-CN.md)

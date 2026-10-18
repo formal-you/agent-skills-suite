@@ -5,6 +5,22 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.2] - 2026-10-19
+
+### Changed
+
+- **Canonical skill-change workflow**: `AGENTS.md` now defines the always-loaded workflow for
+  authoring/optimizing the skill suite itself: issue first, branch from `main`, dual-tree edits,
+  targeted + full tests, conventional commits, PR with `Closes #<issue>`, merge/sync, annotated
+  `vX.Y.Z` tag and release verification, definition of done and prohibited shortcuts. The
+  agent no longer needs the git-flow process repeated in prompts.
+- `CONTRIBUTING.md` links the canonical workflow and reflects the current eleven workflow skills.
+
+### Fixed
+
+- The issue/branch/commit/PR/merge/tag process was previously prompt-only knowledge; it is now
+  enforced by the always-loaded rules and a unit test guard.
+
 ## [3.4.1] - 2026-10-19
 
 ### Fixed

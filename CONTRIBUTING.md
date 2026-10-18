@@ -1,7 +1,8 @@
 # Contributing
 
 Thanks for helping improve the Agent Skills Suite. This repository is the distributed
-skill package: nine skills, their rules, helper scripts, docs and tests.
+skill package: eleven workflow skills (plus the platform helper), their rules, helper scripts, docs
+and tests.
 
 ## Prerequisites
 
@@ -56,11 +57,19 @@ claude plugin validate .          # optional; validates plugin.json + marketplac
 
 All tests must pass on Windows and Linux. CI runs the matrix in `.github/workflows/ci.yml`.
 
+## Git flow
+
+The canonical workflow is in [`AGENTS.md`](AGENTS.md#skill-change-workflow-authoring---optimization---tests---git-flow).
+In short: issue -> branch from `main` -> author/optimize -> test -> conventional commit -> PR
+(`Closes #<issue>`) -> green checks -> merge -> sync `main` -> annotated `vX.Y.Z` tag and release
+when a version is published. Do not commit directly to `main` and do not force-push shared branches.
+
 ## Pull requests
 
 - One focused change per PR; keep unrelated reformatting out.
-- Describe the skill/script affected and the evidence (test command + result).
-- Update `CHANGELOG.md` under `## [Unreleased]` for user-visible changes.
+- Link the issue with `Closes #<issue>` and describe the skill/script affected.
+- Include the evidence (test command + result) and any risk/rollback notes.
+- Update `CHANGELOG.md`, `VERSION` and plugin manifests for user-visible releases.
 - Do not weaken a gate to make a test pass; fix the artifact instead.
 
 ## Reporting issues
