@@ -1,0 +1,39 @@
+# Reference profile: Java / Kotlin (Maven)
+stack: java
+display_name: "Java / Kotlin"
+
+toolchain:
+  setup:
+    - "uses: actions/setup-java@v4"
+    - "with: {distribution: temurin, java-version: \"21\", cache: maven}"
+  setup_notes: "Use the JDK version declared by the project; Gradle projects need a Gradle setup instead."
+
+install:
+  - "mvn -B -DskipTests dependency:resolve"
+
+acceptance:
+  command: "mvn -B test"
+  junit: "target/surefire-reports/*.xml"
+  alternatives:
+    - "mvn -B test -Dcucumber.filter.tags=\"@acceptance\""
+  bdd_tools: ["Cucumber-JVM", "JBehave"]
+
+mutation:
+  tool: "PITest"
+  command: "mvn -B org.pitest:pitest-maven:mutationCoverage"
+  raw_report: "target/pit-reports/mutations.xml"
+  report: "artifacts/mutation-report.json"
+  adapter: "Map PIT mutations.xml into targets[]; treat NO_COVERAGE separately from SURVIVED."
+  min_msi: 80
+
+complexity:
+  command: "python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src/main/java --json"
+  engines: ["tree-sitter", "lizard", "pmd"]
+  source: "src/main/java"
+
+services: []
+
+notes:
+  - "Aggregate Surefire XML for the JUnit artifact or upload the directory."
+  - "For real databases/queues, add services: or testcontainers."
+  - "Gate 3 expects a single normalized mutation report; keep the PIT adapter deterministic."

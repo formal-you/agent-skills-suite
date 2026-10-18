@@ -1,0 +1,39 @@
+# Reference profile: C# / .NET
+stack: dotnet
+display_name: "C# / .NET"
+
+toolchain:
+  setup:
+    - "uses: actions/setup-dotnet@v4"
+    - "with: {dotnet-version: \"8.0.x\"}"
+  setup_notes: "Pin the SDK version from global.json when present."
+
+install:
+  - "dotnet restore"
+
+acceptance:
+  command: "dotnet test --filter Category=Acceptance --logger \"junit;LogFilePath=artifacts/acceptance-junit.xml\""
+  junit: "artifacts/acceptance-junit.xml"
+  alternatives:
+    - "dotnet test --logger \"trx;LogFileName=acceptance.trx\""
+  bdd_tools: ["Reqnroll", "SpecFlow"]
+
+mutation:
+  tool: "Stryker.NET"
+  command: "dotnet stryker --mutate \"src/**/*.cs\" --reporters json"
+  raw_report: "StrykerOutput/**/reports/mutation-report.json"
+  report: "artifacts/mutation-report.json"
+  adapter: "Map Stryker.NET JSON into targets[]; keep file-level counts."
+  min_msi: 80
+
+complexity:
+  command: "python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src --json"
+  engines: ["tree-sitter", "lizard"]
+  source: "src"
+
+services: []
+
+notes:
+  - "The JUnit logger is a NuGet test logger (JunitXml.TestLogger); install it in the test project."
+  - "TRX is not JUnit; convert it or use the JUnit logger."
+  - "For real databases/queues, add services: or testcontainers."

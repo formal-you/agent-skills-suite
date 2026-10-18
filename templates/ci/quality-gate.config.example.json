@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "mode": "spec-driven",
+  "stack": "python",
+  "display_name": "Python reference",
+  "source": {
+    "dirs": ["src"],
+    "languages": ["python"]
+  },
+  "install": [
+    "python -m pip install --upgrade pip",
+    "if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi",
+    "if [ -f pyproject.toml ]; then python -m pip install -e .; fi"
+  ],
+  "acceptance": {
+    "command": "python -m pytest tests/acceptance -q --junitxml=artifacts/acceptance-junit.xml",
+    "junit": "artifacts/acceptance-junit.xml",
+    "alternatives": [
+      "python -m unittest discover -s tests/acceptance -v"
+    ]
+  },
+  "mutation": {
+    "tool": "mutmut",
+    "command": "mutmut run --paths-to-mutate src",
+    "raw_report": "mutmut results (text) or .mutmut-cache",
+    "report": "artifacts/mutation-report.json",
+    "adapter": "Convert tool output into targets[]; one target per source file.",
+    "min_msi": 80
+  },
+  "complexity": {
+    "command": "python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src --json",
+    "engines": ["tree-sitter", "lizard", "ast"],
+    "standard": 10,
+    "warning": 15
+  },
+  "services": [],
+  "notes": [
+    "Profiles are reference fragments; copy/adapt them into quality-gate.yml.",
+    "Add services: or testcontainers when acceptance tests require real middleware.",
+    "Do not wrap gate commands in || true or continue-on-error."
+  ]
+}

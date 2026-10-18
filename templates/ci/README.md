@@ -20,6 +20,29 @@ third-party marketplace action is required.
 - **`plan-gate.yml`** and **`rbac-gate.yml`** are modular, dedicated workflows for repositories
   that prefer separate status checks or isolated trigger paths.
 
+## Multi-language stack profiles
+
+`quality-gate.yml` is a **Python-first reference implementation**, not a universal pipeline.
+The `profiles/` directory ships per-stack reference fragments for the invariant gates:
+
+| Stack | Profile | Acceptance/JUnit | Mutation tool |
+| :--- | :--- | :--- | :--- |
+| Python | `profiles/python.yml` | pytest JUnit | mutmut |
+| Node.js / TS | `profiles/node.yml` | Cucumber.js / Jest | Stryker |
+| Go | `profiles/go.yml` | gotestsum JUnit | go-mutesting |
+| Java / Kotlin | `profiles/java.yml` | Surefire XML | PITest |
+| Rust | `profiles/rust.yml` | nextest + cargo2junit | cargo-mutants |
+| C# / .NET | `profiles/dotnet.yml` | JUnit logger / TRX adapter | Stryker.NET |
+| C / C++ | `profiles/cpp.yml` | CTest JUnit | Mull |
+
+- Profiles are **reference fragments**: copy the toolchain/install/acceptance/mutation blocks into
+  your adapted `quality-gate.yml`; they do not run standalone.
+- `profiles/index.json` is the machine-readable catalog.
+- `quality-gate.config.example.json` shows the profile/config shape.
+- Adoption guide: [`docs/ci-stack-profiles.zh-CN.md`](../../docs/ci-stack-profiles.zh-CN.md).
+- Profiles do not provision real middleware. Add GitHub Actions `services:` or testcontainers when
+  acceptance tests need a real database/queue/cache.
+
 ---
 
 ## The 4-Stage Layered Testing Pipeline

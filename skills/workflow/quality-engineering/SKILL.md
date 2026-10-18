@@ -54,6 +54,8 @@ Stage 1: Local Testing (Dev & QA)
 - Running or debugging automated pre-merge quality gates on pull requests.
 - Running post-merge regression, spec convergence, or mutation baseline tracking on trunk.
 - Auditing QA verification artifacts (`03-qa-verification.md`) via Gate 3 (`verification_linter.py`).
+- Adapting the reference CI workflow to a non-Python stack: start from the stack profile catalog
+  shipped alongside the CI template (Python, Node/TS, Go, Java, Rust, .NET, C/C++).
 
 ## Do not use when
 
@@ -168,7 +170,10 @@ fabrication or an unresolvable spec conflict -> escalate to the orchestrator.
   tree-sitter/lizard engines for multi-language analysis (Python >= 3.9).
 - Gate 3 auditor: [`scripts/verification_linter.py`](scripts/verification_linter.py) — deterministic
   audit tool (standard library only, Python >= 3.9).
-- CI workflow template: `quality-gate.yml` — unified multi-stage CI quality gate.
+- CI workflow template: `quality-gate.yml` — Python reference implementation of the unified
+  multi-stage CI quality gate. The suite also ships per-stack reference profile fragments
+  (Python, Node/TS, Go, Java, Rust, .NET, C/C++) plus a profile/config example; they are fragments
+  to adapt, not standalone workflows.
 - Sister skill: `qa` — local development stage testing and verification evidence generation.
 
 ## Honest limits

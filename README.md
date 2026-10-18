@@ -82,7 +82,7 @@ from one source).
 | `.agents/skills/` | The same skill files under the AGENTS discovery path, kept byte-identical by the upstream packaging build (used by tests and local installers) |
 | `.agents/rules/` | Role rules (Planner, Dev, QA, Reviewer, Orchestrator, PM, Architect) plus the `enforcement.md` role matrix and honest enforcement model |
 | `tools/` | `quickstart.py`, `install_skills.py`, `rbac_audit.py`, `mutation_gate.py` |
-| `templates/ci/` | GitHub Actions: full quality gate, RBAC gate, Gate 1 plan gate |
+| `templates/ci/` | GitHub Actions: full quality gate (Python reference), RBAC gate, Gate 1 plan gate, and per-stack profiles |
 | `docs/` | User guides: skills guide, brownfield/convergence guide, harness compatibility, benchmark report |
 | `tests/unit/` | Black-box tests for the skills and helpers |
 | `.claude-plugin/` | Claude Code plugin and marketplace manifests (skills point at `skills/`) |
@@ -119,6 +119,7 @@ python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks   -
 - `docs/skills-guide.zh-CN.md` - how the ten skills work and how to use them
 - `docs/brownfield-convergence.zh-CN.md` - change proposals, convergence and Gate 2 heuristics
 - `docs/skills-compatibility.md` - harness discovery, installation, enforcement layers
+- `docs/ci-stack-profiles.zh-CN.md` - Python/Node/Go/Java/Rust/.NET/C++ CI profile adoption
 - `docs/skills-benchmark.zh-CN.md` - scorecard versus open-source alternatives
 - `.agents/rules/enforcement.md` - role write scopes and the honest enforcement model
 

@@ -1,0 +1,39 @@
+# Reference profile: Rust
+stack: rust
+display_name: "Rust"
+
+toolchain:
+  setup:
+    - "uses: dtolnay/rust-toolchain@stable"
+    - "with: {components: rustfmt, clippy}"
+  setup_notes: "Pin the toolchain from rust-toolchain.toml when the project declares one."
+
+install:
+  - "cargo fetch"
+
+acceptance:
+  command: "cargo test"
+  junit: "artifacts/acceptance-junit.xml"
+  alternatives:
+    - "cargo nextest run --profile ci"
+  bdd_tools: ["cucumber-rs"]
+
+mutation:
+  tool: "cargo-mutants"
+  command: "cargo mutants"
+  raw_report: "text output / mutants.out"
+  report: "artifacts/mutation-report.json"
+  adapter: "Parse cargo-mutants outcomes into targets[]; map caught/missed/timeout/unviable."
+  min_msi: 80
+
+complexity:
+  command: "python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src --json"
+  engines: ["tree-sitter", "lizard"]
+  source: "src"
+
+services: []
+
+notes:
+  - "cargo test has no JUnit output; use cargo-nextest + cargo2junit or a small adapter."
+  - "For real databases/queues, add services: or testcontainers."
+  - "Mutation testing Rust can be slow; scope cargo-mutants to changed files where possible."

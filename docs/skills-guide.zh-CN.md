@@ -578,6 +578,14 @@ jobs:
 python tools/quickstart.py --target ../my-new-repo --copy --with-ci
 ```
 
+#### 多语言项目：使用 Stack Profiles
+
+`quality-gate.yml` 是 **Python 参考实现**，不是跨栈通用 YAML。其他技术栈从 `templates/ci/profiles/`
+选择参考片段（Python、Node/TS、Go、Java、Rust、.NET、C/C++），只替换工具链、安装、验收/JUnit、
+变异工具和 adapter，保留 Gate 1/3、RBAC、artifact、fail-closed 不变量。
+配置形状见 `templates/ci/quality-gate.config.example.json`；完整采纳说明见
+[多语言 CI 参考模板](ci-stack-profiles.zh-CN.md)。
+
 ---
 
 ## 7. 各技能详解
@@ -742,6 +750,7 @@ python tools/mutation_gate.py check --report artifacts/mutation-report.json --mi
 - [技能类别索引（skills/README.md）](../skills/README.md)
 - [Brownfield 增量变更与规格收敛指南](brownfield-convergence.zh-CN.md)
 - [CI 自动化门禁配置与工作流模板](../templates/ci/README.md)
+- [多语言 CI 参考模板（Stack Profiles）](ci-stack-profiles.zh-CN.md)
 - [门禁加固改造执行手册](skills-remediation.zh-CN.md)
 - [宿主兼容性与工具安装指南](skills-compatibility.md)
 - [角色规则与权威强制模型](../.agents/rules/enforcement.md)

@@ -1,0 +1,38 @@
+# Reference profile: C / C++
+stack: cpp
+display_name: "C / C++"
+
+toolchain:
+  setup:
+    - "sudo apt-get update && sudo apt-get install -y cmake g++ ninja-build"
+  setup_notes: "Use the project's declared compiler/CMake version; add clang if required."
+
+install:
+  - "cmake -B build -DCMAKE_BUILD_TYPE=Release"
+
+acceptance:
+  command: "cmake --build build && ctest --test-dir build --output-on-failure --output-junit artifacts/acceptance-junit.xml"
+  junit: "artifacts/acceptance-junit.xml"
+  alternatives:
+    - "cmake --build build && ctest --test-dir build --output-on-failure"
+  bdd_tools: ["Cucumber-Cpp", "CTest"]
+
+mutation:
+  tool: "Mull"
+  command: "mull-runner build"
+  raw_report: "mull-report.sqlite / stdout"
+  report: "artifacts/mutation-report.json"
+  adapter: "Parse Mull reporter output into targets[]; map killed/survived/timeout per file."
+  min_msi: 80
+
+complexity:
+  command: "python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src --json"
+  engines: ["tree-sitter", "lizard"]
+  source: "src"
+
+services: []
+
+notes:
+  - "CTest JUnit output requires CMake 3.21+."
+  - "Mull needs compiler instrumentation; follow the project's Mull setup for the exact toolchain."
+  - "For real databases/queues, add services: or testcontainers."
