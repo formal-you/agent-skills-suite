@@ -5,6 +5,27 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.7] - 2026-10-19
+
+### Added
+
+- **AGENTS.md maintenance guide**: `docs/agents-maintenance.zh-CN.md` documents the source-of-truth
+  map, the 155-line context budget, and why nested AGENTS.md files are not split yet.
+
+### Changed
+
+- **Single source of truth**: AGENTS.md no longer duplicates the role matrix; it links to
+  `.agents/rules/enforcement.md#role-matrix`. The gate table is replaced by a compact summary linked
+  to `templates/ci/README.md` and the owning skills, reducing drift risk and the always-loaded size.
+- Reorganized AGENTS.md to 153 lines: repository map, work types, roles/gates sources, skill-change
+  workflow, commands, maintenance and references.
+- The workflow guard now rejects re-introducing the `| Role | Rule |` and `| Gate | Owner |` tables
+  into AGENTS.md and requires the canonical role-matrix link.
+
+### Fixed
+
+- Removed the duplicate role/gate tables that could drift from their canonical rule and CI sources.
+
 ## [3.4.6] - 2026-10-19
 
 ### Changed
