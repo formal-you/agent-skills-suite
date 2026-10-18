@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.3] - 2026-10-19
+
+### Changed
+
+- **Best-practice skill-change workflow**: `AGENTS.md` now uses risk-based issue-first, explicit
+  branch/write-scope rules for parallel agents, independent review for behavior/security/gate/CI
+  changes, SemVer (breaking/feature/fix), post-merge CI verification, rollback/revert guidance,
+  install-smoke checks, tag immutability and a stricter definition of done.
+- `.github/pull_request_template.md` now requires the linked issue, test evidence, risk/rollback,
+  release/tag plan, independent-review confirmation and secret/dual-tree checks.
+- `CONTRIBUTING.md` links the upgraded workflow and documents the independent-review and SemVer
+  expectations.
+
+### Fixed
+
+- The previous workflow treated green checks as sufficient and lacked a review gate, rollback path
+  and published-tag immutability rule; those gaps are now explicit.
+
 ## [3.4.2] - 2026-10-19
 
 ### Changed

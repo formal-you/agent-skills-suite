@@ -1,8 +1,8 @@
-# Agent Skills Suite v3.4.2
+# Agent Skills Suite v3.4.3
 
 [![CI](https://github.com/formal-you/agent-skills-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/formal-you/agent-skills-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.4.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.4.3-blue.svg)](CHANGELOG.md)
 
 Eleven prompt-first, harness-neutral skills that turn an idea or an existing codebase into
 planned, reviewed, implemented and spec-converged work - plus the rules, helper scripts and

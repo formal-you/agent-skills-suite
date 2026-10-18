@@ -58,43 +58,60 @@ override. If an action is outside your write scope, escalate to the owner instea
 
 This section applies when changing the **skill suite itself** (`SKILL.md`, `references/`, assets,
 scripts, rules, templates, manifests, CI or docs). It does not replace the per-task Planner -> Dev ->
-QA -> converge pipeline.
+QA -> converge pipeline. Principles: small, reviewable, reversible; evidence over claims; one writer
+per file; no bypassed gates.
 
-1. **Issue first.** Create a GitHub issue with problem, scope, acceptance criteria and test plan.
-   A change without a linked issue is not ready for a PR unless the user explicitly asks for a
-   quick fix.
-2. **Branch from `main`.** Never commit directly to `main`. Use `feat/<topic>`, `fix/<topic>`,
-   `docs/<topic>` or `chore/<topic>`; keep one logical change per branch.
+1. **Intent and issue (risk-based).** Behavior, security, gate, CI, release or multi-file changes
+   start with an issue containing problem, scope, acceptance criteria, test plan and risk. A trivial
+   typo or docs-only PR may skip the issue only when the PR explains why; never use that exception
+   for code, gates, CI or release changes.
+2. **Branch and write scope.** Branch from an up-to-date `main` using `feat/<topic>`, `fix/<topic>`,
+   `docs/<topic>`, `chore/<topic>` or `security/<topic>`. One logical change per branch; never commit
+   directly to `main`. Parallel agents must use disjoint write scopes and the Lead integrates and
+   reviews the final diff; two agents must not edit the same file.
 3. **Author or optimize.**
    - Edit canonical `.agents/skills/<name>/` and the byte-identical mirror `skills/workflow/<name>/`.
    - Keep `SKILL.md` under 200 lines, canonical English, and self-contained (no runtime dependency on
      another skill or on repository-only `docs/`, `tools/` or CI files).
    - Put detail in `references/` or `assets/`; keep templates token-free where Gate 1 scans them.
-   - If behavior or interfaces change, update the role rule, docs, `CHANGELOG.md`, `VERSION` and
-     plugin/marketplace manifests.
-4. **Test before commit.**
+   - Update the role rule, docs, skill `metadata.version`, `CHANGELOG.md`, `VERSION` and plugin
+     manifests when behavior or interfaces change. Document breaking changes and migration.
+   - Never weaken a gate, test or role boundary to make a change easier to land.
+4. **Test and evidence before commit.**
    - Run targeted tests, then the full suite:
      `python -m unittest discover -s tests/unit -p "test_*.py"`.
    - Verify dual-tree parity, skill self-containment, `SKILL.md` line limits, YAML/JSON parse,
      `git diff --check`, and the CI matrix (Ubuntu/Windows, Python 3.9/3.12, plugin manifests).
-   - Never delete, skip or weaken a test to make a change pass.
+   - For distribution changes, run an installation smoke test (`quickstart --dry-run` or a temp
+     install); for manifest changes, run `claude plugin validate .` when available.
+   - CI is authoritative: local tests are necessary but not sufficient. Never delete, skip or weaken
+     a test, and never use `|| true` / `continue-on-error` to hide a failure.
 5. **Commit.** Use conventional commit messages (`feat(scope): ...`, `fix(scope): ...`,
-   `docs(scope): ...`). Stage only intended files; never commit secrets, generated caches or
-   unrelated reformatting.
-6. **Pull request.** Push the branch and open a PR against `main` with `Closes #<issue>`, a summary,
-   the test evidence and risk/rollback notes. Required checks must be green before merge.
-7. **Merge and sync.** Merge with the repository's configured method and delete the branch, then
-   `git switch main && git pull --ff-only`. Do not force-push `main` or a shared branch.
-8. **Tag and release.** For a user-visible release, update `VERSION`, `CHANGELOG.md` and plugin
-   manifests first, create an annotated tag `vX.Y.Z` (feat -> minor, fix/docs -> patch by convention),
-   push the tag, and verify the release workflow and GitHub release. Never tag an unmerged or WIP
-   branch.
-9. **Definition of done.** Tests and CI checks pass; mirrors are byte-identical; docs, version,
-   changelog and manifests agree; PR is merged; tag/release verified when the change is released;
-   evidence is recorded in the PR/issue.
-10. **Prohibited shortcuts.** Direct commits to `main`; `git push --force` on shared branches;
-    `|| true` or `continue-on-error` to hide gate failures; deleting or skipping tests; editing only
-    one tree; committing secrets; declaring done without command output or CI evidence.
+   `docs(scope): ...`, `security(scope): ...`). Keep commits atomic; stage only intended files; never
+   commit secrets, credentials, generated caches or unrelated reformatting.
+6. **Pull request and review.** Push the branch and open a PR against `main` using the PR template:
+   `Closes #<issue>`, summary, test evidence, risk/rollback, release/tag plan. Keep it small enough
+   to review; open a draft PR early for long work. Required checks must be green, and
+   behavior/security/gate/CI changes require approval from an independent reviewer who is not the
+   author (use CODEOWNERS/branch protection where configured). Docs-only changes may self-merge only
+   if branch protection permits it.
+7. **Merge, sync and post-merge verification.** Merge only with required checks and review complete;
+   use the repository's configured merge method; do not force-push a reviewed branch; delete the
+   branch and `git switch main && git pull --ff-only`. Watch the post-merge CI run; if `main` is red,
+   fix forward with a new PR or revert with a PR — never rewrite `main`.
+8. **Tag and release (SemVer).** Release only from merged `main`. Breaking change -> major,
+   feature -> minor, fix -> patch; docs/chore changes are released only when user-visible or bundled
+   with a release. Update `VERSION`, `CHANGELOG.md`, plugin manifests and skill metadata, create an
+   annotated `vX.Y.Z` tag (sign it if the repository requires signed tags), push it, and verify the
+   release workflow, release assets, GitHub release and install smoke. Never move or delete a
+   published tag; a bad release gets a new patch release.
+9. **Definition of done.** Issue linked; tests and CI green; independent review where required;
+   mirrors byte-identical; docs, version, changelog and manifests agree; PR merged; post-merge CI
+   watched; tag/release verified when released; rollback path documented.
+10. **Prohibited shortcuts.** Direct commits to `main`; force-pushing shared branches; bypassing
+    required checks (`|| true`, `continue-on-error`, `[skip ci]` on required gates); deleting or
+    skipping tests; editing only one tree; committing secrets; self-approving behavior/security/gate
+    changes; tagging before merge; moving published tags; declaring done without evidence.
 
 When the user says "standard open-source workflow", "git flow", "issue/PR", "commit/push/PR/tag" or
 equivalent, execute this section without asking for a separate process description.
