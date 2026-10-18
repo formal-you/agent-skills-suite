@@ -12,7 +12,7 @@ CONTRIBUTING = ROOT / "CONTRIBUTING.md"
 PR_TEMPLATE = ROOT / ".github" / "pull_request_template.md"
 
 REQUIRED_AGENTS_PHRASES = (
-    "## Skill change workflow",
+    "## 6. Skill change workflow",
     "Intent and issue (risk-based)",
     "Branch and write scope",
     "Author or optimize",
@@ -49,6 +49,23 @@ class AgentsWorkflowTests(unittest.TestCase):
         self.assertIn("independent reviewer", text_flat)
         self.assertIn("disjoint write scopes", text_flat)
         self.assertIn("post-merge", text_flat.lower())
+
+    def test_agents_is_concise_and_scannable(self) -> None:
+        text = read(AGENTS)
+        self.assertLessEqual(len(text.splitlines()), 150, "AGENTS.md must stay under 150 lines")
+        for phrase in (
+            "**Purpose.**",
+            "**Precedence (highest first).**",
+            "**Authority.**",
+            "## 1. Repository map",
+            "## 2. How to work",
+            "### 2.1 Per-task delivery",
+            "### 2.2 Skill-suite development",
+            "## 7. Commands",
+            "always-loaded summary",
+        ):
+            self.assertIn(phrase, text, "AGENTS.md misses structure phrase: " + phrase)
+        self.assertNotIn("v2.0.0", text, "do not pin tool versions in the always-loaded summary")
 
     def test_contributing_points_to_the_canonical_workflow(self) -> None:
         text = flat(read(CONTRIBUTING))

@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   branch/write-scope rules for parallel agents, independent review for behavior/security/gate/CI
   changes, SemVer (breaking/feature/fix), post-merge CI verification, rollback/revert guidance,
   install-smoke checks, tag immutability and a stricter definition of done.
+- **AGENTS.md structure**: rewritten as a concise, scannable always-loaded summary with explicit
+  purpose/precedence/authority, repository map, the two workflows, role/gate tables, commands and
+  maintenance rules; removed stale tool-version pinning and duplicated gate detail; line-budget test
+  added.
 - `.github/pull_request_template.md` now requires the linked issue, test evidence, risk/rollback,
   release/tag plan, independent-review confirmation and secret/dual-tree checks.
 - `CONTRIBUTING.md` links the upgraded workflow and documents the independent-review and SemVer

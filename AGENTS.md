@@ -1,65 +1,78 @@
-# Global Agent Rules for Autonomous Multi-Agent Development
+# AGENTS.md — Global Rules for the Agent Skills Suite
 
-These rules apply to every agent and every harness in this repository. This file is the
-host-agnostic rules layer shipped with the Agent Skills Suite: keep it at the adopting repository
-root so AGENTS-aware hosts load it automatically (Codex, DSH, Antigravity, generic agents). The
-skills are self-contained and work without this file; when both are present, these conventions
-apply.
+> **Purpose.** Always-loaded contract for agents developing/validating this skill suite and running
+> its per-task pipeline.
+>
+> **Precedence (highest first).** Host/user instruction and task contract; role rule for permissions;
+> this file for conventions; skill docs for procedure. On conflict, stop and escalate.
+>
+> **Authority.** Prompt rules are advisory; CI gates, branch protection and CODEOWNERS are
+> authoritative. Skills are self-contained; this file is never a runtime dependency.
 
-The pipeline is: idea or bounded change -> PRD/spec -> task bundles -> Gate 1 -> Gate 2 ->
-Dev <-> QA -> convergence. This file is the always-loaded summary; it must not contradict the
-detailed rules in `.agents/rules/enforcement.md`, the skill index `.agents/skills/README.md` or the
-guides under `docs/`.
+## 1. Repository map
 
-## Task bundles
+| Path | Purpose |
+| :--- | :--- |
+| `.agents/skills/` | Canonical skill sources: `SKILL.md`, `references/`, `assets/`, `scripts/` |
+| `skills/workflow/` | Installable mirror; byte-identical to `.agents/skills/` |
+| `.agents/rules/` | Role permissions and enforcement model |
+| `tests/unit/` | Black-box tests for skills, tools, templates and distribution |
+| `templates/ci/` | Copy-paste CI gates and stack profiles |
+| `tools/` | Maintainer helpers (`quickstart.py`, audit tools) |
+| `docs/`, `tasks/` | Guides/strategy; per-task bundles used by the delivery pipeline |
 
-All work is sliced into task bundles under `tasks/<task-id>/` containing exactly four documents:
+## 2. How to work
+### 2.1 Per-task delivery
+`idea/change -> PRD/spec -> task bundles -> Gate 1 -> Gate 2 -> Dev <-> QA -> Gate 3 -> converge`
 
-- `01-contract.md` — Planner-owned contract; authoritative YAML frontmatter, read-only for Dev/QA.
-- `02-dev-workspace.md` — Dev-owned implementation notes, self-verification, handoff and the
-  `Implementation deviations` table (`DEV-001` / `#sec-*` / `add|modify|remove`; `None` row when nothing deviated).
-- `03-qa-verification.md` — QA-owned test matrix, evidence and verdict.
-- `04-process.md` — derived status/audit output maintained by tooling; no agent hand-edits it.
+- Planner writes `01-contract.md`; Dev writes `02-dev-workspace.md`; QA writes `03-qa-verification.md`;
+  `04-process.md` is derived and never hand-edited.
+- Do not start Dev without a contract, start QA without `WAITING_FOR_QA`, or merge with a red required
+  gate. Completion = `QA_PASSED` + Gate 3 + clean role audit.
 
-The `task_id` in `01-contract.md` must equal the directory name.
+### 2.2 Skill-suite development
 
-## Goldilocks rule
+Changes to skills, rules, templates, tools, manifests, CI or docs follow §6. Use it when improving
+the suite rather than delivering one task bundle.
 
-Tasks are sized for one reviewable change: 1–3 touched files and 50–250 estimated diff lines by
-default. The limits are configurable in the plan-linter configuration. Split tasks above the maximum;
-merge tasks below the minimum.
+## 3. Task bundles and sizing
 
-## Role isolation and no cheating
+- `01` Planner-owned contract; `02` Dev handoff; `03` QA evidence/verdict; `04` derived and
+  tooling-owned; `task_id` in `01` equals the directory name.
+- Goldilocks default: 1–3 touched files and 50–250 estimated diff lines. Split larger work; merge
+  smaller work. Limits are configurable.
 
-Each role has a rule file under `.agents/rules/`; it defines the permissions that this summary cannot
-override. If an action is outside your write scope, escalate to the owner instead of editing.
+## 4. Roles and write scopes
 
-- Planner — `.agents/rules/planner.md`: creates task bundles; never writes source, tests or `04`.
-- Dev — `.agents/rules/dev.md`: writes `src/**` plus `02-dev-workspace.md`; never edits tests, contracts or other roles' docs.
-- QA — `.agents/rules/qa.md`: local development stage testing (integration, BDD E2E, mutation testing, static lint & complexity analysis, autonomous review invocation, local Gate 3 pre-check). Prompt-first execution skill with a bundled `scripts/verification_linter.py`; writes `tests/acceptance/**`, `tests/integration/**` plus `03-qa-verification.md`; never edits source or other roles' docs.
-- Quality Engineering — `.agents/skills/quality-engineering/`: CI pipeline construction, test environment provisioning, pre-merge PR gates (Gate 1, RBAC, complexity check, acceptance tests, Gate 3 audit), post-merge automated verification, and ownership of CI workflow templates (`quality-gate.yml`), audit scripts (`complexity_check.py`, `verification_linter.py`) and the fail-closed mutation helper (`mutation_gate.py`).
-- Test Engineering — `.agents/rules/test-engineering.md`: owns the repository-wide test system (test strategy, risk-based test-design methods, data/environment and flakiness policy, test metrics, independent test-design review); writes only the agreed test-strategy document and test-design review notes; never accepts an individual task, never writes tests or `03`, and never runs CI gates.
-- Reviewer (Gate 2) — `.agents/rules/reviewer.md`: read-only semantic audit; never edits artifacts or weakens Gate 1.
-- Orchestrator/Lead — `.agents/rules/orchestrator.md`: routes work and enforces gate order; never authors role artifacts or bypasses a gate.
+| Role | Rule | Owns | Never |
+| :--- | :--- | :--- | :--- |
+| Planner | `.agents/rules/planner.md` | Task bundles, contracts, DAG | Source, tests, `04` |
+| Dev | `.agents/rules/dev.md` | `src/**`, `02-dev-workspace.md` | Tests, contracts, other roles' docs |
+| QA | `.agents/rules/qa.md` | `tests/acceptance/**`, `tests/integration/**`, `03` | Source, `01`, `02`, `04`; uses bundled Gate 3 pre-check |
+| Quality Engineering | `.agents/skills/quality-engineering/` | CI workflows, environment, gate scripts | Local task implementation, black-box test authoring |
+| Test Engineering | `.agents/rules/test-engineering.md` | Agreed test strategy, design-review notes | Task acceptance, tests, `03`, running CI gates |
+| Reviewer | `.agents/rules/reviewer.md` | Read-only semantic Gate 2 review | Editing artifacts or weakening gates |
+| Orchestrator/Lead | `.agents/rules/orchestrator.md` | Routing, gate order, integration | Authoring role artifacts or bypassing gates |
 
-## Gates and evidence
+## 5. Gates and quality bar
 
-- **Gate 1 (deterministic):** `plan-linter` has strictly single responsibility for Gate 1 deterministic task contract and DAG validation before development starts; checks contract fields, BDD Given-When-Then scenarios, DAG, placeholders, anchor coverage and real-file topology. It does not audit the complexity/mutation evidence in `03-qa-verification.md` (Gate 3 owns that; placeholder and existence checks are allowed). Its JSON and exit codes are the evidence.
-- **Gate 2 (semantic):** an independent, read-only reviewer audits traceability, invented content and ADR alignment; it never replaces Gate 1.
-- **Modern Quality Engineering Triad & Execution:**
-  - **Static Complexity Checker:** Multi-language AST McCabe Cyclomatic Complexity static checker (`complexity_check.py` v2.0.0) powered by Tree-sitter (https://github.com/tree-sitter/tree-sitter) with Lizard integration and Python AST fallback, covering Python, JS/TS, Go, Rust, Java, C/C++, C#. Dev enforces single-function cyclomatic complexity ($V(G) \le 10$) and hands off with evidence in `02`.
-  - **BDD Living Documentation:** QA conducts local integration and BDD E2E testing with stack-native open-source frameworks (pytest-bdd, Cucumber.js, Godog, Cucumber-JVM, cucumber-rs, Reqnroll/SpecFlow).
-  - **Mutation Testing:** Mandatory open-source mutation testing tools (mutmut, Stryker, go-mutesting, PITest, cargo-mutants, Mull) with $\text{MSI} \ge 80\%$ threshold. QA designs basis path tests ($\text{Test Cases} \ge V(G)$), records evidence in `03`, and issues exactly one verdict (`QA_PASSED` or `REWORK_REQUIRED`); `converge` folds confirmed deviations back into the spec after `QA_PASSED`.
-- **Gate 3 (acceptance audit):** `verification_linter.py` (maintained by `quality-engineering`) deterministically audits signed-off `03` artifacts for basis path coverage and mutation MSI thresholds, and cross-checks Section 3 V(G) values against the CI-uploaded AST artifact (`--actual-complexity`); it is fail-closed on omitted/phantom/mismatched functions and on any non-compliant mutation table.
-- **Mutation gate:** `tools/mutation_gate.py` runs the project's `MUTATION_COMMAND` on trunk pushes, validates the normalized report, and enforces the MSI threshold. A missing command/report is a failure, never a skip.
-- **Enforcement honesty (L0-L2):** prompt rules are advisory and bypassable (L0). The authoritative layer is the CI Quality Gate (`templates/ci/quality-gate.yml`, `tools/rbac_audit.py`, `tools/mutation_gate.py`) (L1) coupled with branch protection and CODEOWNERS (L2); no local hook adapter is shipped.
+| Gate | Owner | Checks | Evidence |
+| :--- | :--- | :--- | :--- |
+| Gate 1 | `plan-linter` | Contract fields, BDD G/W/T, DAG, placeholders, anchors, topology | JSON + exit code |
+| Gate 2 | Independent reviewer | Traceability, invented content, ADR alignment | Review findings |
+| Gate 3 | `verification_linter.py` | Section 3 V(G), basis paths, Section 4 MSI, Section 5 provenance | JSON + exit code |
+| Mutation | `tools/mutation_gate.py` | `MUTATION_COMMAND` report on trunk; fail-closed | Normalized report |
+| Role audit | `tools/rbac_audit.py` | Changed paths vs role scope | CI status |
 
-## Skill change workflow (authoring -> optimization -> tests -> git flow)
+Quality bar: `V(G) <= 10` per function (`11-15` waiver, `>15` rejected); `Test Cases >= V(G)`;
+`MSI >= 80%` (`>= 90%` for `risk_level: core`); no critical surviving mutant; no fabricated evidence.
+CI plus branch protection (L1/L2) is authoritative; prompt rules are L0 only.
 
-This section applies when changing the **skill suite itself** (`SKILL.md`, `references/`, assets,
-scripts, rules, templates, manifests, CI or docs). It does not replace the per-task Planner -> Dev ->
-QA -> converge pipeline. Principles: small, reviewable, reversible; evidence over claims; one writer
-per file; no bypassed gates.
+## 6. Skill change workflow (authoring -> optimization -> tests -> git flow)
+
+This section applies when changing the suite itself (`SKILL.md`, `references/`, assets, scripts,
+rules, templates, manifests, CI or docs). It does not replace §2.1. Principles: small, reviewable,
+reversible; evidence over claims; one writer per file; no bypassed gates.
 
 1. **Intent and issue (risk-based).** Behavior, security, gate, CI, release or multi-file changes
    start with an issue containing problem, scope, acceptance criteria, test plan and risk. A trivial
@@ -69,42 +82,36 @@ per file; no bypassed gates.
    `docs/<topic>`, `chore/<topic>` or `security/<topic>`. One logical change per branch; never commit
    directly to `main`. Parallel agents must use disjoint write scopes and the Lead integrates and
    reviews the final diff; two agents must not edit the same file.
-3. **Author or optimize.**
-   - Edit canonical `.agents/skills/<name>/` and the byte-identical mirror `skills/workflow/<name>/`.
-   - Keep `SKILL.md` under 200 lines, canonical English, and self-contained (no runtime dependency on
-     another skill or on repository-only `docs/`, `tools/` or CI files).
-   - Put detail in `references/` or `assets/`; keep templates token-free where Gate 1 scans them.
-   - Update the role rule, docs, skill `metadata.version`, `CHANGELOG.md`, `VERSION` and plugin
-     manifests when behavior or interfaces change. Document breaking changes and migration.
-   - Never weaken a gate, test or role boundary to make a change easier to land.
-4. **Test and evidence before commit.**
-   - Run targeted tests, then the full suite:
-     `python -m unittest discover -s tests/unit -p "test_*.py"`.
-   - Verify dual-tree parity, skill self-containment, `SKILL.md` line limits, YAML/JSON parse,
-     `git diff --check`, and the CI matrix (Ubuntu/Windows, Python 3.9/3.12, plugin manifests).
-   - For distribution changes, run an installation smoke test (`quickstart --dry-run` or a temp
-     install); for manifest changes, run `claude plugin validate .` when available.
-   - CI is authoritative: local tests are necessary but not sufficient. Never delete, skip or weaken
-     a test, and never use `|| true` / `continue-on-error` to hide a failure.
-5. **Commit.** Use conventional commit messages (`feat(scope): ...`, `fix(scope): ...`,
-   `docs(scope): ...`, `security(scope): ...`). Keep commits atomic; stage only intended files; never
-   commit secrets, credentials, generated caches or unrelated reformatting.
+3. **Author or optimize.** Edit canonical `.agents/skills/<name>/` and the byte-identical mirror
+   `skills/workflow/<name>/`; keep `SKILL.md` under 200 lines, canonical English, self-contained;
+   put detail in `references/`/`assets/`; keep templates token-free where Gate 1 scans them. Update
+   the role rule, docs, skill `metadata.version`, `CHANGELOG.md`, `VERSION` and plugin manifests for
+   behavior changes; document breaking changes and migration. Never weaken a gate, test or role
+   boundary.
+4. **Test and evidence before commit.** Run targeted tests, then the full suite:
+   `python -m unittest discover -s tests/unit -p "test_*.py"`. Verify dual-tree parity,
+   self-containment, line limits, YAML/JSON parse, `git diff --check` and the CI matrix
+   (Ubuntu/Windows, Python 3.9/3.12, plugin manifests). For distribution changes run an install smoke
+   test; for manifest changes run `claude plugin validate .` when available. CI is authoritative:
+   local tests are necessary but not sufficient. Never delete, skip or weaken a test, and never use
+   `|| true` / `continue-on-error` to hide a failure.
+5. **Commit.** Use conventional commits (`feat(scope): ...`, `fix(scope): ...`, `docs(scope): ...`,
+   `security(scope): ...`). Keep commits atomic; stage only intended files; never commit secrets,
+   credentials, generated caches or unrelated reformatting.
 6. **Pull request and review.** Push the branch and open a PR against `main` using the PR template:
-   `Closes #<issue>`, summary, test evidence, risk/rollback, release/tag plan. Keep it small enough
-   to review; open a draft PR early for long work. Required checks must be green, and
-   behavior/security/gate/CI changes require approval from an independent reviewer who is not the
-   author (use CODEOWNERS/branch protection where configured). Docs-only changes may self-merge only
-   if branch protection permits it.
+   `Closes #<issue>`, summary, test evidence, risk/rollback, release/tag plan. Keep it reviewable;
+   open a draft PR early for long work. Required checks must be green, and behavior/security/gate/CI
+   changes need approval from an independent reviewer who is not the author (CODEOWNERS/branch
+   protection where configured). Docs-only changes may self-merge only if branch protection permits.
 7. **Merge, sync and post-merge verification.** Merge only with required checks and review complete;
-   use the repository's configured merge method; do not force-push a reviewed branch; delete the
-   branch and `git switch main && git pull --ff-only`. Watch the post-merge CI run; if `main` is red,
-   fix forward with a new PR or revert with a PR — never rewrite `main`.
-8. **Tag and release (SemVer).** Release only from merged `main`. Breaking change -> major,
-   feature -> minor, fix -> patch; docs/chore changes are released only when user-visible or bundled
-   with a release. Update `VERSION`, `CHANGELOG.md`, plugin manifests and skill metadata, create an
-   annotated `vX.Y.Z` tag (sign it if the repository requires signed tags), push it, and verify the
-   release workflow, release assets, GitHub release and install smoke. Never move or delete a
-   published tag; a bad release gets a new patch release.
+   use the configured merge method; do not force-push a reviewed branch; delete the branch and
+   `git switch main && git pull --ff-only`. Watch post-merge CI; if `main` is red, fix forward with a
+   new PR or revert with a PR — never rewrite `main`.
+8. **Tag and release (SemVer).** Release only from merged `main`. Breaking -> major, feature ->
+   minor, fix -> patch; docs/chore only when user-visible or bundled with a release. Update
+   `VERSION`, `CHANGELOG.md`, plugin manifests and skill metadata, create an annotated `vX.Y.Z` tag
+   (sign it if required), push it, and verify the release workflow, assets, GitHub release and
+   install smoke. Never move or delete a published tag; a bad release gets a new patch release.
 9. **Definition of done.** Issue linked; tests and CI green; independent review where required;
    mirrors byte-identical; docs, version, changelog and manifests agree; PR merged; post-merge CI
    watched; tag/release verified when released; rollback path documented.
@@ -116,20 +123,28 @@ per file; no bypassed gates.
 When the user says "standard open-source workflow", "git flow", "issue/PR", "commit/push/PR/tag" or
 equivalent, execute this section without asking for a separate process description.
 
+## 7. Commands
+```bash
+python -m unittest discover -s tests/unit -p "test_*.py"
+python -m compileall -q .agents tools templates
+claude plugin validate .                  # when manifests change; optional if unavailable
+python tools/quickstart.py --target .tmp-smoke --dry-run   # distribution smoke
+git diff --check
+```
+
+## 8. Maintaining this file
+- Keep this always-loaded summary under 150 lines; move detail to role rules/skill docs/guides and
+  do not duplicate role permissions, gate internals or pinned tool versions here.
+- Changes need a docs PR, the workflow guard tests and the same review rules as §6. If this file
+  conflicts with a role rule, the role rule wins for permissions; fix the stale source in the PR.
+
 ## References
 
-- `.agents/rules/enforcement.md` — role matrix, lifecycle markers and the honest enforcement model.
-- `.agents/skills/README.md` — skill index, discovery and the per-skill contract.
-- `templates/ci/README.md` — CI quality engineering gates, RBAC audit and 4-stage testing pipeline.
-- `skills/<category>/<name>/` — installable layout for plugins and `npx skills`; `.agents/skills/`
-  is the AGENTS mirror.
+- `.agents/rules/enforcement.md` — role matrix, lifecycle markers, enforcement model.
+- `.agents/skills/README.md` — skill index, discovery and per-skill contract.
+- `templates/ci/README.md` — CI gates, RBAC audit and the four-stage pipeline.
+- `CONTRIBUTING.md` — contributor setup, tests and PR conventions.
 - `docs/skills-guide.zh-CN.md`, `docs/brownfield-convergence.zh-CN.md`,
-  `docs/skills-compatibility.md` — usage walkthrough, change/convergence and the harness matrix.
-- `docs/skills-remediation.zh-CN.md` — hardening work packages, critique adjudication and evidence
-  pointers for the truthful-gate changes.
-- Review skill: `review` (Gate 2 plan review plus change/code review); execution skills: `dev`
-  (implement + handoff) and `qa` (independent verification + verdict); quality engineering: `quality-engineering`
-  (CI gates + pipeline automation); test engineering: `test-engineering` (repository-wide test
-  strategy and independent test-design review; never a per-task verdict); brownfield entry: `change`
-  (proposal -> one task bundle -> archive) and convergence: `converge` (after `QA_PASSED`, append
-  deviations to `.specs/02-tech-spec.md`, move the bundle to `tasks/archive/`).
+  `docs/skills-compatibility.md` — usage, convergence and harness compatibility.
+- `docs/testing-strategy.md` — the suite's own test-strategy seed; `docs/skills-remediation.zh-CN.md`
+  — hardening work packages and evidence.
