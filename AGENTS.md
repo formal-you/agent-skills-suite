@@ -8,6 +8,9 @@
 >
 > **Authority.** Prompt rules are advisory; CI gates, branch protection and CODEOWNERS are
 > authoritative. Skills are self-contained; this file is never a runtime dependency.
+>
+> **Safety.** Never commit secrets/PII or run destructive commands without explicit confirmation;
+> verify resolved paths before delete/move and never modify outside the declared write scope.
 
 ## 1. Repository map
 
@@ -22,8 +25,10 @@
 | `docs/`, `tasks/` | Guides/strategy; per-task bundles used by the delivery pipeline |
 
 ## 2. How to work
+
 ### 2.1 Discovery and specification
-`idea/change -> PRD (PM + prd-generator) -> ADRs/tech spec (Architect + spec-generator) -> task bundles (Planner + task-decomposition) -> Gate 1 -> Gate 2 -> Dev <-> QA -> Gate 3 -> converge`
+
+`idea -> PRD (PM + prd-generator) -> ADRs/tech spec (Architect + spec-generator) -> task bundles (Planner + task-decomposition) -> Gate 1 -> Gate 2 -> Dev <-> QA -> Gate 3 -> converge`
 
 - PM / `prd-generator` writes `.specs/01-prd.md` and `.specs/01-prd/`: stable `REQ-*/CON-*/NFR-*/FORK-*`
   IDs and `#sec-*` anchors, with open questions explicit.
@@ -32,8 +37,9 @@
 - Four-perspective review, subagents and chain-of-thought are brainstorming techniques; the
   deliverable is the traceable PRD/spec, not the deliberation itself.
 - Handoff is PRD -> spec -> task bundles. `task-decomposition` authors bundles from spec anchors;
-  `plan-linter` is the Gate 1 validator, not the author; Gate 2 `review` checks semantic alignment;
-  `change` handles bounded brownfield deviations and `converge` writes confirmed deviations back.
+  `plan-linter` is the Gate 1 validator, not the author; Gate 2 `review` checks semantic alignment.
+- Bounded brownfield changes use `change`: proposal -> one task bundle. They may skip a full PRD but
+  must preserve spec anchors and record deviations; `converge` writes confirmed deviations back.
 
 ### 2.2 Per-task delivery
 `task bundles -> Gate 1 -> Gate 2 -> Dev <-> QA -> Gate 3 -> converge`
@@ -47,6 +53,7 @@
 
 Changes to skills, rules, templates, tools, manifests, CI or docs follow §6. Use it when improving
 the suite rather than delivering one task bundle.
+
 ## 3. Task bundles and sizing
 
 - `01` Planner-owned contract; `02` Dev handoff; `03` QA evidence/verdict; `04` derived and
@@ -140,6 +147,7 @@ When the user says "standard open-source workflow", "git flow", "issue/PR", "com
 equivalent, execute this section without asking for a separate process description.
 
 ## 7. Commands
+
 ```bash
 python -m unittest discover -s tests/unit -p "test_*.py"
 python -m compileall -q .agents tools templates
@@ -149,7 +157,7 @@ git diff --check
 ```
 
 ## 8. Maintaining this file
-- Keep this always-loaded summary at most 165 lines; move detail to role rules/skill docs/guides and
+- Keep this always-loaded summary at most 175 lines; move detail to role rules/skill docs/guides and
   do not duplicate role permissions, gate internals or pinned tool versions here.
 - Changes need a docs PR, the workflow guard tests and the same review rules as §6. If this file
   conflicts with a role rule, the role rule wins for permissions; fix the stale source in the PR.

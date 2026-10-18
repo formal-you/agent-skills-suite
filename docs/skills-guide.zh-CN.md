@@ -11,6 +11,7 @@
 > **v3.4.3 最佳实践升级**：流程加入风险分级的 issue-first、独立评审、SemVer、回滚/回退、合并后 CI 观察、安装冒烟与 tag 不可变规则；PR 模板同步要求 issue/证据/风险/发布计划/评审确认。`AGENTS.md` 本身重构为可扫描摘要（范围/优先级/权威层、仓库地图、流程、角色与门禁表、命令、维护规则）。
 > **v3.4.4 文档整理**：新增[文档索引](README.md)、[Gate 3 本地预检](gate3-precheck.zh-CN.md)与[归档索引](archive/README.md)；历史加固文档移入 `archive/`，当前指南、兼容性、CI profile 与测评报告的链接和版本口径已对齐当前实现。
 > **v3.4.5 发现阶段**：`AGENTS.md` 补充 PRD/Spec 发现阶段：PM + `prd-generator` 产出 PRD，Architect + `spec-generator` 产出 ADR/技术规格，Planner + `task-decomposition` 再拆分任务；并明确 `task-decomposition` 是作者、`plan-linter` 是 Gate 1 校验者，`change`/`converge` 处理偏差写回。
+> **v3.4.6 AGENTS 加固**：补充 secrets/破坏性命令/路径核验/写作用域安全默认值；区分 greenfield 的 PRD 路径与 bounded brownfield `change` 路径；恢复可读排版，线数预算改为 175；测试增加“角色规则与流水线技能必须真实存在”的一致性检查。
 > 本文系统说明十一个技能如何协同工作、现代质量工程三支柱如何落地、四阶段测试流水线与 CI 权威门禁如何运转。
 
 ---

@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.6] - 2026-10-19
+
+### Changed
+
+- **AGENTS.md safety defaults**: added explicit rules for secrets/PII, destructive commands, path
+  verification before delete/move, and staying inside the declared write scope.
+- **Work-type split**: greenfield follows `idea -> PRD -> spec -> tasks`; bounded brownfield changes
+  use `change` (proposal -> one task bundle) and preserve spec anchors while recording deviations.
+- Restored readable heading/paragraph spacing and set a realistic 175-line soft cap instead of
+  compressing layout to hit 165.
+- The workflow guard now checks that every role rule and pipeline skill referenced by AGENTS.md
+  actually exists, in addition to phrase/structure checks.
+
+### Fixed
+
+- Removed the remaining ambiguity between greenfield discovery and bounded `change`, and between
+  `task-decomposition` (author) and `plan-linter` (Gate 1 validator).
+
 ## [3.4.5] - 2026-10-19
 
 ### Changed
