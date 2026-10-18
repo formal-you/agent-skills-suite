@@ -6,6 +6,7 @@
 > **v3.2.0 加固**：Gate 3 与真实 AST artifact 交叉核验、变异测试 fail-closed、错误码注册表与 triage、证据 provenance 与 Appeal/仲裁；详见 [`skills-remediation.zh-CN.md`](skills-remediation.zh-CN.md)。
 > **v3.3.0 新增**：`test-engineering` 全局测试方法学技能（测试策略、测试设计方法、数据/环境与 flakiness 策略、测试指标与独立测试设计评审）；它不接收单任务、不写测试与 `03`、不运行 CI 门禁，详见 §7.8。
 > **v3.4.0 策略接线**：本仓库的测试策略示例落盘为 [`testing-strategy.md`](testing-strategy.md)，采用方应从技能内置模板生成自己的策略；QA 在测试设计前只读读取并在 `03` 记录测试设计摘要，`quality-engineering` 负责把策略映射为 CI 画像/作业选择/阈值/环境服务。该示例文件不属于技能安装包，单独安装 `test-engineering` 不依赖它。
+> **v3.4.1 修复**：`qa` 自带 `scripts/verification_linter.py` 作为本地 Gate 3 预检，不再依赖 quality-engineering 安装；本地预检是 advisory，CI Gate 3 仍是权威。
 > 本文系统说明十一个技能如何协同工作、现代质量工程三支柱如何落地、四阶段测试流水线与 CI 权威门禁如何运转。
 
 ---
@@ -646,7 +647,11 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
   - **变异测试杀伤力基线**：针对不同项目栈自主引入知名工具（`mutmut`、`Stryker`、`go-mutesting`、`PITest`、`cargo-mutants`），击杀存活弱断言，确保 $\text{MSI} \ge 80\%$（核心模块 $\ge 90\%$）且无关键逻辑变异体存活；
   - 在 `03` 中记录完整执行证据与度量表，二选一勾选 `QA_PASSED` 或 `REWORK_REQUIRED`；
   - **证据 provenance**：Section 5 记录真实 artifact 路径与 SHA-256；`Equivalent > 0` 时填写等价理由；`01-contract.md` 的 `risk_level: core` 任务使用 90% MSI 阈值；
-  - 本地运行 Gate 3 静态审计（由 `quality-engineering` 提供的 `verification_linter.py`）确认合规后签署；收到 Appeal 时先等待仲裁，不要单方面再次 `REWORK_REQUIRED`。
+  - **本地 Gate 3 预检**：`qa` skill 自带 `scripts/verification_linter.py`（与 quality-engineering 审计器逐字节一致的 stdlib 副本）；在填完 `03` 后、下裁决前运行：
+    ```bash
+    python .agents/skills/qa/scripts/verification_linter.py --tasks-dir ./tasks --json
+    ```
+    有真实复杂度 artifact 时可加 `--actual-complexity <report> --require-actual-complexity` 做交叉核验；本地预检是 advisory，CI Gate 3 仍是权威。收到 Appeal 时先等待仲裁，不要单方面再次 `REWORK_REQUIRED`。
   - **与 `test-engineering` 的边界**：跨任务的测试策略、测试设计方法与数据/环境/flakiness 策略由 `test-engineering` 维护；`qa` 只负责当前任务的验收测试执行、证据记录与唯一裁决。
   - **读取项目测试策略**：测试设计前先只读读取项目测试策略（默认路径由角色规则固定；文件不存在时从 `test-engineering` 技能内置模板创建，不能假设仓库已带该文件），在 `03` 的测试设计摘要中记录 `strategy:` 引用；策略缺失时按 `baseline` 标注并沿用现有约定，不得凭空发明测试标准。
 
