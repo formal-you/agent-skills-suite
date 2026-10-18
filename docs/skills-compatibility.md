@@ -185,8 +185,9 @@ test strategy and design standards and can review a task's test design (`DESIGN_
 `DESIGN_GAPS`), but it never accepts a task, writes tests or `03`, or runs CI gates. Per-task
 acceptance stays with `qa`; CI gates stay with `quality-engineering`. The strategy's default output is
 fixed by the repository role rule; the skill ships `assets/templates/test-strategy.template.md`, and
-adopters may point it at their own spec-chain path. QA reads it before test design and
-`quality-engineering` maps it to CI jobs and thresholds.
+adopters may point it at their own spec-chain path. This suite's own seed is
+[`testing-strategy.md`](testing-strategy.md); adopters generate their own from the template. QA reads
+it before test design and `quality-engineering` maps it to CI jobs and thresholds.
 
 ## Versioning and change notes
 
