@@ -60,3 +60,19 @@ added #sec-* anchor. Leave this table blank only while the task is still being i
 
 | Deviation ID | Spec anchor | Operation | Confirmed behavior |
 | :--- | :--- | :--- | :--- |
+
+## 6. Appeal Request
+
+Optional. Complete this block only when raising a structured appeal against a `REWORK_REQUIRED`
+verdict; otherwise leave it empty. Dev owns this block and no other role edits it. The
+`requested_verdict` value must be exactly one of `CODE_BUG`, `TEST_BUG` or `SPEC_AMBIGUITY`.
+
+```yaml
+appeal:
+  appeal_id: ""          # AP-001, AP-002, ...
+  target_case: ""        # test case ID from 03, for example TC-02
+  spec_anchor: ""        # existing or newly added #sec-* anchor the expectation comes from
+  reason: ""             # why the QA verdict and the contract/spec disagree
+  evidence: ""           # test or source reference with line numbers
+  requested_verdict: ""  # CODE_BUG | TEST_BUG | SPEC_AMBIGUITY
+```

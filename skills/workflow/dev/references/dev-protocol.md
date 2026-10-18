@@ -156,7 +156,40 @@ On `REWORK_REQUIRED`, QA's traces in `03` are the input. Fix only inside the con
 DoD, update `02` for the new attempt, and hand off again. Repeated failures are a planning or
 scope signal: escalate rather than bypassing the contract.
 
-## 7. After QA_PASSED: convergence owns the spec
+## 7. Appeal instead of ping-pong
+
+A `REWORK_REQUIRED` is not always a code defect. When the verdict and the contract/spec disagree,
+raise a structured appeal in `02-dev-workspace.md` Section 6 instead of patching code to satisfy the
+test.
+
+### 7.1 When to appeal
+
+- QA's assertion contradicts the contract, the referenced spec anchor or an inherited ADR.
+- The required change falls outside `touch_files` (new file, another module, test-only change).
+- The spec is self-contradictory or ambiguous, so the expected behavior cannot be derived.
+- QA's evidence is wrong: the command failed for environmental reasons, or the case does not exercise
+  the claimed behavior.
+
+### 7.2 When not to appeal
+
+- The implementation is hard, slow or inconvenient.
+- You want to bypass a DoD check, a complexity limit or a mutation score threshold.
+- The disagreement is a personal preference without a spec anchor.
+- The appeal has no concrete evidence reference to a test, file or line.
+
+An appeal is not a way to keep the task in Dev's hands: the orchestrator routes it to an independent
+reviewer, never back to Dev. Fill only the Section 6 block in `02`; do not edit `03`, `01` or any
+test to win the dispute.
+
+### 7.3 Never special-case test values
+
+Do not write production code that special-cases the exact values used by the acceptance tests
+(hardcoded IDs, fixture strings, expected responses, test-only branches, environment sniffing). That
+is reward hacking: it can pass the suite without implementing the contract. If a test insists on
+behavior the contract does not specify, appeal with the spec anchor and evidence; do not neutralize
+the test value.
+
+## 8. After QA_PASSED: convergence owns the spec
 
 Dev's responsibility ends with a truthful `02-dev-workspace.md`. Once QA checks `QA_PASSED`, the
 `converge` skill owns the spec write-back:
@@ -170,7 +203,7 @@ Dev's responsibility ends with a truthful `02-dev-workspace.md`. Once QA checks 
 - On `REWORK_REQUIRED`, update the Implementation deviations table for the new attempt and hand
   off again; do not write spec prose to compensate for an unresolved rework.
 
-## 8. `04-process.md`
+## 9. `04-process.md`
 
 `04` is derived output. Its initial state is `TODO` / `UNASSIGNED` / `None` / retry `0` with an
 empty event table. When the handoff box is checked, optional repository tooling appends
@@ -178,11 +211,12 @@ empty event table. When the handoff box is checked, optional repository tooling 
 `QAAgent`. If the tooling is absent, leave `04` as initialized and rely on git/CI; never write
 event rows by hand.
 
-## 9. Failure escalation checklist
+## 10. Failure escalation checklist
 
 - Missing/ambiguous contract → Planner/owner.
 - Required file outside `touch_files` → split the task.
 - DoD command unavailable → report exact command and error; do not claim a pass.
 - High complexity cannot be decoupled without architectural/spec change → escalate to Planner/Architect.
-- Repeated rework → escalate with evidence from `02`/`03`.
+- Repeated rework → escalate with evidence from `02`/`03`; if the verdict is disputed, appeal per
+  Section 7 instead of coding around the test.
 - Environment/tooling failure → report command and exit code; do not hand-edit derived files.

@@ -169,6 +169,7 @@ jobs:
           echo "Auditing Cyclomatic Complexity (Tree-sitter multi-language engine, McCabe V(G) <= 10)..."
 
           python .agents/skills/quality-engineering/scripts/complexity_check.py \
+            --src-dir src \
             --json > artifacts/complexity-report.json 2> artifacts/complexity-error.log || status=$?
 
           {
@@ -193,6 +194,14 @@ jobs:
           if [ -s artifacts/complexity-error.log ]; then cat artifacts/complexity-error.log >&2; fi
           exit "$status"
 
+      - name: Upload Complexity Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complexity-report
+          path: artifacts/complexity-report.json
+          if-no-files-found: error
+
   # ---------------------------------------------------------------------------
   # Stage 4: Acceptance Test Suite Execution
   # Checks: Executes black-box acceptance tests (tests/acceptance/**) derived
@@ -210,19 +219,56 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Run Acceptance Test Suite
+      - name: Install project dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f requirements.txt ]; then
+            python -m pip install -r requirements.txt
+          fi
+          if [ -f pyproject.toml ]; then
+            python -m pip install -e .
+          fi
+          if [ -f package.json ] && [ -f package-lock.json ]; then
+            npm ci
+          fi
+          if [ -f go.mod ]; then
+            go mod download
+          fi
+          if [ -f Cargo.toml ]; then
+            cargo fetch
+          fi
+
+      - name: Environment readiness (collect acceptance tests)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d tests/acceptance ]; then
+            echo "No tests/acceptance directory; acceptance gate cannot run." >&2
+            exit 1
+          fi
+          if python -c "import pytest" >/dev/null 2>&1; then
+            python -m pytest --collect-only -q tests/acceptance
+          else
+            python -m unittest discover -s tests/acceptance -v
+          fi
+
+      - name: Run acceptance test suite
         shell: bash
         run: |
           set -uo pipefail
+          mkdir -p artifacts
           status=0
-          if [ -d "tests/acceptance" ]; then
-            echo "Executing acceptance test suite in tests/acceptance..."
-            python -m unittest discover -s tests/acceptance -v 2>&1 | tee acceptance-test.log || status=$?
-          elif [ -d "tests" ]; then
-            echo "Executing unit & acceptance test suite in tests..."
-            python -m unittest discover -s tests -v 2>&1 | tee acceptance-test.log || status=$?
+          if python -c "import pytest" >/dev/null 2>&1; then
+            args=(-q --junitxml=artifacts/acceptance-junit.xml)
+            if python -c "import pytest_socket" >/dev/null 2>&1; then
+              args+=(--disable-socket)
+            else
+              echo "NETWORK_ISOLATION=advisory (install pytest-socket for hard blocking)"
+            fi
+            python -m pytest tests/acceptance "${args[@]}" 2>&1 | tee acceptance-test.log || status=$?
           else
-            echo "No tests directory found, skipping." | tee acceptance-test.log
+            python -m unittest discover -s tests/acceptance -v 2>&1 | tee acceptance-test.log || status=$?
           fi
 
           {
@@ -233,24 +279,40 @@ jobs:
             echo '```'
             echo ""
             if [ "$status" -eq 0 ]; then
-              echo "Result: **PASSED** (100% green baseline)"
+              echo "Result: **PASSED**"
             else
               echo "Result: **FAILED** (exit $status)"
             fi
           } >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
 
+      - name: Upload acceptance artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-report
+          path: |
+            acceptance-test.log
+            artifacts/acceptance-junit.xml
+          if-no-files-found: warn
+
   # ---------------------------------------------------------------------------
   # Stage 5: Gate 3 Verification Linter & Mutation Score Audit
   # Checks: Audits 03-qa-verification.md when signed off with QA_PASSED:
-  #         - Basis Path Test Cases >= V(G) for modified functions
-  #         - Mutation Testing table completeness & MSI >= 80% (MSI >= 90% core)
-  #         - Zero survived mutants in critical business modules
+  #         - Basis Path Test Cases >= actual AST V(G) for modified functions
+  #         - Cross-validates Section 3 V(G) against the uploaded AST artifact
+  #         - Mutation Testing table consistency & MSI >= 80% (MSI >= 90% core)
   # ---------------------------------------------------------------------------
   gate3-verification:
     name: Gate 3 - Acceptance & MSI Audit
     runs-on: ubuntu-latest
     needs: [gate1-plan-linter, rbac-audit, complexity-gate, acceptance-tests]
+    if: |
+      always() &&
+      needs.gate1-plan-linter.result == 'success' &&
+      needs.complexity-gate.result == 'success' &&
+      needs.acceptance-tests.result == 'success' &&
+      (needs.rbac-audit.result == 'success' || needs.rbac-audit.result == 'skipped')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -260,7 +322,13 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Run Gate 3 Verification Linter
+      - name: Download complexity artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: complexity-report
+          path: artifacts
+
+      - name: Run Gate 3 Verification Linter (cross-validated with AST report)
         shell: bash
         run: |
           set -uo pipefail
@@ -268,7 +336,9 @@ jobs:
           if [ -d "tasks" ]; then
             python .agents/skills/quality-engineering/scripts/verification_linter.py \
               --tasks-dir tasks \
-              --json > verification-report.json 2> verification-error.log || status=$?
+              --actual-complexity artifacts/complexity-report.json \
+              --require-actual-complexity \
+              --strict --json > verification-report.json 2> verification-error.log || status=$?
           else
             echo '{"status": "skipped", "message": "No tasks directory found"}' > verification-report.json
           fi
@@ -285,7 +355,7 @@ jobs:
             echo '```'
             echo ""
             if [ "$status" -eq 0 ]; then
-              echo "Result: **PASSED** (Basis paths >= V(G) and MSI >= 80% confirmed)"
+              echo "Result: **PASSED** (Basis paths >= AST V(G) and MSI >= 80% confirmed)"
             else
               echo "Result: **FAILED** (exit $status)"
             fi
@@ -295,10 +365,20 @@ jobs:
           if [ -s verification-error.log ]; then cat verification-error.log >&2; fi
           exit "$status"
 
+      - name: Upload Gate 3 report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate3-report
+          path: |
+            verification-report.json
+            verification-error.log
+          if-no-files-found: warn
+
   # ---------------------------------------------------------------------------
-  # Stage 6 (Optional): Automated Mutation Testing Execution
-  # Demonstrates active mutant execution and kill ratio threshold verification.
-  # Can run on scheduled runs or release branches to prevent excessive PR delay.
+  # Stage 6: Active Mutation Testing (fail-closed)
+  # Runs the project's MUTATION_COMMAND and enforces the normalized report and
+  # MSI threshold. A missing command or report fails the build; it never skips.
   # ---------------------------------------------------------------------------
   mutation-active-check:
     name: Mutation - Active Kill Ratio Check
@@ -314,15 +394,46 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Run Active Mutation Testing (Python example with mutmut)
+      - name: Install project dependencies
         shell: bash
         run: |
-          echo "Running active mutation testing baseline..."
-          # Install mutation runner (adapt to your stack: mutmut, stryker, etc.)
-          pip install mutmut || true
-          if command -v mutmut >/dev/null 2>&1 && [ -d "src" ]; then
-            mutmut run --paths-to-mutate src/ || true
-            mutmut results || true
-          else
-            echo "mutmut not available or src/ directory absent; relying on Gate 3 verification linter audit."
+          set -euo pipefail
+          if [ -f requirements.txt ]; then
+            python -m pip install -r requirements.txt
           fi
+          if [ -f pyproject.toml ]; then
+            python -m pip install -e .
+          fi
+          if [ -f package.json ] && [ -f package-lock.json ]; then
+            npm ci
+          fi
+          if [ -f go.mod ]; then
+            go mod download
+          fi
+          if [ -f Cargo.toml ]; then
+            cargo fetch
+          fi
+
+      - name: Run mutation hard gate
+        shell: bash
+        env:
+          MUTATION_COMMAND: ${{ vars.MUTATION_COMMAND }}
+        run: |
+          set -uo pipefail
+          if [ -z "${MUTATION_COMMAND:-}" ]; then
+            echo "MUTATION_COMMAND repository variable is required; mutation gate is fail-closed." >&2
+            exit 1
+          fi
+          mkdir -p artifacts
+          python tools/mutation_gate.py run \
+            --command "$MUTATION_COMMAND" \
+            --report artifacts/mutation-report.json \
+            --min-msi 80
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: artifacts/mutation-report.json
+          if-no-files-found: warn

@@ -2,7 +2,7 @@
 name: quality-engineering
 description: "Build CI pipelines and manage multi-stage testing gates: configure test environments, enforce pre-merge PR automated checks (Gate 1, RBAC, complexity, acceptance tests, Gate 3 audit) and post-merge automated verification. Use when configuring CI pipelines, provisioning test environments, or running automated pre-merge/post-merge quality gates. Do not use for local task implementation or black-box test authoring."
 license: MIT
-compatibility: "Harness-agnostic. Standard library only. Python >= 3.9."
+compatibility: "Harness-agnostic. Core linters standard library only; multi-language complexity uses optional tree-sitter/lizard with a Python AST fallback. Python >= 3.9."
 metadata:
   version: "2.0.0"
   category: execution
@@ -83,20 +83,23 @@ Stage 1: Local Testing (Dev & QA)
 python .agents/skills/quality-engineering/scripts/verification_linter.py \
   --tasks-dir ./tasks
 
-# Cyclomatic complexity check (AST McCabe V(G) <= 10)
-python .agents/skills/quality-engineering/scripts/complexity_check.py --json
+# Cyclomatic complexity check (fail-closed; explicit source directory)
+python .agents/skills/quality-engineering/scripts/complexity_check.py \
+  --src-dir src --json > artifacts/complexity-report.json
 
-# Machine-readable JSON for CI gating
+# Machine-readable JSON for CI gating, cross-validated with the live AST report
 python .agents/skills/quality-engineering/scripts/verification_linter.py \
-  --tasks-dir ./tasks --json --min-msi 80
+  --tasks-dir ./tasks \
+  --actual-complexity artifacts/complexity-report.json \
+  --require-actual-complexity --strict --json
 
-# Relax mutation threshold (e.g. for legacy codebases)
+# Require evidence provenance (artifact path + SHA-256; equivalent justification)
 python .agents/skills/quality-engineering/scripts/verification_linter.py \
-  --tasks-dir ./tasks --json --min-msi 60
+  --tasks-dir ./tasks --require-provenance --strict --json
 
-# Skip mutation check (when tool is not yet integrated)
-python .agents/skills/quality-engineering/scripts/verification_linter.py \
-  --tasks-dir ./tasks --no-mutation
+# Local-only escape hatches (never use them in authoritative CI)
+#   --min-msi 60      relax the threshold for legacy code
+#   --no-mutation     skip Section 4 (only when no mutation tool exists)
 ```
 
 ## Exit codes
@@ -114,35 +117,55 @@ python .agents/skills/quality-engineering/scripts/verification_linter.py \
 | :--- | :--- |
 | `COMPLEXITY_MISSING_SECTION` | Section 3 absent or has no data rows when QA_PASSED |
 | `COMPLEXITY_EXCEEDS_MAX_THRESHOLD` | V(G) > 15 (absolute prohibition) |
-| `BASIS_PATH_INSUFFICIENT` | Test Cases < V(G) |
-| `MUTATION_MISSING_SECTION` | Section 4 absent when QA_PASSED |
-| `MUTATION_NO_SCORE` | No MSI or killed/total counts found in Section 4 |
-| `MUTATION_SCORE_BELOW_THRESHOLD` | MSI < min_msi (default 80%) |
+| `COMPLEXITY_BASIS_PATH_INSUFFICIENT` | Test Cases < actual V(G) |
+| `COMPLEXITY_REPORT_MISSING` | `--require-actual-complexity` without a usable AST report |
+| `COMPLEXITY_FUNCTION_MISSING_IN_03` | A `touch_files` function in the AST report is absent from Section 3 |
+| `COMPLEXITY_MISMATCH_WITH_AST` | Section 3 reports a different V(G) than the AST report |
+| `COMPLEXITY_PHANTOM_FUNCTION` | Section 3 lists a function absent from the AST report |
+| `QA_MISSING_MUTATION_EVIDENCE` | Section 4 absent or has no data rows when QA_PASSED |
+| `QA_INVALID_MSI_SCORE` | Missing/non-numeric MSI, or MSI below the threshold (80%; 90% core) |
+| `MUTATION_TABLE_INCONSISTENT` | Populated mutation tables disagree, or a populated table has a blank companion |
+| `MUTATION_EQUIVALENT_JUSTIFICATION_MISSING` | `Equivalent > 0` but no justification, with `--require-provenance` |
 | `EVIDENCE_MISSING_COMMAND` | Execution evidence Command field is blank |
 | `EVIDENCE_MISSING_RESULT` | Execution evidence Result field is blank |
+| `EVIDENCE_MISSING_ARTIFACT` | Provenance is required but the artifact path is blank/missing |
+| `EVIDENCE_HASH_INVALID` | Provenance SHA-256 is missing or does not match the artifact |
 
 ## Warning codes (Gate 3 `warnings[].code`)
 
 | Code | Trigger |
 | :--- | :--- |
 | `COMPLEXITY_EXCEEDS_STANDARD_THRESHOLD` | V(G) 11–15; passes but requires justification in `02` |
-| `MUTATION_SCORE_MARGINAL` | MSI passes but is below 90% |
+| `TOUCH_FILES_UNREADABLE` | `touch_files` could not be parsed from `01-contract.md`; cross-validation is incomplete |
 
 ## Multi-Stage CI Pipeline Architecture
 
 | Stage | Responsibility | Enforcement Tool | Scope |
 | :--- | :--- | :--- | :--- |
 | **Stage 1: Local Test** | Integration, BDD E2E, Mutation, Lint, Complexity | Dev & QA local tools | Pre-commit |
-| **Stage 2: Test Env** | Environment readiness, isolation, mock validation | Docker, runner setup | PR setup |
-| **Stage 3: Pre-merge PR** | Gate 1, RBAC, Complexity, Acceptance, Gate 3 | `quality-gate.yml` | Pull Request |
-| **Stage 4: Post-merge** | Trunk regression, spec convergence, MSI baseline | Mainline CI workflows | Post-merge |
+| **Stage 2: Test Env** | Dependency install, acceptance-collection probe, advisory network isolation | `quality-gate.yml` steps | PR setup |
+| **Stage 3: Pre-merge PR** | Gate 1, RBAC, Complexity artifact, Acceptance + JUnit, Gate 3 cross-validation | `quality-gate.yml` | Pull Request |
+| **Stage 4: Post-merge** | Trunk regression, fail-closed mutation gate, manual spec convergence | Mainline CI workflows | Post-merge |
+
+## Failure Triage & Routing
+
+Read [`references/triage-routing.md`](references/triage-routing.md) after a gate failure. It maps
+each deterministic error code to its owner, first action, escalation trigger and forbidden shortcut.
+The short rule is: complexity mismatch/missing function -> `qa` (re-fill Section 3 from the AST
+artifact); low MSI -> `qa`/`dev` (strengthen assertions or remove dead code); missing artifact/hash ->
+`qa` (record real provenance); CI wiring/artifact problems -> `quality-engineering`; repeated
+fabrication or an unresolvable spec conflict -> escalate to the orchestrator.
 
 ## References
 
 - [`references/verification-protocol.md`](references/verification-protocol.md) — multi-stage CI
-  testing pipeline architecture, test environment protocol, and Gate 3 evidence audit rules.
+  testing pipeline architecture, test environment protocol, Gate 3 evidence audit rules and the
+  normalized mutation-report schema.
+- [`references/triage-routing.md`](references/triage-routing.md) — error-code to owner/action
+  routing, escalation rules and forbidden shortcuts.
 - Complexity checker: [`scripts/complexity_check.py`](scripts/complexity_check.py) — deterministic
-  AST cyclomatic complexity check tool (standard library only, Python >= 3.9).
+  AST cyclomatic complexity check tool. Standard-library Python AST fallback; optional
+  tree-sitter/lizard engines for multi-language analysis (Python >= 3.9).
 - Gate 3 auditor: [`scripts/verification_linter.py`](scripts/verification_linter.py) — deterministic
   audit tool (standard library only, Python >= 3.9).
 - CI workflow template: `quality-gate.yml` — unified multi-stage CI quality gate.
@@ -150,9 +173,11 @@ python .agents/skills/quality-engineering/scripts/verification_linter.py \
 
 ## Honest limits
 
-CI gates and verification linters audit submitted code, PR diffs, and evidence in `03-qa-verification.md`.
-While Gate 1, RBAC, Complexity, and Acceptance tests run live code and diffs, Gate 3 relies on
-recorded test and mutation metrics. True quality assurance requires combining local QA execution with
-authoritative CI enforcement and branch protection.
+Gate 3 now cross-checks Section 3 V(G) against the CI-uploaded AST artifact and fails on omitted,
+phantom or mismatched functions. It still trusts the mutation evidence recorded in `03`; the
+fail-closed `mutation_gate.py` run on trunk is what actually executes the mutation tool.
+Local prompt rules and `--no-mutation`/relaxed thresholds are advisory escape hatches, not
+enforcement. True quality assurance requires combining local QA execution with authoritative CI
+enforcement plus branch protection.
 
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)

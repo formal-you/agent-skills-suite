@@ -5,7 +5,8 @@ skill package: nine skills, their rules, helper scripts, docs and tests.
 
 ## Prerequisites
 
-- Python 3.9+ (helpers are standard-library only).
+- Python 3.9+ (helpers are standard-library only, except the optional multi-language engines in
+  `complexity_check.py`).
 - Optional: a Claude Code install (`claude` CLI) to validate the plugin manifest.
 - Optional: Node 22+ only if you exercise examples that use a TypeScript project.
 
@@ -15,7 +16,8 @@ skill package: nine skills, their rules, helper scripts, docs and tests.
 .agents/skills/<name>/SKILL.md   # one skill; frontmatter name MUST equal the directory name
 .agents/skills/<name>/references/
 .agents/skills/<name>/assets/templates/
-.agents/skills/<name>/scripts/   # optional, stdlib-only, --help/--version, exit 0/1/2/3
+.agents/skills/<name>/scripts/   # optional helpers, --help/--version, exit 0/1/2/3
+                                 # stdlib-only except complexity_check.py's optional tree-sitter/lizard engines
 .agents/rules/                   # role rules + enforcement model
 tools/                           # install, adoption, audit helpers
 templates/ci/                    # copy-paste GitHub Actions

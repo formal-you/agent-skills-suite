@@ -14,7 +14,7 @@ This skill has a single, strictly bounded responsibility: **Gate 1 deterministic
 
 - **Gate 1** is a deterministic script in this skill: fast, offline, stdlib only.
 - **Gate 2** is a prompt-only semantic review (`review` skill, with `references/gate-2-review.md` as fallback).
-- **Non-goals**: plan-linter does NOT execute code, does NOT build or run CI pipelines, does NOT perform AST/code complexity analysis, and does NOT audit tests. All CI pipelines and verification gates are owned by `quality-engineering`; local testing is owned by `qa`.
+- **Non-goals**: plan-linter does NOT execute code, does NOT build or run CI pipelines, does NOT perform AST/code complexity analysis, and does NOT audit tests or the QA complexity/mutation evidence recorded in `03-qa-verification.md` (placeholder scanning and existence checks only). All CI pipelines and verification gates are owned by `quality-engineering`; local testing is owned by `qa`.
 
 ## Gate 1: deterministic checks
 
@@ -32,6 +32,7 @@ This skill has a single, strictly bounded responsibility: **Gate 1 deterministic
 | 02-dev-workspace.md, 03-qa-verification.md, 04-process.md exist | required | require_docs |
 | forbidden touch prefixes | tests/acceptance/ | forbidden_touch_prefixes |
 | unresolved placeholders in 01/02/03 | blocked | scan_placeholders |
+| 03-qa-verification.md content-level QA evidence | not audited (Gate 3) | no |
 | reverse topology: modify paths exist, create paths do not | warning | check_topology, strict_topology, --repo-root |
 | size_class micro: change_id present, 1 touch file, smaller budget | required when micro | micro_min_diff_lines, micro_max_touch_files |
 | change_id has an open proposal under the change directory | required when --changes-dir is given | --changes-dir |
@@ -163,7 +164,8 @@ per project; unknown keys produce a warning, while wrongly typed values exit 2.
 
 Each error object has keys `task`, `code`, `message`, `file`, and `line`. Error codes
 are stable English identifiers (e.g. `MISSING_DOC`, `TASK_ID_MISMATCH`, `DAG_CYCLE`,
-`PLACEHOLDER`, `TOUCH_FILE_MISSING`, `SPEC_SECTION_UNCOVERED`). Archived proposals
+`PLACEHOLDER`, `TOUCH_FILE_MISSING`, `FORBIDDEN_TOUCH_FILE`, `BDD_MISSING_PRECONDITION`,
+`BDD_MISSING_ACTION`, `BDD_MISSING_OUTCOME`, `BDD_INVALID_SCENARIO`, `SPEC_SECTION_UNCOVERED`). Archived proposals
 produce `CHANGE_ALREADY_ARCHIVED` instead of an error, and `ignore_task_dirs`
 (`tasks/archive`) are never scanned as pending bundles. Full error reference: `references/gate-2-review.md`.
 
@@ -183,6 +185,9 @@ Strict boundaries and non-goals:
 - **No code execution**: never runs DoD commands, application code, or test suites.
 - **No CI orchestration**: does not build, manage, or run CI pipelines (owned by `quality-engineering`).
 - **No AST or complexity analysis**: does not compute cyclomatic complexity $V(G)$ (owned by `quality-engineering`).
-- **No test or verification audit**: does not audit test evidence or mutation MSI (Gate 3 owned by `quality-engineering`).
+- **No test or verification audit**: does not audit 03 QA evidence. Only the
+  four-document existence check and the unresolved-placeholder scan touch
+  `03-qa-verification.md`; complexity, basis-path coverage and mutation MSI are
+  audited by Gate 3 (`quality-engineering/verification_linter.py`).
 - **No semantic judgment**: does not judge semantic truthfulness (Gate 2 is prompt review).
 - **No RBAC enforcement**: does not replace the git-based RBAC audit.

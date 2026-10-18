@@ -16,9 +16,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LINTER = REPO_ROOT / ".agents" / "skills" / "plan-linter" / "scripts" / "plan_linter.py"
+VERIFICATION_LINTER = (
+    REPO_ROOT / ".agents" / "skills" / "quality-engineering" / "scripts" / "verification_linter.py"
+)
 if str(LINTER.parent) not in sys.path:
     sys.path.insert(0, str(LINTER.parent))
-from plan_linter import _lint_qa_mutation, Finding
 SKILL_DIR = REPO_ROOT / ".agents" / "skills" / "plan-linter"
 BT = chr(96)
 
@@ -857,10 +859,37 @@ class PlanLinterBddTests(unittest.TestCase):
         self.assertIn("BDD_MISSING_OUTCOME", codes)
 
 
+class PlanLinterGate3BoundaryTests(unittest.TestCase):
+    """Gate 1 must not audit QA complexity/mutation evidence in 03-qa-verification.md.
 
+    Gate 3 (quality-engineering/verification_linter.py) owns that evidence. A
+    structurally valid bundle whose 03 carries bad QA evidence must still pass
+    Gate 1 (exit 0) and must fail Gate 3 (exit 1). These tests regress the
+    single-responsibility boundary after the duplicated Gate 3 logic was removed.
+    """
 
-class PlanLinterComplexityTests(unittest.TestCase):
-    """Features 21 and 23: Cyclomatic complexity and basis path static validation in plan_linter.py."""
+    GATE3_ONLY_CODES = {
+        "COMPLEXITY_MISSING_SECTION",
+        "COMPLEXITY_EXCEEDS_MAX_THRESHOLD",
+        "COMPLEXITY_EXCEEDS_STANDARD_THRESHOLD",
+        "COMPLEXITY_BASIS_PATH_INSUFFICIENT",
+        "QA_MISSING_MUTATION_EVIDENCE",
+        "QA_INVALID_MSI_SCORE",
+    }
+
+    COMPLEXITY_HEADER = (
+        "## 3. Complexity and basis path coverage\n\n"
+        "| Function / Module | Cyclomatic Complexity V(G) | Independent Basis Paths | Test Case IDs | Compliance (<=10) |\n"
+        "| :--- | :--- | :--- | :--- | :--- |\n"
+    )
+
+    MUTATION_HEADER = (
+        "## 4. Mutation testing and MSI audit\n\n"
+        "| Target Source File | Mutation Tool | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail |\n"
+        "| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
+    )
+
+    TC_IDS_18 = ", ".join("TC-%02d" % number for number in range(1, 19))
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -870,468 +899,124 @@ class PlanLinterComplexityTests(unittest.TestCase):
     def tearDown(self):
         self._tmp.cleanup()
 
-    def lint_json(self, *extra):
-        result = run_linter(["--tasks-dir", str(self.tasks_dir), "--json"] + list(extra))
-        payload = json.loads(result.stdout)
-        return result, payload
-
-    def test_complexity_unchecked_qa_passed_backward_compatible(self):
-        """When 03-qa-verification.md has unchecked [-] QA_PASSED, complexity checks do not run."""
+    def _write_qa(self, qa_content):
         task_dir = write_task(self.tasks_dir, "task-001")
-        (task_dir / "03-qa-verification.md").write_text(
-            "# QA verification\n\n- [ ] QA_PASSED\n- [ ] REWORK_REQUIRED\n", encoding="utf-8"
-        )
-        result, payload = self.lint_json()
-        self.assertEqual(result.returncode, 0)
-        self.assertTrue(payload["passed"])
-        self.assertEqual(payload["errors"], [])
-
-    def test_complexity_missing_section_on_qa_passed(self):
-        """When QA signs off with QA_PASSED but Section 3 is missing, emit COMPLEXITY_MISSING_SECTION."""
-        task_dir = write_task(self.tasks_dir, "task-001")
-        qa_content = (
-            "# QA verification\n\n"
-            "## 1. Verification metadata\n\n"
-            "## 5. Verdict\n\n"
-            "- [x] QA_PASSED\n"
-            "- [ ] REWORK_REQUIRED\n"
-        )
         (task_dir / "03-qa-verification.md").write_text(qa_content, encoding="utf-8")
-        result, payload = self.lint_json()
-        self.assertEqual(result.returncode, 1)
-        self.assertFalse(payload["passed"])
-        codes = [e["code"] for e in payload["errors"]]
-        self.assertIn("COMPLEXITY_MISSING_SECTION", codes)
 
-    def test_complexity_empty_table_on_qa_passed(self):
-        """When QA signs off with QA_PASSED but Section 3 table has no data rows, emit COMPLEXITY_MISSING_SECTION."""
-        task_dir = write_task(self.tasks_dir, "task-001")
-        qa_content = (
-            "# QA verification\n\n"
-            "## 3. Complexity and basis path coverage\n\n"
-            "| Function / Module | Cyclomatic Complexity V(G) | Independent Basis Paths | Test Case IDs | Compliance (<=10) |\n"
-            "| :--- | :--- | :--- | :--- | :--- |\n"
-            "|  |  |  |  |  |\n\n"
-            "## 5. Verdict\n\n"
-            "- [x] QA_PASSED\n"
-            "- [ ] REWORK_REQUIRED\n"
+    def _gate1(self):
+        result = run_linter(["--tasks-dir", str(self.tasks_dir), "--json"])
+        return result, json.loads(result.stdout)
+
+    def _signed_qa(self, body):
+        return "# QA verification\n\n- [x] QA_PASSED\n- [ ] REWORK_REQUIRED\n\n" + body
+
+    def _bad_evidence_fixtures(self):
+        compliant_mutation = (
+            self.MUTATION_HEADER
+            + "| src/auth/login.py | mutmut | 10 | 9 | 1 | 0 | 0 | 90.0% | PASS |\n"
         )
-        (task_dir / "03-qa-verification.md").write_text(qa_content, encoding="utf-8")
-        result, payload = self.lint_json()
-        self.assertEqual(result.returncode, 1)
-        self.assertFalse(payload["passed"])
-        codes = [e["code"] for e in payload["errors"]]
-        self.assertIn("COMPLEXITY_MISSING_SECTION", codes)
-
-    def test_complexity_exceeds_max_threshold_error(self):
-        """When V(G) > 15, emit error COMPLEXITY_EXCEEDS_MAX_THRESHOLD."""
-        task_dir = write_task(self.tasks_dir, "task-001")
-        qa_content = (
-            "# QA verification\n\n"
-            "## 3. Complexity and basis path coverage\n\n"
-            "| Function / Module | Cyclomatic Complexity V(G) | Independent Basis Paths | Test Case IDs | Compliance (<=10) |\n"
-            "| :--- | :--- | :--- | :--- | :--- |\n"
-            "| complex_router | 18 | P1..P18 | TC-01, TC-02, TC-03, TC-04, TC-05, TC-06, TC-07, TC-08, TC-09, TC-10, TC-11, TC-12, TC-13, TC-14, TC-15, TC-16, TC-17, TC-18 | NO |\n\n"
-            "## 5. Verdict\n\n"
-            "- [x] QA_PASSED\n"
+        standard_warning_complexity = (
+            self.COMPLEXITY_HEADER
+            + "| auth_dispatch | 12 | P1..P12 | "
+            + ", ".join("TC-%02d" % number for number in range(1, 13))
+            + " | NO (Approved) |\n"
         )
-        (task_dir / "03-qa-verification.md").write_text(qa_content, encoding="utf-8")
-        result, payload = self.lint_json()
-        self.assertEqual(result.returncode, 1)
-        self.assertFalse(payload["passed"])
-        codes = [e["code"] for e in payload["errors"]]
-        self.assertIn("COMPLEXITY_EXCEEDS_MAX_THRESHOLD", codes)
-        self.assertNotIn("COMPLEXITY_BASIS_PATH_INSUFFICIENT", codes)
+        return {
+            "unchecked_qa_passed": "# QA verification\n\n- [ ] QA_PASSED\n- [ ] REWORK_REQUIRED\n",
+            "missing_sections": "# QA verification\n\n- [x] QA_PASSED\n- [ ] REWORK_REQUIRED\n",
+            "empty_sections": self._signed_qa(
+                self.COMPLEXITY_HEADER
+                + "|  |  |  |  |  |\n\n"
+                + self.MUTATION_HEADER
+                + "|  |  |  |  |  |  |  |  |  |\n"
+            ),
+            "vg_exceeds_max": self._signed_qa(
+                self.COMPLEXITY_HEADER
+                + "| monster_fn | 18 | P1..P18 | "
+                + self.TC_IDS_18
+                + " | NO |\n\n"
+                + compliant_mutation
+            ),
+            "vg_standard_warning": self._signed_qa(
+                standard_warning_complexity + "\n" + compliant_mutation
+            ),
+            "basis_path_insufficient": self._signed_qa(
+                self.COMPLEXITY_HEADER
+                + "| route_req | 5 | P1..P5 | TC-01, TC-02 | NO |\n\n"
+                + compliant_mutation
+            ),
+            "low_msi": self._signed_qa(
+                self.COMPLEXITY_HEADER
+                + "| login_user | 2 | P1, P2 | TC-01, TC-02 | YES |\n\n"
+                + self.MUTATION_HEADER
+                + "| src/auth/login.py | mutmut | 10 | 6 | 4 | 0 | 0 | 60.0% | FAIL |\n"
+            ),
+            "invalid_msi": self._signed_qa(
+                self.COMPLEXITY_HEADER
+                + "| login_user | 2 | P1, P2 | TC-01, TC-02 | YES |\n\n"
+                + self.MUTATION_HEADER
+                + "| src/auth/login.py | mutmut | 10 | 8 | 2 | 0 | 0 | N/A | FAIL |\n"
+            ),
+            "dual_table_scaffolded": self._signed_qa(
+                self.MUTATION_HEADER
+                + "|  |  |  |  |  |  |  |  |  |\n\n"
+                + "| Metric / Field | Value |\n"
+                + "| :--- | :--- |\n"
+                + "| Mutation tool / engine |  |\n"
+                + "| Mutation Score Indicator (MSI) |  |\n"
+            ),
+        }
 
-    def test_complexity_exceeds_standard_threshold_warning(self):
-        """When 11 <= V(G) <= 15, emit warning COMPLEXITY_EXCEEDS_STANDARD_THRESHOLD, Gate 1 passes if basis paths sufficient."""
-        task_dir = write_task(self.tasks_dir, "task-001")
-        qa_content = (
-            "# QA verification\n\n"
-            "## 3. Complexity and basis path coverage\n\n"
-            "| Function / Module | Cyclomatic Complexity V(G) | Independent Basis Paths | Test Case IDs | Compliance (<=10) |\n"
-            "| :--- | :--- | :--- | :--- | :--- |\n"
-            "| auth_dispatch | 12 | P1..P12 | TC-01, TC-02, TC-03, TC-04, TC-05, TC-06, TC-07, TC-08, TC-09, TC-10, TC-11, TC-12 | NO (Approved) |\n\n"
-            "## 4. Mutation testing and MSI audit\n"
-            "| Target Source File | Mutation Tool | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail |\n"
-            "| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
-            "| src/auth.py | mutmut | 10 | 9 | 1 | 0 | 0 | 90.0% | PASS |\n\n"
-            "## 5. Verdict\n\n"
-            "- [x] QA_PASSED\n"
+    def test_gate1_passes_when_qa_evidence_is_bad(self):
+        """Bad or missing complexity/mutation evidence never fails Gate 1."""
+        for scenario, qa_content in self._bad_evidence_fixtures().items():
+            with self.subTest(scenario=scenario):
+                self._write_qa(qa_content)
+                result, payload = self._gate1()
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertTrue(payload["passed"])
+                self.assertEqual(payload["errors"], [])
+                emitted = {finding["code"] for finding in payload["errors"]}
+                self.assertFalse(
+                    emitted & self.GATE3_ONLY_CODES,
+                    "Gate 1 must not emit Gate 3 codes, got: " + repr(sorted(emitted)),
+                )
+
+    def test_gate3_fails_the_same_bad_qa_evidence(self):
+        """Gate 3, not Gate 1, rejects bad complexity and mutation evidence."""
+        qa_content = self._signed_qa(
+            self.COMPLEXITY_HEADER
+            + "| monster_fn | 18 | P1..P18 | "
+            + self.TC_IDS_18
+            + " | NO |\n\n"
+            + self.MUTATION_HEADER
+            + "| src/monster.py | mutmut | 10 | 6 | 4 | 0 | 0 | 60.0% | FAIL |\n"
         )
-        (task_dir / "03-qa-verification.md").write_text(qa_content, encoding="utf-8")
-        result, payload = self.lint_json()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertTrue(payload["passed"])
-        self.assertEqual(payload["errors"], [])
-        w_codes = [w["code"] for w in payload["warnings"]]
-        self.assertIn("COMPLEXITY_EXCEEDS_STANDARD_THRESHOLD", w_codes)
+        self._write_qa(qa_content)
 
-    def test_complexity_basis_path_insufficient_error(self):
-        """When test case count < V(G), emit error COMPLEXITY_BASIS_PATH_INSUFFICIENT."""
-        task_dir = write_task(self.tasks_dir, "task-001")
-        qa_content = (
-            "# QA verification\n\n"
-            "## 3. Complexity and basis path coverage\n\n"
-            "| Function / Module | Cyclomatic Complexity V(G) | Independent Basis Paths | Test Case IDs | Compliance (<=10) |\n"
-            "| :--- | :--- | :--- | :--- | :--- |\n"
-            "| process_payment | 5 | P1..P5 | TC-01, TC-02, TC-03 | NO |\n\n"
-            "## 5. Verdict\n\n"
-            "- [x] QA_PASSED\n"
+        gate1_result, gate1_payload = self._gate1()
+        self.assertEqual(gate1_result.returncode, 0, gate1_result.stdout + gate1_result.stderr)
+        self.assertTrue(gate1_payload["passed"])
+
+        gate3_result = subprocess.run(
+            [
+                sys.executable,
+                str(VERIFICATION_LINTER),
+                "--tasks-dir",
+                str(self.tasks_dir),
+                "--json",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
-        (task_dir / "03-qa-verification.md").write_text(qa_content, encoding="utf-8")
-        result, payload = self.lint_json()
-        self.assertEqual(result.returncode, 1)
-        self.assertFalse(payload["passed"])
-        codes = [e["code"] for e in payload["errors"]]
-        self.assertIn("COMPLEXITY_BASIS_PATH_INSUFFICIENT", codes)
-
-    def test_complexity_compliant_passes(self):
-        """When V(G) <= 10 and test cases >= V(G), passes Gate 1 with 0 errors and 0 warnings."""
-        task_dir = write_task(self.tasks_dir, "task-001")
-        qa_content = (
-            "# QA verification\n\n"
-            "## 3. Complexity and basis path coverage\n\n"
-            "| Function / Module | Cyclomatic Complexity V(G) | Independent Basis Paths | Test Case IDs | Compliance (<=10) |\n"
-            "| :--- | :--- | :--- | :--- | :--- |\n"
-            "| calculate_fee | 3 | P1, P2, P3 | TC-01, TC-02, TC-03 | YES |\n\n"
-            "## 4. Mutation testing and MSI audit\n"
-            "| Target Source File | Mutation Tool | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail |\n"
-            "| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |\n"
-            "| src/fee.py | mutmut | 10 | 9 | 1 | 0 | 0 | 90.0% | PASS |\n\n"
-            "## 5. Verdict\n\n"
-            "- [x] QA_PASSED\n"
-        )
-        (task_dir / "03-qa-verification.md").write_text(qa_content, encoding="utf-8")
-        result, payload = self.lint_json()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertTrue(payload["passed"])
-        self.assertEqual(payload["errors"], [])
-        complexity_warnings = [w for w in payload["warnings"] if "COMPLEXITY" in w.get("code", "")]
-        self.assertEqual(len(complexity_warnings), 0)
-
-    def test_complexity_multiple_rows_aggregation(self):
-        """Multiple rows aggregate their respective warnings and errors."""
-        task_dir = write_task(self.tasks_dir, "task-001")
-        qa_content = (
-            "# QA verification\n\n"
-            "## 3. Complexity and basis path coverage\n\n"
-            "| Target Function | V(G) Complexity | Independent Basis Paths | Mapped Test Cases | Path Coverage |\n"
-            "| :--- | :--- | :--- | :--- | :--- |\n"
-            "| helper_fn | 2 | P1, P2 | TC-01, TC-02 | 100% |\n"
-            "| auth_dispatch | 12 | P1..P12 | TC-01, TC-02, TC-03, TC-04, TC-05, TC-06, TC-07, TC-08, TC-09, TC-10, TC-11, TC-12 | 100% |\n"
-            "| data_crunch | 7 | P1..P7 | TC-20, TC-21 | 28.5% |\n\n"
-            "## 6. Verdict\n\n"
-            "- [x] QA_PASSED\n"
-        )
-        (task_dir / "03-qa-verification.md").write_text(qa_content, encoding="utf-8")
-        result, payload = self.lint_json()
-        self.assertEqual(result.returncode, 1)
-        self.assertFalse(payload["passed"])
-        err_codes = [e["code"] for e in payload["errors"]]
-        warn_codes = [w["code"] for w in payload["warnings"]]
-        self.assertIn("COMPLEXITY_BASIS_PATH_INSUFFICIENT", err_codes)
-        self.assertIn("COMPLEXITY_EXCEEDS_STANDARD_THRESHOLD", warn_codes)
-
-
-
-
-class PlanLinterMutationTests(unittest.TestCase):
-    """Features 22 and 27: Mutation testing and MSI static validation in plan_linter.py."""
-
-    def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory()
-        self.tasks_dir = Path(self._tmp.name) / "tasks"
-        self.tasks_dir.mkdir(parents=True, exist_ok=True)
-        self.task_dir = self.tasks_dir / "task-001"
-        self.task_name = "task-001"
-
-    def tearDown(self):
-        self._tmp.cleanup()
-
-    def lint_json(self, *extra):
-        result = run_linter(["--tasks-dir", str(self.tasks_dir), "--json"] + list(extra))
-        payload = json.loads(result.stdout)
-        return result, payload
-
-    def _write_qa(self, content: str) -> None:
-        self.task_dir.mkdir(parents=True, exist_ok=True)
-        (self.task_dir / "01-contract.md").write_text(frontmatter_contract(task_id=self.task_name), encoding="utf-8")
-        (self.task_dir / "02-dev-workspace.md").write_text(DOC_02, encoding="utf-8")
-        (self.task_dir / "03-qa-verification.md").write_text(content, encoding="utf-8")
-        (self.task_dir / "04-process.md").write_text(DOC_04, encoding="utf-8")
-
-    def test_mutation_unchecked_qa_passed_backward_compatible(self) -> None:
-        """When QA_PASSED is unchecked, linter does NOT require mutation table."""
-        self._write_qa("""# QA Verification
-- [ ] QA_PASSED
-- [ ] REWORK_REQUIRED
-""")
-        findings: list[Finding] = []
-        _lint_qa_mutation(self.task_name, self.task_dir, findings)
-        self.assertEqual(len(findings), 0)
-
-    def test_mutation_missing_section_on_qa_passed(self) -> None:
-        """When QA_PASSED is checked but Section 4 is missing, emit QA_MISSING_MUTATION_EVIDENCE."""
-        self._write_qa("""# QA Verification
-- [x] QA_PASSED
-- [ ] REWORK_REQUIRED
-""")
-        findings: list[Finding] = []
-        _lint_qa_mutation(self.task_name, self.task_dir, findings)
-        self.assertEqual(len(findings), 1)
-        self.assertEqual(findings[0].code, "QA_MISSING_MUTATION_EVIDENCE")
-
-    def test_mutation_empty_table_on_qa_passed(self) -> None:
-        """When Section 4 heading exists but table has no data rows, emit QA_MISSING_MUTATION_EVIDENCE."""
-        self._write_qa("""# QA Verification
-- [x] QA_PASSED
-
-## 4. Mutation testing and MSI audit
-| Target Source File | Mutation Tool | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-|  |  |  |  |  |  |  |  |  |  |
-""")
-        findings: list[Finding] = []
-        _lint_qa_mutation(self.task_name, self.task_dir, findings)
-        self.assertEqual(len(findings), 1)
-        self.assertEqual(findings[0].code, "QA_MISSING_MUTATION_EVIDENCE")
-
-    def test_mutation_valid_score_passes(self) -> None:
-        """When MSI >= 80%, verification passes with zero findings."""
-        self._write_qa("""# QA Verification
-- [x] QA_PASSED
-
-## 4. Mutation testing and MSI audit
-| Target Source File | Mutation Tool | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| src/auth/login.py | mutmut | 10 | 8 | 2 | 0 | 0 | 80% | PASS |
-""")
-        findings: list[Finding] = []
-        _lint_qa_mutation(self.task_name, self.task_dir, findings)
-        self.assertEqual(len(findings), 0)
-
-    def test_mutation_score_below_80_emits_error(self) -> None:
-        """When MSI < 80%, emit QA_INVALID_MSI_SCORE error."""
-        self._write_qa("""# QA Verification
-- [x] QA_PASSED
-
-## 4. Mutation testing and MSI audit
-| Target Source File | Mutation Tool | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| src/auth/login.py | mutmut | 10 | 7 | 3 | 0 | 0 | 70% | FAIL |
-""")
-        findings: list[Finding] = []
-        _lint_qa_mutation(self.task_name, self.task_dir, findings)
-        self.assertEqual(len(findings), 1)
-        self.assertEqual(findings[0].code, "QA_INVALID_MSI_SCORE")
-        self.assertIn("70.0%", findings[0].message)
-
-    def test_mutation_invalid_score_format_emits_error(self) -> None:
-        """When MSI value is non-numeric, emit QA_INVALID_MSI_SCORE error."""
-        self._write_qa("""# QA Verification
-- [x] QA_PASSED
-
-## 4. Mutation testing and MSI audit
-| Target Source File | Mutation Tool | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| src/auth/login.py | mutmut | 10 | 8 | 2 | 0 | 0 | N/A | FAIL |
-""")
-        findings: list[Finding] = []
-        _lint_qa_mutation(self.task_name, self.task_dir, findings)
-        self.assertEqual(len(findings), 1)
-        self.assertEqual(findings[0].code, "QA_INVALID_MSI_SCORE")
-
-    def test_mutation_kv_format_supported(self) -> None:
-        """Key-value format with MSI >= 80% passes."""
-        self._write_qa("""# QA Verification
-- [x] QA_PASSED
-
-## 4. Mutation testing and MSI audit
-| Metric / Field | Value |
-| :--- | :--- |
-| Mutation tool / engine | Synthetic agent fallback |
-| Total mutants generated | 6 |
-| Killed mutants | 5 |
-| Mutation Score Indicator (MSI) | 100.0% |
-""")
-        findings: list[Finding] = []
-        _lint_qa_mutation(self.task_name, self.task_dir, findings)
-        self.assertEqual(len(findings), 0)
-
-    def test_mutation_kv_format_below_threshold_fails(self) -> None:
-        """Key-value format with MSI < 80% emits QA_INVALID_MSI_SCORE."""
-        self._write_qa("""# QA Verification
-- [x] QA_PASSED
-
-## 4. Mutation testing and MSI audit
-| Metric / Field | Value |
-| :--- | :--- |
-| Mutation tool / engine | Synthetic agent fallback |
-| Mutation Score Indicator (MSI) | 65.0% |
-""")
-        findings: list[Finding] = []
-        _lint_qa_mutation(self.task_name, self.task_dir, findings)
-        self.assertEqual(len(findings), 1)
-        self.assertEqual(findings[0].code, "QA_INVALID_MSI_SCORE")
-        self.assertIn("65.0%", findings[0].message)
-
-    def test_mutation_multiple_rows_aggregation(self) -> None:
-        """Multiple target files: valid file passes, failing file emits error."""
-        self._write_qa("""# QA Verification
-- [x] QA_PASSED
-
-## 4. Mutation testing and MSI audit
-| Target Source File | Mutation Tool | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| src/auth/token.py | mutmut | 10 | 9 | 1 | 0 | 0 | 90.0% | PASS |
-| src/auth/login.py | mutmut | 10 | 6 | 4 | 0 | 0 | 60.0% | FAIL |
-""")
-        findings: list[Finding] = []
-        _lint_qa_mutation(self.task_name, self.task_dir, findings)
-        self.assertEqual(len(findings), 1)
-        self.assertEqual(findings[0].code, "QA_INVALID_MSI_SCORE")
-        self.assertIn("src/auth/login.py", findings[0].message)
-
-    def test_mutation_cli_end_to_end_pass(self) -> None:
-        """CLI end-to-end integration: task passes Gate 1 when both Section 3 and Section 4 are compliant."""
-        self._write_qa("""# QA Verification
-- [x] QA_PASSED
-- [ ] REWORK_REQUIRED
-
-## 3. Complexity and basis path coverage
-| Function / Module | Cyclomatic Complexity V(G) | Independent Basis Paths | Test Case IDs | Compliance (<=10) |
-| :--- | :--- | :--- | :--- | :--- |
-| login_user | 2 | P1, P2 | TC-01, TC-02 | YES |
-
-## 4. Mutation testing and MSI audit
-| Target Source File | Mutation Tool | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| src/auth/login.py | mutmut | 10 | 9 | 1 | 0 | 0 | 90.0% | PASS |
-""")
-        result, payload = self.lint_json()
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertTrue(payload["passed"])
-        self.assertEqual(payload["errors"], [])
-
-    def test_mutation_cli_end_to_end_fail_low_msi(self) -> None:
-        """CLI end-to-end integration: fails when MSI < 80%."""
-        self._write_qa("""# QA Verification
-- [x] QA_PASSED
-- [ ] REWORK_REQUIRED
-
-## 3. Complexity and basis path coverage
-| Function / Module | Cyclomatic Complexity V(G) | Independent Basis Paths | Test Case IDs | Compliance (<=10) |
-| :--- | :--- | :--- | :--- | :--- |
-| login_user | 2 | P1, P2 | TC-01, TC-02 | YES |
-
-## 4. Mutation testing and MSI audit
-| Target Source File | Mutation Tool | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| src/auth/login.py | mutmut | 10 | 6 | 4 | 0 | 0 | 60.0% | FAIL |
-""")
-        result, payload = self.lint_json()
-        self.assertEqual(result.returncode, 1)
-        self.assertFalse(payload["passed"])
-        codes = [e["code"] for e in payload["errors"]]
-        self.assertIn("QA_INVALID_MSI_SCORE", codes)
-
-    def test_mutation_dual_table_both_compliant_passes(self) -> None:
-        """Dual-table: both per-target table and KV summary table pass with zero errors."""
-        self._write_qa("""# QA Verification
-- [x] QA_PASSED
-
-## 4. Mutation testing and MSI audit
-| Target Source File | Mutation Tool / Recipe | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail (>=80%) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| src/login.py | mutmut | 10 | 9 | 1 | 0 | 0 | 90% | PASS |
-
-| Metric / Field | Value |
-| :--- | :--- |
-| Mutation tool / engine | mutmut |
-| Total mutants generated | 10 |
-| Killed mutants | 9 |
-| Timed-out mutants | 0 |
-| Equivalent mutants | 0 |
-| Survived mutants | 1 |
-| Mutation Score Indicator (MSI) | 90.0% |
-""")
-        findings: list[Finding] = []
-        _lint_qa_mutation(self.task_name, self.task_dir, findings)
-        self.assertEqual(len(findings), 0)
-
-    def test_mutation_dual_table_table1_filled_table2_scaffolded_passes(self) -> None:
-        """Dual-table: Table 1 filled and Table 2 scaffolded blank passes with zero errors."""
-        self._write_qa("""# QA Verification
-- [x] QA_PASSED
-
-## 4. Mutation testing and MSI audit
-| Target Source File | Mutation Tool / Recipe | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail (>=80%) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| src/login.py | mutmut | 10 | 9 | 1 | 0 | 0 | 90% | PASS |
-
-| Metric / Field | Value |
-| :--- | :--- |
-| Mutation tool / engine |  |
-| Total mutants generated |  |
-| Killed mutants |  |
-| Timed-out mutants |  |
-| Equivalent mutants |  |
-| Survived mutants |  |
-| Mutation Score Indicator (MSI) |  |
-""")
-        findings: list[Finding] = []
-        _lint_qa_mutation(self.task_name, self.task_dir, findings)
-        self.assertEqual(len(findings), 0)
-
-    def test_mutation_dual_table_table1_scaffolded_table2_filled_passes(self) -> None:
-        """Dual-table: Table 1 scaffolded blank and Table 2 filled passes with zero errors."""
-        self._write_qa("""# QA Verification
-- [x] QA_PASSED
-
-## 4. Mutation testing and MSI audit
-| Target Source File | Mutation Tool / Recipe | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail (>=80%) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-|  |  |  |  |  |  |  |  |  |
-
-| Metric / Field | Value |
-| :--- | :--- |
-| Mutation tool / engine | mutmut |
-| Total mutants generated | 10 |
-| Killed mutants | 9 |
-| Timed-out mutants | 0 |
-| Equivalent mutants | 0 |
-| Survived mutants | 1 |
-| Mutation Score Indicator (MSI) | 90.0% |
-""")
-        findings: list[Finding] = []
-        _lint_qa_mutation(self.task_name, self.task_dir, findings)
-        self.assertEqual(len(findings), 0)
-
-    def test_mutation_dual_table_both_scaffolded_fails(self) -> None:
-        """Dual-table: both tables unpopulated scaffolded emits QA_MISSING_MUTATION_EVIDENCE."""
-        self._write_qa("""# QA Verification
-- [x] QA_PASSED
-
-## 4. Mutation testing and MSI audit
-| Target Source File | Mutation Tool / Recipe | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail (>=80%) |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-|  |  |  |  |  |  |  |  |  |
-
-| Metric / Field | Value |
-| :--- | :--- |
-| Mutation tool / engine |  |
-| Total mutants generated |  |
-| Killed mutants |  |
-| Timed-out mutants |  |
-| Equivalent mutants |  |
-| Survived mutants |  |
-| Mutation Score Indicator (MSI) |  |
-""")
-        findings: list[Finding] = []
-        _lint_qa_mutation(self.task_name, self.task_dir, findings)
-        self.assertEqual(len(findings), 1)
-        self.assertEqual(findings[0].code, "QA_MISSING_MUTATION_EVIDENCE")
+        self.assertEqual(gate3_result.returncode, 1, gate3_result.stdout + gate3_result.stderr)
+        gate3_payload = json.loads(gate3_result.stdout)
+        self.assertFalse(gate3_payload["passed"])
+        gate3_codes = {finding["code"] for finding in gate3_payload["errors"]}
+        self.assertIn("COMPLEXITY_EXCEEDS_MAX_THRESHOLD", gate3_codes)
+        self.assertIn("QA_INVALID_MSI_SCORE", gate3_codes)
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 {
   "name": "agent-skills-suite",
   "displayName": "Agent Skills Suite",
-  "version": "3.1.0",
-  "description": "Nine prompt-first skills for spec-driven, role-isolated, verifiable agent development: PRD to spec to tasks, Gate 1/2 review, dev, QA and convergence.",
+  "version": "3.2.0",
+  "description": "Ten prompt-first skills for spec-driven, role-isolated, verifiable agent development: PRD to spec to tasks, Gate 1/2 review, dev, QA, CI quality engineering and convergence.",
   "author": {
     "name": "Agent Skills Suite contributors"
   },
@@ -28,6 +28,7 @@
     "./skills/workflow/plan-linter/",
     "./skills/workflow/prd-generator/",
     "./skills/workflow/qa/",
+    "./skills/workflow/quality-engineering/",
     "./skills/workflow/review/",
     "./skills/workflow/spec-generator/",
     "./skills/workflow/task-decomposition/"

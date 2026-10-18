@@ -3,19 +3,25 @@
 
 Deterministic static checker for QA verification signoff:
 - Cyclomatic Complexity (Section 3): V(G) <= 10, warnings 11-15, errors > 15, Basis Path >= V(G)
-- Mutation Testing and MSI Audit (Section 4): Non-empty table, numeric MSI >= 80%
+- Mutation Testing and MSI Audit (Section 4): every populated table must be compliant and the
+  populated tables must agree on MSI/totals; numeric MSI >= 80% (>= 90% for risk_level: core)
 - Execution Evidence (Section 5): Command and Result fields must not be blank
+- Cross-validation (--actual-complexity): reported V(G) values are checked against the actual
+  AST complexity report produced by complexity_check.py (WP-04)
+- Provenance (--require-provenance): Section 5 artifact path/SHA-256 are verified against real
+  files and every equivalent mutant must carry a justification
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 VERSION = "1.0.0"
 EXIT_PASS = 0
@@ -29,6 +35,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "max_vg_warning": 15,
     "require_mutation_section": True,
     "require_execution_evidence": True,
+    "require_provenance": False,
+    "repo_root": ".",
+    "actual_functions": None,
 }
 
 _MSI_RE = re.compile(
@@ -37,6 +46,26 @@ _MSI_RE = re.compile(
 )
 _KILLED_RE = re.compile(r"killed[^\d]*(\d+)", re.IGNORECASE)
 _TOTAL_MUT_RE = re.compile(r"(?:total|generated)[^\d]*(\d+)\s+mutant", re.IGNORECASE)
+_QA_PASSED_RE = re.compile(r"^[-*+]\s*\[[xX]\]\s*QA_PASSED\b")
+_COMPLEXITY_HEADING_RE = re.compile(
+    r"^#{2,4}\s*(?:\d+\.\s*)?Complexity\s+and\s+basis\s+path\s+coverage\b",
+    re.IGNORECASE,
+)
+_MUTATION_HEADING_RE = re.compile(
+    r"^#{2,4}\s*(?:\d+\.\s*)?Mutation\s+testing\b",
+    re.IGNORECASE,
+)
+_EVIDENCE_HEADING_RE = re.compile(
+    r"^#{2,4}\s*(?:\d+\.\s*)?Execution\s+evidence\b",
+    re.IGNORECASE,
+)
+_RISK_LEVEL_RE = re.compile(
+    r"^risk_level\s*:\s*[\"']?(standard|core)[\"']?\s*(?:#.*)?$",
+    re.IGNORECASE | re.MULTILINE,
+)
+_TOUCH_PATH_RE = re.compile(r"^\s*path\s*:\s*(.+?)\s*$")
+_SEPARATOR_CELL_RE = re.compile(r"^:?-+:?$")
+_SHA256_HEX_RE = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
 class Finding:
@@ -71,38 +100,350 @@ class Finding:
         return f"Finding({self.task!r}, {self.code!r}, {self.message!r}, {self.file!r}, {self.line})"
 
 
+# ---------------------------------------------------------------------------
+# Generic Markdown helpers
+# ---------------------------------------------------------------------------
+
+
+def _read_text(path: Path) -> Optional[str]:
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
+def _qa_passed_line(qa_text: str) -> Optional[int]:
+    """Return the 1-based line number of the checked QA_PASSED verdict, if any."""
+    for idx, line in enumerate(qa_text.splitlines(), 1):
+        if _QA_PASSED_RE.match(line):
+            return idx
+    return None
+
+
+def _collect_section(
+    qa_text: str, heading_re: "re.Pattern[str]"
+) -> Tuple[Optional[int], List[Tuple[int, str]]]:
+    """Collect the lines that belong to the first section matching heading_re."""
+    lines = qa_text.splitlines()
+    in_section = False
+    sec_line_num: Optional[int] = None
+    section_lines: List[Tuple[int, str]] = []
+    for line_idx, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if not in_section:
+            if heading_re.match(stripped):
+                in_section = True
+                sec_line_num = line_idx
+                continue
+        else:
+            if stripped.startswith("## ") or (
+                stripped.startswith("### ") and not stripped.startswith("#### ")
+            ):
+                break
+            section_lines.append((line_idx, line))
+    return sec_line_num, section_lines
+
+
+def _split_table_cells(line: str) -> List[str]:
+    stripped = line.strip()
+    if stripped.startswith("|"):
+        stripped = stripped[1:]
+    if stripped.endswith("|"):
+        stripped = stripped[:-1]
+    return [c.strip() for c in stripped.split("|")]
+
+
+def _is_separator_row(cells: Sequence[str]) -> bool:
+    non_empty = [c for c in cells if c]
+    if not non_empty:
+        return False
+    return all(_SEPARATOR_CELL_RE.match(c) for c in non_empty)
+
+
+def _split_pipe_blocks(
+    section_lines: Sequence[Tuple[int, str]]
+) -> List[List[Tuple[int, List[str]]]]:
+    """Group contiguous Markdown table lines into blocks of parsed cells."""
+    blocks: List[List[Tuple[int, List[str]]]] = []
+    current: List[Tuple[int, List[str]]] = []
+    for line_no, line in section_lines:
+        if line.strip().startswith("|"):
+            current.append((line_no, _split_table_cells(line)))
+        else:
+            if current:
+                blocks.append(current)
+                current = []
+    if current:
+        blocks.append(current)
+    return blocks
+
+
+# ---------------------------------------------------------------------------
+# Path and contract helpers
+# ---------------------------------------------------------------------------
+
+
+def _normalize_posix_path(path: str) -> str:
+    normalized = str(path).strip().replace("\\", "/")
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized
+
+
+def _normalize_actual_path(raw: Any, repo_root: Optional[Path]) -> str:
+    """Normalize an AST report path to a POSIX repo-relative path."""
+    text = str(raw).strip().replace("\\", "/")
+    candidate = Path(text)
+    if candidate.is_absolute() and repo_root is not None:
+        try:
+            return _normalize_posix_path(os.path.relpath(candidate.resolve(), repo_root.resolve()))
+        except (OSError, ValueError):
+            return _normalize_posix_path(text)
+    return _normalize_posix_path(text)
+
+
+def _load_actual_complexity(
+    report_path: Path, repo_root: Path
+) -> Tuple[Optional[List[Dict[str, Any]]], str]:
+    """Load the WP-04 AST complexity report.
+
+    Returns (records, "") on success or (None, error_message) on failure.
+    """
+    if not report_path.is_file():
+        return None, f"actual complexity report not found: {report_path}"
+    text = _read_text(report_path)
+    if text is None:
+        return None, f"actual complexity report is unreadable: {report_path}"
+    if not text.strip():
+        return None, f"actual complexity report is empty: {report_path}"
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        return None, f"actual complexity report is not valid JSON: {exc}"
+    if not isinstance(payload, dict) or not isinstance(payload.get("functions"), list):
+        return None, (
+            "actual complexity report must be a JSON object with a 'functions' list "
+            f"(schema: {{'functions': [{{'file', 'line', 'function', 'vg'}}]}}): {report_path}"
+        )
+    records: List[Dict[str, Any]] = []
+    for entry in payload["functions"]:
+        if not isinstance(entry, dict):
+            continue
+        file_raw = entry.get("file")
+        function_raw = entry.get("function")
+        vg_raw = entry.get("vg")
+        if not isinstance(file_raw, str) or not isinstance(function_raw, str):
+            continue
+        try:
+            vg = int(vg_raw)
+        except (TypeError, ValueError):
+            continue
+        function_name = function_raw.strip()
+        if not function_name:
+            continue
+        records.append(
+            {
+                "file": _normalize_actual_path(file_raw, repo_root),
+                "line": entry.get("line", 0),
+                "function": function_name,
+                "vg": vg,
+            }
+        )
+    return records, ""
+
+
+def _read_risk_level(task_dir: Path) -> str:
+    """Read the optional contract risk_level (standard | core). Default: standard."""
+    contract_text = _read_text(task_dir / "01-contract.md")
+    if not contract_text:
+        return "standard"
+    match = _RISK_LEVEL_RE.search(contract_text)
+    if not match:
+        return "standard"
+    risk_level = match.group(1).lower()
+    return risk_level if risk_level in ("standard", "core") else "standard"
+
+
+def _read_touch_files(
+    task_name: str,
+    task_dir: Path,
+    warnings: Optional[List[Dict[str, Any]]],
+) -> Optional[Set[str]]:
+    """Read touch_files[].path values from 01-contract.md.
+
+    Returns a set of POSIX repo-relative paths, or None when the contract cannot
+    be read. None is accompanied by a TOUCH_FILES_UNREADABLE warning so the
+    cross-check never fails silently.
+    """
+    def _warn(message: str) -> None:
+        if warnings is not None:
+            warnings.append(
+                {
+                    "task": task_name,
+                    "code": "TOUCH_FILES_UNREADABLE",
+                    "message": message,
+                    "file": "01-contract.md",
+                    "line": 0,
+                }
+            )
+
+    contract_text = _read_text(task_dir / "01-contract.md")
+    if contract_text is None:
+        _warn(
+            "01-contract.md is missing or unreadable; the complexity cross-check cannot "
+            "restrict the actual report to touch_files"
+        )
+        return None
+
+    block_match = re.search(r"^touch_files\s*:\s*(?:#.*)?$", contract_text, re.MULTILINE)
+    if not block_match:
+        empty_match = re.search(
+            r"^touch_files\s*:\s*\[\s*\]\s*(?:#.*)?$", contract_text, re.MULTILINE
+        )
+        if empty_match:
+            return set()
+        _warn(
+            "01-contract.md has no readable touch_files block; the complexity cross-check "
+            "cannot restrict the actual report to touch_files"
+        )
+        return None
+
+    paths: Set[str] = set()
+    for raw_line in contract_text[block_match.end():].splitlines():
+        if not raw_line.strip():
+            continue
+        if not raw_line[:1].isspace():
+            break
+        path_match = _TOUCH_PATH_RE.match(raw_line)
+        if not path_match:
+            continue
+        value = re.sub(r"\s+#.*$", "", path_match.group(1)).strip()
+        value = value.strip("`\"' ")
+        if value and not value.startswith("{{"):
+            paths.add(_normalize_posix_path(value))
+    if not paths:
+        _warn(
+            "01-contract.md touch_files block has no 'path:' entries; the complexity "
+            "cross-check cannot restrict the actual report to touch_files"
+        )
+        return None
+    return paths
+
+
+# ---------------------------------------------------------------------------
+# Section 3: complexity and basis path coverage
+# ---------------------------------------------------------------------------
+
+
+def _count_test_cases(cases_raw: str) -> int:
+    cleaned = cases_raw.strip()
+    if cleaned.lower() in ("none", "n/a", "-", ""):
+        return 0
+    tc_tokens = re.findall(r"\b(?:TC|test|case)[-\w]*\b", cleaned, re.IGNORECASE)
+    comma_items = [item.strip() for item in re.split(r"[,;\n]+", cleaned) if item.strip()]
+    return max(len(tc_tokens), len(comma_items))
+
+
+def _parse_complexity_section(
+    qa_text: str,
+) -> Tuple[Optional[int], List[Dict[str, Any]]]:
+    """Parse Section 3 rows: [{line, function, vg, test_count}]."""
+    sec_line_num, section_lines = _collect_section(qa_text, _COMPLEXITY_HEADING_RE)
+    if sec_line_num is None:
+        return None, []
+
+    header_idx = -1
+    col_headers: List[str] = []
+    separator_found = False
+    data_rows: List[Tuple[int, List[str]]] = []
+
+    for idx, (line_no, line) in enumerate(section_lines):
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        cells = _split_table_cells(stripped)
+        if header_idx == -1:
+            lowered = [c.lower() for c in cells]
+            if any("complexity" in c or "v(g)" in c for c in lowered):
+                header_idx = idx
+                col_headers = lowered
+                continue
+        elif not separator_found:
+            if _is_separator_row(cells):
+                separator_found = True
+                continue
+        else:
+            if any(c for c in cells):
+                data_rows.append((line_no, cells))
+
+    if not data_rows:
+        return sec_line_num, []
+
+    func_col = 0
+    vg_col = 1
+    cases_col = 3
+    for i, header in enumerate(col_headers):
+        if "function" in header or "module" in header or "target" in header:
+            func_col = i
+        elif "v(g)" in header or "cyclomatic" in header or "complexity" in header:
+            vg_col = i
+        elif (
+            "test case" in header
+            or "mapped test" in header
+            or "test case id" in header
+            or "test cases" in header
+        ):
+            cases_col = i
+
+    rows: List[Dict[str, Any]] = []
+    for line_no, cells in data_rows:
+        function_name = cells[func_col] if func_col < len(cells) else ""
+        function_name = function_name.strip("`\"' ")
+        if not function_name:
+            function_name = "unknown"
+
+        vg_raw = cells[vg_col] if vg_col < len(cells) else ""
+        vg_match = re.search(r"\b(\d+)\b", vg_raw)
+        vg = int(vg_match.group(1)) if vg_match else None
+
+        cases_raw = cells[cases_col] if cases_col < len(cells) else ""
+        rows.append(
+            {
+                "line": line_no,
+                "function": function_name,
+                "vg": vg,
+                "test_count": _count_test_cases(cases_raw),
+            }
+        )
+    return sec_line_num, rows
+
+
+def _index_actual_vg(actual_functions: Optional[List[Dict[str, Any]]]) -> Dict[str, List[int]]:
+    index: Dict[str, List[int]] = {}
+    for record in actual_functions or []:
+        index.setdefault(record["function"], []).append(record["vg"])
+    return index
+
+
 def _lint_qa_complexity(
     task_name: str,
     task_dir: Path,
     findings: List[Finding],
     warnings: Optional[List[Dict[str, Any]]] = None,
     config: Optional[Dict[str, Any]] = None,
+    actual_vg_by_function: Optional[Dict[str, List[int]]] = None,
 ) -> None:
     """Audit Section 3: Cyclomatic complexity and basis path coverage."""
-    qa_path = task_dir / "03-qa-verification.md"
-    if not qa_path.is_file():
-        return
-    try:
-        qa_text = qa_path.read_text(encoding="utf-8")
-    except OSError:
+    qa_text = _read_text(task_dir / "03-qa-verification.md")
+    if qa_text is None:
         return
 
-    qa_passed_match = re.search(r"^[-*+]\s*\[[xX]\]\s*QA_PASSED\b", qa_text, re.MULTILINE)
-    if not qa_passed_match:
+    verdict_line_num = _qa_passed_line(qa_text)
+    if verdict_line_num is None:
         return
 
-    verdict_line_num = 1
-    for idx, line in enumerate(qa_text.splitlines(), 1):
-        if re.search(r"^[-*+]\s*\[[xX]\]\s*QA_PASSED\b", line):
-            verdict_line_num = idx
-            break
-
-    sec_match = re.search(
-        r"^#{2,4}\s*(?:\d+\.\s*)?Complexity\s+and\s+basis\s+path\s+coverage\b.*$",
-        qa_text,
-        re.IGNORECASE | re.MULTILINE,
-    )
-    if not sec_match:
+    sec_line_num, rows = _parse_complexity_section(qa_text)
+    if sec_line_num is None:
         findings.append(
             Finding(
                 task_name,
@@ -114,47 +455,7 @@ def _lint_qa_complexity(
         )
         return
 
-    lines = qa_text.splitlines()
-    sec_line_num = 1
-    in_section = False
-    section_lines: List[Tuple[int, str]] = []
-    for line_idx, line in enumerate(lines, 1):
-        stripped = line.strip()
-        if not in_section:
-            if re.match(r"^#{2,4}\s*(?:\d+\.\s*)?Complexity\s+and\s+basis\s+path\s+coverage\b", stripped, re.IGNORECASE):
-                in_section = True
-                sec_line_num = line_idx
-                continue
-        else:
-            if stripped.startswith("## ") or (stripped.startswith("### ") and not stripped.startswith("#### ")):
-                break
-            section_lines.append((line_idx, line))
-
-    header_idx = -1
-    col_headers: List[str] = []
-    separator_found = False
-    data_rows: List[Tuple[int, List[str]]] = []
-
-    for idx, (line_no, line) in enumerate(section_lines):
-        stripped = line.strip()
-        if not stripped.startswith("|"):
-            continue
-        cells = [c.strip() for c in stripped.split("|")[1:-1]]
-        if header_idx == -1:
-            lowered = [c.lower() for c in cells]
-            if any("complexity" in c or "v(g)" in c for c in lowered):
-                header_idx = idx
-                col_headers = lowered
-                continue
-        elif not separator_found:
-            if all(re.match(r"^:?-+:?$", c) for c in cells if c):
-                separator_found = True
-                continue
-        else:
-            if any(c for c in cells):
-                data_rows.append((line_no, cells))
-
-    if not data_rows:
+    if not rows:
         findings.append(
             Finding(
                 task_name,
@@ -166,77 +467,282 @@ def _lint_qa_complexity(
         )
         return
 
-    func_col = 0
-    vg_col = 1
-    cases_col = 3
-    for i, h in enumerate(col_headers):
-        if "function" in h or "module" in h or "target" in h:
-            func_col = i
-        elif "v(g)" in h or "cyclomatic" in h or "complexity" in h:
-            vg_col = i
-        elif "test case" in h or "mapped test" in h or "test case id" in h or "test cases" in h:
-            cases_col = i
-
     cfg = config or DEFAULT_CONFIG
     max_std = cfg.get("max_vg_standard", 10)
     max_warn = cfg.get("max_vg_warning", 15)
 
-    for line_no, cells in data_rows:
-        fn_name = cells[func_col] if func_col < len(cells) else ""
-        fn_name = fn_name.strip("`\"' ")
-        if not fn_name:
-            fn_name = "unknown"
+    for row in rows:
+        fn_name = row["function"]
+        vg = row["vg"]
 
-        vg_raw = cells[vg_col] if vg_col < len(cells) else ""
-        vg_match = re.search(r"\b(\d+)\b", vg_raw)
-        if not vg_match:
-            continue
-        vg = int(vg_match.group(1))
-
-        cases_raw = cells[cases_col] if cases_col < len(cells) else ""
-        cleaned_cases = cases_raw.strip()
-        if cleaned_cases.lower() in ("none", "n/a", "-", ""):
-            test_count = 0
-        else:
-            tc_tokens = re.findall(r"\b(?:TC|test|case)[-\w]*\b", cleaned_cases, re.IGNORECASE)
-            comma_items = [item.strip() for item in re.split(r"[,;\n]+", cleaned_cases) if item.strip()]
-            test_count = max(len(tc_tokens), len(comma_items))
-
-        if vg > max_warn:
-            findings.append(
-                Finding(
-                    task_name,
-                    "COMPLEXITY_EXCEEDS_MAX_THRESHOLD",
-                    f"Function {fn_name!r} has cyclomatic complexity V(G)={vg} exceeding maximum threshold of {max_warn}",
-                    "03-qa-verification.md",
-                    line_no,
+        if vg is not None:
+            if vg > max_warn:
+                findings.append(
+                    Finding(
+                        task_name,
+                        "COMPLEXITY_EXCEEDS_MAX_THRESHOLD",
+                        f"Function {fn_name!r} has cyclomatic complexity V(G)={vg} exceeding maximum threshold of {max_warn}",
+                        "03-qa-verification.md",
+                        row["line"],
+                    )
                 )
+            elif max_std < vg <= max_warn:
+                if warnings is not None:
+                    warnings.append(
+                        {
+                            "task": task_name,
+                            "code": "COMPLEXITY_EXCEEDS_STANDARD_THRESHOLD",
+                            "message": (
+                                f"Function {fn_name!r} has cyclomatic complexity V(G)={vg} exceeding standard threshold of {max_std}"
+                                " (requires architectural justification in 02-dev-workspace.md)"
+                            ),
+                            "file": "03-qa-verification.md",
+                            "line": row["line"],
+                        }
+                    )
+
+        # Basis path coverage must be measured against the ACTUAL AST V(G) when available.
+        basis_vg = vg
+        actual_vgs = (actual_vg_by_function or {}).get(fn_name)
+        if actual_vgs:
+            basis_vg = max(actual_vgs)
+
+        test_count = row["test_count"]
+        if basis_vg is not None and test_count < basis_vg:
+            message = (
+                f"Function {fn_name!r} has V(G)={basis_vg} but only {test_count} test case(s) "
+                "provided (basis path testing requires >= V(G))"
             )
-        elif max_std < vg <= max_warn:
-            if warnings is not None:
-                warnings.append(
-                    {
-                        "task": task_name,
-                        "code": "COMPLEXITY_EXCEEDS_STANDARD_THRESHOLD",
-                        "message": (
-                            f"Function {fn_name!r} has cyclomatic complexity V(G)={vg} exceeding standard threshold of {max_std}"
-                            " (requires architectural justification in 02-dev-workspace.md)"
-                        ),
-                        "file": "03-qa-verification.md",
-                        "line": line_no,
-                    }
-                )
-
-        if test_count < vg:
+            if actual_vgs and vg is not None and basis_vg != vg:
+                message += " [basis path measured against actual AST V(G)]"
             findings.append(
                 Finding(
                     task_name,
                     "COMPLEXITY_BASIS_PATH_INSUFFICIENT",
-                    f"Function {fn_name!r} has V(G)={vg} but only {test_count} test case(s) provided (basis path testing requires >= V(G))",
+                    message,
                     "03-qa-verification.md",
-                    line_no,
+                    row["line"],
                 )
             )
+
+
+def _cross_check_complexity(
+    task_name: str,
+    task_dir: Path,
+    findings: List[Finding],
+    warnings: Optional[List[Dict[str, Any]]],
+    actual_functions: List[Dict[str, Any]],
+    config: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Cross-check Section 3 against the actual AST complexity report."""
+    qa_text = _read_text(task_dir / "03-qa-verification.md")
+    if qa_text is None or _qa_passed_line(qa_text) is None:
+        return
+
+    sec_line_num, rows = _parse_complexity_section(qa_text)
+    if not rows:
+        # Missing/empty Section 3 is already reported by the complexity audit.
+        return
+
+    touch_files = _read_touch_files(task_name, task_dir, warnings)
+
+    actual_by_function: Dict[str, List[Dict[str, Any]]] = {}
+    for record in actual_functions:
+        actual_by_function.setdefault(record["function"], []).append(record)
+
+    if touch_files is not None:
+        reported_names = {row["function"] for row in rows}
+        reported_missing: Set[str] = set()
+        for record in actual_functions:
+            fn_name = record["function"]
+            if record["file"] not in touch_files:
+                continue
+            if fn_name in reported_names or fn_name in reported_missing:
+                continue
+            reported_missing.add(fn_name)
+            findings.append(
+                Finding(
+                    task_name,
+                    "COMPLEXITY_FUNCTION_MISSING_IN_03",
+                    f"Actual AST report lists function {fn_name!r} in touch_files path {record['file']!r} "
+                    "(V(G)="
+                    f"{record['vg']}) but Section 3 has no row for it",
+                    "03-qa-verification.md",
+                    sec_line_num,
+                )
+            )
+
+    for row in rows:
+        fn_name = row["function"]
+        matches = actual_by_function.get(fn_name)
+        if not matches:
+            findings.append(
+                Finding(
+                    task_name,
+                    "COMPLEXITY_PHANTOM_FUNCTION",
+                    f"Section 3 row for function {fn_name!r} does not exist in the actual AST complexity report",
+                    "03-qa-verification.md",
+                    row["line"],
+                )
+            )
+            continue
+        actual_vgs = sorted({record["vg"] for record in matches})
+        if row["vg"] is None or row["vg"] not in actual_vgs:
+            source_files = ", ".join(sorted({record["file"] for record in matches}))
+            findings.append(
+                Finding(
+                    task_name,
+                    "COMPLEXITY_MISMATCH_WITH_AST",
+                    f"Section 3 reports V(G)={row['vg']} for function {fn_name!r} but the actual AST report "
+                    f"reports V(G)={actual_vgs} ({source_files})",
+                    "03-qa-verification.md",
+                    row["line"],
+                )
+            )
+
+
+# ---------------------------------------------------------------------------
+# Section 4: mutation testing and MSI audit
+# ---------------------------------------------------------------------------
+
+
+def _parse_float_cell(raw: str) -> Optional[float]:
+    match = re.search(r"(\d+(?:\.\d+)?)", raw or "")
+    return float(match.group(1)) if match else None
+
+
+def _parse_int_cell(raw: str) -> Optional[int]:
+    match = re.search(r"(\d+)", raw or "")
+    return int(match.group(1)) if match else None
+
+
+def _kv_metrics(values: Dict[str, str]) -> Dict[str, Any]:
+    metrics: Dict[str, Any] = {
+        "msi": None,
+        "total": None,
+        "killed": None,
+        "timed_out": None,
+        "equivalent": None,
+        "survived": None,
+    }
+    for key, value in values.items():
+        if "justif" in key or "reason" in key:
+            continue
+        if "msi" in key or "mutation score" in key:
+            metrics["msi"] = _parse_float_cell(value)
+        elif "total" in key:
+            metrics["total"] = _parse_int_cell(value)
+        elif "killed" in key or "kill" in key:
+            metrics["killed"] = _parse_int_cell(value)
+        elif "timed" in key or "timeout" in key:
+            metrics["timed_out"] = _parse_int_cell(value)
+        elif "equivalent" in key:
+            metrics["equivalent"] = _parse_int_cell(value)
+        elif "survived" in key:
+            metrics["survived"] = _parse_int_cell(value)
+    return metrics
+
+
+def _per_target_metrics(
+    col_headers: List[str], rows: List[List[str]]
+) -> Dict[str, Any]:
+    columns: Dict[str, int] = {}
+    for idx, header in enumerate(col_headers):
+        if "total" in header and "total" not in columns:
+            columns["total"] = idx
+        elif ("killed" in header or "kill" in header) and "killed" not in columns:
+            columns["killed"] = idx
+        elif "survived" in header and "survived" not in columns:
+            columns["survived"] = idx
+        elif ("timeout" in header or "timed" in header) and "timed_out" not in columns:
+            columns["timed_out"] = idx
+        elif "equivalent" in header and "equivalent" not in columns:
+            columns["equivalent"] = idx
+        elif ("msi" in header or "score" in header) and "msi" not in columns:
+            columns["msi"] = idx
+
+    totals: Dict[str, Optional[int]] = {key: None for key in columns if key != "msi"}
+    for cells in rows:
+        for key, idx in columns.items():
+            if key == "msi":
+                continue
+            if idx >= len(cells):
+                continue
+            value = _parse_int_cell(cells[idx])
+            if value is None:
+                continue
+            totals[key] = (totals[key] or 0) + value
+
+    metrics: Dict[str, Any] = {"msi": None}
+    for key in ("total", "killed", "timed_out", "equivalent", "survived"):
+        metrics[key] = totals.get(key)
+
+    total = metrics.get("total")
+    killed = metrics.get("killed")
+    timed_out = metrics.get("timed_out")
+    equivalent = metrics.get("equivalent")
+    survived = metrics.get("survived")
+    if total is not None and killed is not None:
+        denominator = total - (equivalent or 0)
+        if denominator > 0:
+            metrics["msi"] = round((killed + (timed_out or 0)) / denominator * 100, 4)
+        elif (survived or 0) == 0:
+            metrics["msi"] = 100.0
+        else:
+            metrics["msi"] = 0.0
+    return metrics
+
+
+def _parse_mutation_table_block(
+    block: Sequence[Tuple[int, str]]
+) -> Optional[Tuple[str, List[str], List[Tuple[int, List[str]]]]]:
+    """Parse one contiguous Markdown table into (format, headers, data_rows)."""
+    header_idx = -1
+    col_headers: List[str] = []
+    separator_found = False
+    data_rows: List[Tuple[int, List[str]]] = []
+
+    for idx, (line_no, line) in enumerate(block):
+        stripped = line.strip()
+        cells = _split_table_cells(stripped)
+        if header_idx == -1:
+            lowered = [c.lower() for c in cells]
+            if any(
+                "mutation" in c
+                or "msi" in c
+                or "file" in c
+                or "metric" in c
+                or "target" in c
+                or "field" in c
+                or "value" in c
+                or "tool" in c
+                for c in lowered
+            ):
+                header_idx = idx
+                col_headers = lowered
+                continue
+            if idx + 1 < len(block):
+                next_cells = _split_table_cells(block[idx + 1][1].strip())
+                if next_cells and _is_separator_row(next_cells):
+                    header_idx = idx
+                    col_headers = lowered
+                    continue
+        elif not separator_found:
+            if _is_separator_row(cells):
+                separator_found = True
+                continue
+        else:
+            data_rows.append((line_no, cells))
+
+    if not col_headers or not separator_found:
+        return None
+
+    is_kv_format = (
+        len(col_headers) == 2
+        and any("metric" in c or "field" in c for c in col_headers)
+        and any("value" in c for c in col_headers)
+    )
+    return ("kv" if is_kv_format else "per_target"), col_headers, data_rows
 
 
 def _lint_qa_mutation(
@@ -251,30 +757,16 @@ def _lint_qa_mutation(
     if not cfg.get("require_mutation_section", True):
         return
 
-    qa_path = task_dir / "03-qa-verification.md"
-    if not qa_path.is_file():
-        return
-    try:
-        qa_text = qa_path.read_text(encoding="utf-8")
-    except OSError:
+    qa_text = _read_text(task_dir / "03-qa-verification.md")
+    if qa_text is None:
         return
 
-    qa_passed_match = re.search(r"^[-*+]\s*\[[xX]\]\s*QA_PASSED\b", qa_text, re.MULTILINE)
-    if not qa_passed_match:
+    verdict_line_num = _qa_passed_line(qa_text)
+    if verdict_line_num is None:
         return
 
-    verdict_line_num = 1
-    for idx, line in enumerate(qa_text.splitlines(), 1):
-        if re.search(r"^[-*+]\s*\[[xX]\]\s*QA_PASSED\b", line):
-            verdict_line_num = idx
-            break
-
-    sec_match = re.search(
-        r"^#{2,4}\s*(?:\d+\.\s*)?Mutation\s+testing\b.*$",
-        qa_text,
-        re.IGNORECASE | re.MULTILINE,
-    )
-    if not sec_match:
+    sec_line_num, section_lines = _collect_section(qa_text, _MUTATION_HEADING_RE)
+    if sec_line_num is None:
         findings.append(
             Finding(
                 task_name,
@@ -286,28 +778,10 @@ def _lint_qa_mutation(
         )
         return
 
-    lines = qa_text.splitlines()
-    sec_line_num = 1
-    in_section = False
-    section_lines: List[Tuple[int, str]] = []
-    for line_idx, line in enumerate(lines, 1):
-        stripped = line.strip()
-        if not in_section:
-            if re.match(r"^#{2,4}\s*(?:\d+\.\s*)?Mutation\s+testing\b", stripped, re.IGNORECASE):
-                in_section = True
-                sec_line_num = line_idx
-                continue
-        else:
-            if stripped.startswith("## ") or (stripped.startswith("### ") and not stripped.startswith("#### ")):
-                break
-            section_lines.append((line_idx, line))
-
     raw_tables: List[List[Tuple[int, str]]] = []
     current_block: List[Tuple[int, str]] = []
-
     for line_no, line in section_lines:
-        stripped = line.strip()
-        if stripped.startswith("|"):
+        if line.strip().startswith("|"):
             current_block.append((line_no, line))
         else:
             if current_block:
@@ -316,74 +790,51 @@ def _lint_qa_mutation(
     if current_block:
         raw_tables.append(current_block)
 
-    min_msi = float(cfg.get("min_msi", 80))
+    risk_level = _read_risk_level(task_dir)
+    base_min_msi = float(cfg.get("min_msi", 80))
+    if risk_level == "core":
+        min_msi = max(base_min_msi, 90.0)
+        threshold_label = f"{min_msi:.0f}% threshold for core module (risk_level: core)"
+    else:
+        min_msi = base_min_msi
+        threshold_label = f"{min_msi:.0f}% threshold"
+
     table_results: List[Dict[str, Any]] = []
 
     for block in raw_tables:
-        header_idx = -1
-        col_headers: List[str] = []
-        separator_found = False
-        data_rows: List[Tuple[int, List[str]]] = []
-
-        for idx, (line_no, line) in enumerate(block):
-            stripped = line.strip()
-            cells = [c.strip() for c in stripped.split("|")[1:-1]]
-            if header_idx == -1:
-                lowered = [c.lower() for c in cells]
-                if any(
-                    "mutation" in c
-                    or "msi" in c
-                    or "file" in c
-                    or "metric" in c
-                    or "target" in c
-                    or "field" in c
-                    or "value" in c
-                    or "tool" in c
-                    for c in lowered
-                ):
-                    header_idx = idx
-                    col_headers = lowered
-                    continue
-                if idx + 1 < len(block):
-                    next_stripped = block[idx + 1][1].strip()
-                    next_cells = [c.strip() for c in next_stripped.split("|")[1:-1]]
-                    if next_cells and all(re.match(r"^:?-+:?$", c) for c in next_cells if c):
-                        header_idx = idx
-                        col_headers = lowered
-                        continue
-            elif not separator_found:
-                if all(re.match(r"^:?-+:?$", c) for c in cells if c):
-                    separator_found = True
-                    continue
-            else:
-                if any(c for c in cells):
-                    data_rows.append((line_no, cells))
-
-        if not col_headers or not separator_found:
+        parsed = _parse_mutation_table_block(block)
+        if parsed is None:
             continue
+        table_format, col_headers, data_rows = parsed
+        table_line = block[0][0]
 
-        is_kv_format = (
-            len(col_headers) == 2
-            and any("metric" in c or "field" in c for c in col_headers)
-            and any("value" in c for c in col_headers)
-        )
-
-        tbl_findings: List[Finding] = []
+        table_findings: List[Finding] = []
         compliant_rows = 0
 
-        if is_kv_format:
+        if table_format == "kv":
             kv_data_rows = [
-                (lno, cells)
-                for lno, cells in data_rows
-                if len(cells) >= 2 and cells[1].strip() != ""
+                (line_no, cells)
+                for line_no, cells in data_rows
+                if len(cells) >= 2 and cells[1].strip()
             ]
+            values: Dict[str, str] = {}
+            for line_no, cells in data_rows:
+                if len(cells) < 2:
+                    continue
+                values[cells[0].lower()] = cells[1].strip()
+            metrics = _kv_metrics(values)
+
             if not kv_data_rows:
-                table_results.append({
-                    "format": "kv",
-                    "has_data": False,
-                    "compliant": False,
-                    "findings": [],
-                })
+                table_results.append(
+                    {
+                        "format": "kv",
+                        "has_data": False,
+                        "compliant": False,
+                        "findings": [],
+                        "metrics": metrics,
+                        "line": table_line,
+                    }
+                )
                 continue
 
             msi_found = False
@@ -396,7 +847,7 @@ def _lint_qa_mutation(
                     msi_found = True
                     score_match = re.search(r"(\d+(?:\.\d+)?)\s*%?", val_cell)
                     if not score_match:
-                        tbl_findings.append(
+                        table_findings.append(
                             Finding(
                                 task_name,
                                 "QA_INVALID_MSI_SCORE",
@@ -408,11 +859,11 @@ def _lint_qa_mutation(
                     else:
                         msi_score = float(score_match.group(1))
                         if msi_score < min_msi:
-                            tbl_findings.append(
+                            table_findings.append(
                                 Finding(
                                     task_name,
                                     "QA_INVALID_MSI_SCORE",
-                                    f"Mutation Score Indicator (MSI) {msi_score:.1f}% is below required {min_msi:.0f}% threshold",
+                                    f"Mutation Score Indicator (MSI) {msi_score:.1f}% is below required {threshold_label}",
                                     "03-qa-verification.md",
                                     line_no,
                                 )
@@ -420,7 +871,7 @@ def _lint_qa_mutation(
                         else:
                             compliant_rows += 1
             if not msi_found:
-                tbl_findings.append(
+                table_findings.append(
                     Finding(
                         task_name,
                         "QA_INVALID_MSI_SCORE",
@@ -430,45 +881,58 @@ def _lint_qa_mutation(
                     )
                 )
 
-            table_results.append({
-                "format": "kv",
-                "has_data": True,
-                "compliant": len(tbl_findings) == 0 and compliant_rows > 0,
-                "findings": tbl_findings,
-            })
+            table_results.append(
+                {
+                    "format": "kv",
+                    "has_data": True,
+                    "compliant": len(table_findings) == 0 and compliant_rows > 0,
+                    "findings": table_findings,
+                    "metrics": metrics,
+                    "line": table_line,
+                }
+            )
         else:
             file_col = 0
             msi_col = -1
-            for i, h in enumerate(col_headers):
-                if "file" in h or "target" in h or "source" in h:
+            for i, header in enumerate(col_headers):
+                if "file" in header or "target" in header or "source" in header:
                     file_col = i
-                elif "msi" in h or "score" in h:
+                elif "msi" in header or "score" in header:
                     msi_col = i
-
             if msi_col == -1:
                 msi_col = 7 if len(col_headers) > 7 else len(col_headers) - 2
 
             target_data_rows = []
             for line_no, cells in data_rows:
-                target_file = cells[file_col].strip("`\"' ") if file_col < len(cells) else ""
+                target_file = (
+                    cells[file_col].strip("`\"' ") if file_col < len(cells) else ""
+                )
                 msi_raw = cells[msi_col].strip() if msi_col < len(cells) else ""
                 if any(c.strip() for c in cells) and (bool(target_file) or bool(msi_raw)):
                     target_data_rows.append((line_no, cells, target_file, msi_raw))
 
+            metrics = _per_target_metrics(
+                col_headers, [cells for _, cells, _, _ in target_data_rows]
+            )
+
             if not target_data_rows:
-                table_results.append({
-                    "format": "per_target",
-                    "has_data": False,
-                    "compliant": False,
-                    "findings": [],
-                })
+                table_results.append(
+                    {
+                        "format": "per_target",
+                        "has_data": False,
+                        "compliant": False,
+                        "findings": [],
+                        "metrics": metrics,
+                        "line": table_line,
+                    }
+                )
                 continue
 
             for line_no, cells, target_file, msi_raw in target_data_rows:
                 tf_display = target_file if target_file else "unknown"
                 score_match = re.search(r"(\d+(?:\.\d+)?)\s*%?", msi_raw)
                 if not score_match:
-                    tbl_findings.append(
+                    table_findings.append(
                         Finding(
                             task_name,
                             "QA_INVALID_MSI_SCORE",
@@ -480,11 +944,11 @@ def _lint_qa_mutation(
                 else:
                     score = float(score_match.group(1))
                     if score < min_msi:
-                        tbl_findings.append(
+                        table_findings.append(
                             Finding(
                                 task_name,
                                 "QA_INVALID_MSI_SCORE",
-                                f"Target file {tf_display!r} has MSI score {score:.1f}% below required {min_msi:.0f}% threshold",
+                                f"Target file {tf_display!r} has MSI score {score:.1f}% below required {threshold_label}",
                                 "03-qa-verification.md",
                                 line_no,
                             )
@@ -492,14 +956,19 @@ def _lint_qa_mutation(
                     else:
                         compliant_rows += 1
 
-            table_results.append({
-                "format": "per_target",
-                "has_data": True,
-                "compliant": len(tbl_findings) == 0 and compliant_rows > 0,
-                "findings": tbl_findings,
-            })
+            table_results.append(
+                {
+                    "format": "per_target",
+                    "has_data": True,
+                    "compliant": len(table_findings) == 0 and compliant_rows > 0,
+                    "findings": table_findings,
+                    "metrics": metrics,
+                    "line": table_line,
+                }
+            )
 
-    if not any(t["has_data"] for t in table_results):
+    data_tables = [t for t in table_results if t["has_data"]]
+    if not data_tables:
         # Fallback: check freeform text if no structured table with data rows
         body_text = "\n".join(line for _, line in section_lines)
         msi_match = _MSI_RE.search(body_text)
@@ -510,7 +979,7 @@ def _lint_qa_mutation(
                     Finding(
                         task_name,
                         "QA_INVALID_MSI_SCORE",
-                        f"Mutation Score Indicator (MSI) {msi_score:.1f}% is below required {min_msi:.0f}% threshold",
+                        f"Mutation Score Indicator (MSI) {msi_score:.1f}% is below required {threshold_label}",
                         "03-qa-verification.md",
                         sec_line_num,
                     )
@@ -528,7 +997,7 @@ def _lint_qa_mutation(
                     Finding(
                         task_name,
                         "QA_INVALID_MSI_SCORE",
-                        f"Derived MSI {msi_score:.1f}% ({killed}/{total}) is below required {min_msi:.0f}% threshold",
+                        f"Derived MSI {msi_score:.1f}% ({killed}/{total}) is below required {threshold_label}",
                         "03-qa-verification.md",
                         sec_line_num,
                     )
@@ -546,12 +1015,286 @@ def _lint_qa_mutation(
         )
         return
 
-    if any(t["compliant"] for t in table_results):
+    # Every populated mutation table must be compliant; a compliant table can no
+    # longer mask a failing or blank one (dual-table loophole).
+    blank_tables = [t for t in table_results if not t["has_data"]]
+    if blank_tables and len(table_results) >= 2:
+        findings.append(
+            Finding(
+                task_name,
+                "MUTATION_TABLE_INCONSISTENT",
+                "Section 4 contains multiple mutation tables but at least one table has no data rows; "
+                "fill every mutation table (or delete the unused scaffold) so the evidence can be cross-checked",
+                "03-qa-verification.md",
+                blank_tables[0].get("line", sec_line_num),
+            )
+        )
+
+    if len(data_tables) >= 2:
+        base_table = data_tables[0]
+        for other_table in data_tables[1:]:
+            base_msi = base_table["metrics"].get("msi")
+            other_msi = other_table["metrics"].get("msi")
+            if base_msi is not None and other_msi is not None:
+                if abs(float(base_msi) - float(other_msi)) > 0.1:
+                    findings.append(
+                        Finding(
+                            task_name,
+                            "MUTATION_TABLE_INCONSISTENT",
+                            "Section 4 mutation tables disagree on MSI: "
+                            f"{float(base_msi):.1f}% vs {float(other_msi):.1f}%",
+                            "03-qa-verification.md",
+                            base_table.get("line", sec_line_num),
+                        )
+                    )
+            base_total = base_table["metrics"].get("total")
+            other_total = other_table["metrics"].get("total")
+            if base_total is not None and other_total is not None:
+                if int(base_total) != int(other_total):
+                    findings.append(
+                        Finding(
+                            task_name,
+                            "MUTATION_TABLE_INCONSISTENT",
+                            "Section 4 mutation tables disagree on total mutants: "
+                            f"{int(base_total)} vs {int(other_total)}",
+                            "03-qa-verification.md",
+                            base_table.get("line", sec_line_num),
+                        )
+                    )
+
+    for table in data_tables:
+        if table["compliant"]:
+            continue
+        if table["findings"]:
+            findings.extend(table["findings"])
+        else:
+            findings.append(
+                Finding(
+                    task_name,
+                    "QA_MISSING_MUTATION_EVIDENCE",
+                    "Section 4 mutation table is incomplete or non-compliant",
+                    "03-qa-verification.md",
+                    table.get("line", sec_line_num),
+                )
+            )
+
+
+# ---------------------------------------------------------------------------
+# Section 4 provenance: equivalent mutants + Section 5 artifact provenance
+# ---------------------------------------------------------------------------
+
+
+def _parse_kv_rows(
+    section_lines: Sequence[Tuple[int, str]]
+) -> List[Tuple[int, str, str]]:
+    """Parse table rows as (line_no, key, value) pairs; skip separators."""
+    rows: List[Tuple[int, str, str]] = []
+    for line_no, line in section_lines:
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        cells = _split_table_cells(stripped)
+        if len(cells) < 2:
+            continue
+        if _is_separator_row(cells):
+            continue
+        key = cells[0].strip().strip("`* ")
+        value = cells[1].strip().strip("`\"' ")
+        rows.append((line_no, key, value))
+    return rows
+
+
+def _equivalent_mutant_total(
+    section_lines: Sequence[Tuple[int, str]]
+) -> Optional[int]:
+    """Return the reported equivalent-mutant count from Section 4, if determinable."""
+    for _line_no, key, value in _parse_kv_rows(section_lines):
+        lowered = key.lower()
+        if "equivalent" not in lowered or "justif" in lowered or "reason" in lowered:
+            continue
+        count = _parse_int_cell(value)
+        if count is not None:
+            return count
+
+    total: Optional[int] = None
+    for block in _split_pipe_blocks(section_lines):
+        header: Optional[List[str]] = None
+        equivalent_col: Optional[int] = None
+        for _line_no, cells in block:
+            lowered = [c.lower() for c in cells]
+            if header is None:
+                if any("equivalent" in c for c in lowered) and any(
+                    "total" in c for c in lowered
+                ):
+                    header = lowered
+                    equivalent_col = next(
+                        (i for i, c in enumerate(lowered) if "equivalent" in c), None
+                    )
+                continue
+            if _is_separator_row(cells) or equivalent_col is None:
+                continue
+            if equivalent_col >= len(cells):
+                continue
+            count = _parse_int_cell(cells[equivalent_col])
+            if count is not None:
+                total = (total or 0) + count
+    return total
+
+
+def _audit_provenance(
+    task_name: str,
+    task_dir: Path,
+    findings: List[Finding],
+    config: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Verify evidence provenance (--require-provenance) and equivalent-mutant justifications."""
+    cfg = config or DEFAULT_CONFIG
+    if not cfg.get("require_provenance", False):
         return
 
-    for t in table_results:
-        if t["has_data"]:
-            findings.extend(t["findings"])
+    qa_text = _read_text(task_dir / "03-qa-verification.md")
+    if qa_text is None:
+        return
+    verdict_line_num = _qa_passed_line(qa_text)
+    if verdict_line_num is None:
+        return
+
+    repo_root = Path(cfg.get("repo_root", "."))
+
+    # --- Section 5: artifact path + SHA-256 ---------------------------------
+    sec_line_num, evidence_lines = _collect_section(qa_text, _EVIDENCE_HEADING_RE)
+    if sec_line_num is None:
+        findings.append(
+            Finding(
+                task_name,
+                "EVIDENCE_MISSING_ARTIFACT",
+                "Section 5 'Execution evidence' is required by --require-provenance to record "
+                "'Artifact path' and 'Artifact SHA-256'",
+                "03-qa-verification.md",
+                verdict_line_num,
+            )
+        )
+    else:
+        kv_rows = _parse_kv_rows(evidence_lines)
+        artifact_row = next(
+            (
+                row
+                for row in kv_rows
+                if "artifact" in row[1].lower() and "path" in row[1].lower()
+            ),
+            None,
+        )
+        hash_row = next(
+            (
+                row
+                for row in kv_rows
+                if "artifact" in row[1].lower()
+                and ("sha" in row[1].lower() or "hash" in row[1].lower())
+            ),
+            None,
+        )
+
+        artifact_path: Optional[Path] = None
+        if artifact_row is None or not artifact_row[2]:
+            findings.append(
+                Finding(
+                    task_name,
+                    "EVIDENCE_MISSING_ARTIFACT",
+                    "Section 5 must contain a non-empty 'Artifact path' row (--require-provenance)",
+                    "03-qa-verification.md",
+                    artifact_row[0] if artifact_row else sec_line_num,
+                )
+            )
+        else:
+            raw_path = artifact_row[2]
+            candidate = Path(raw_path)
+            if not candidate.is_absolute():
+                candidate = repo_root / candidate
+            if not candidate.is_file():
+                findings.append(
+                    Finding(
+                        task_name,
+                        "EVIDENCE_MISSING_ARTIFACT",
+                        f"Artifact path {raw_path!r} does not exist relative to repo root {str(repo_root)!r}",
+                        "03-qa-verification.md",
+                        artifact_row[0],
+                    )
+                )
+            else:
+                artifact_path = candidate
+
+        if hash_row is None or not hash_row[2]:
+            findings.append(
+                Finding(
+                    task_name,
+                    "EVIDENCE_HASH_INVALID",
+                    "Section 5 must contain a non-empty 'Artifact SHA-256' row (--require-provenance)",
+                    "03-qa-verification.md",
+                    hash_row[0] if hash_row else sec_line_num,
+                )
+            )
+        else:
+            digest = hash_row[2].strip().lower()
+            if digest.startswith("sha256:"):
+                digest = digest[len("sha256:"):].strip()
+            digest = digest.strip("`'\" ")
+            if not _SHA256_HEX_RE.match(digest):
+                findings.append(
+                    Finding(
+                        task_name,
+                        "EVIDENCE_HASH_INVALID",
+                        f"Artifact SHA-256 {hash_row[2]!r} is not a 64-character hexadecimal digest",
+                        "03-qa-verification.md",
+                        hash_row[0],
+                    )
+                )
+            elif artifact_path is not None:
+                try:
+                    actual_digest = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+                except OSError:
+                    actual_digest = ""
+                if actual_digest != digest:
+                    findings.append(
+                        Finding(
+                            task_name,
+                            "EVIDENCE_HASH_INVALID",
+                            f"Artifact SHA-256 mismatch: 03 records {digest} but the file digest is "
+                            f"{actual_digest or 'unreadable'}",
+                            "03-qa-verification.md",
+                            hash_row[0],
+                        )
+                    )
+
+    # --- Section 4: equivalent-mutant justification --------------------------
+    mut_sec_line, mut_lines = _collect_section(qa_text, _MUTATION_HEADING_RE)
+    if mut_sec_line is not None:
+        equivalent_total = _equivalent_mutant_total(mut_lines)
+        if equivalent_total is not None and equivalent_total > 0:
+            justification_row = next(
+                (
+                    row
+                    for row in _parse_kv_rows(mut_lines)
+                    if "equivalent" in row[1].lower()
+                    and ("justif" in row[1].lower() or "reason" in row[1].lower())
+                ),
+                None,
+            )
+            if justification_row is None or not justification_row[2]:
+                findings.append(
+                    Finding(
+                        task_name,
+                        "MUTATION_EQUIVALENT_JUSTIFICATION_MISSING",
+                        f"Section 4 reports {equivalent_total} equivalent mutant(s) but no non-empty "
+                        "'Equivalent mutant justification' row",
+                        "03-qa-verification.md",
+                        justification_row[0] if justification_row else mut_sec_line,
+                    )
+                )
+
+
+# ---------------------------------------------------------------------------
+# Section 5: execution evidence
+# ---------------------------------------------------------------------------
 
 
 def _audit_execution_evidence(
@@ -565,43 +1308,18 @@ def _audit_execution_evidence(
     if not cfg.get("require_execution_evidence", True):
         return
 
-    qa_path = task_dir / "03-qa-verification.md"
-    if not qa_path.is_file():
-        return
-    try:
-        qa_text = qa_path.read_text(encoding="utf-8")
-    except OSError:
+    qa_text = _read_text(task_dir / "03-qa-verification.md")
+    if qa_text is None:
         return
 
-    qa_passed_match = re.search(r"^[-*+]\s*\[[xX]\]\s*QA_PASSED\b", qa_text, re.MULTILINE)
-    if not qa_passed_match:
+    if _qa_passed_line(qa_text) is None:
         return
 
-    sec_match = re.search(
-        r"^#{2,4}\s*(?:\d+\.\s*)?Execution\s+evidence\b.*$",
-        qa_text,
-        re.IGNORECASE | re.MULTILINE,
-    )
-    if not sec_match:
+    sec_line_num, section_lines = _collect_section(qa_text, _EVIDENCE_HEADING_RE)
+    if sec_line_num is None:
         return  # Execution evidence section is optional if omitted
 
-    lines = qa_text.splitlines()
-    sec_line_num = 1
-    in_section = False
-    section_lines: List[str] = []
-    for line_idx, line in enumerate(lines, 1):
-        stripped = line.strip()
-        if not in_section:
-            if re.match(r"^#{2,4}\s*(?:\d+\.\s*)?Execution\s+evidence\b", stripped, re.IGNORECASE):
-                in_section = True
-                sec_line_num = line_idx
-                continue
-        else:
-            if stripped.startswith("## ") or (stripped.startswith("### ") and not stripped.startswith("#### ")):
-                break
-            section_lines.append(line)
-
-    body_text = "\n".join(section_lines)
+    body_text = "\n".join(line for _, line in section_lines)
     command_re = re.compile(r"^\|\s*Command\s*\|\s*([^|\r\n]*)\|", re.IGNORECASE | re.MULTILINE)
     result_re = re.compile(r"^\|\s*Result\s*\|\s*([^|\r\n]*)\|", re.IGNORECASE | re.MULTILINE)
     cmd_m = command_re.search(body_text)
@@ -630,6 +1348,11 @@ def _audit_execution_evidence(
         )
 
 
+# ---------------------------------------------------------------------------
+# Task bundle orchestration
+# ---------------------------------------------------------------------------
+
+
 def lint_task_bundle(
     task_dir: Path,
     findings: List[Finding],
@@ -637,10 +1360,23 @@ def lint_task_bundle(
     config: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Run all Gate 3 verification audits on a single task bundle."""
+    cfg = config or DEFAULT_CONFIG
     task_name = task_dir.name
-    _lint_qa_complexity(task_name, task_dir, findings, warnings, config)
-    _lint_qa_mutation(task_name, task_dir, findings, warnings, config)
-    _audit_execution_evidence(task_name, task_dir, findings, config)
+    actual_functions = cfg.get("actual_functions")
+    actual_vg_by_function = (
+        _index_actual_vg(actual_functions) if actual_functions is not None else None
+    )
+
+    _lint_qa_complexity(
+        task_name, task_dir, findings, warnings, cfg, actual_vg_by_function
+    )
+    if actual_functions is not None:
+        _cross_check_complexity(
+            task_name, task_dir, findings, warnings, actual_functions, cfg
+        )
+    _lint_qa_mutation(task_name, task_dir, findings, warnings, cfg)
+    _audit_execution_evidence(task_name, task_dir, findings, cfg)
+    _audit_provenance(task_name, task_dir, findings, cfg)
 
 
 def lint_tasks(
@@ -660,14 +1396,18 @@ def lint_tasks(
         task_dirs = [candidate]
     else:
         task_dirs = sorted(
-            [d for d in tasks_dir.iterdir() if d.is_dir() and not d.name.startswith(".") and d.name != "archive"]
+            [
+                d
+                for d in tasks_dir.iterdir()
+                if d.is_dir() and not d.name.startswith(".") and d.name != "archive"
+            ]
         )
 
-    for td in task_dirs:
-        qa_file = td / "03-qa-verification.md"
+    for task_dir in task_dirs:
+        qa_file = task_dir / "03-qa-verification.md"
         if qa_file.is_file():
             scanned += 1
-            lint_task_bundle(td, findings, warnings, config)
+            lint_task_bundle(task_dir, findings, warnings, config)
 
     return findings, warnings, scanned
 
@@ -704,6 +1444,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="minimum Mutation Score Indicator %% (default: 80)",
     )
     parser.add_argument(
+        "--actual-complexity",
+        default=None,
+        metavar="PATH",
+        help="path to the actual AST complexity report (JSON with a 'functions' list) produced by complexity_check.py",
+    )
+    parser.add_argument(
+        "--require-actual-complexity",
+        action="store_true",
+        help="fail when --actual-complexity is missing so Gate 3 cannot rely on self-reported V(G) values",
+    )
+    parser.add_argument(
+        "--repo-root",
+        default=".",
+        metavar="PATH",
+        help="repository root used to resolve artifact paths and normalize report paths (default: .)",
+    )
+    parser.add_argument(
+        "--require-provenance",
+        action="store_true",
+        help="require Section 5 artifact path/SHA-256 provenance and equivalent-mutant justifications",
+    )
+    parser.add_argument(
         "--no-mutation",
         action="store_true",
         help="skip the mutation testing section check",
@@ -729,6 +1491,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         sys.stderr.write("error: --min-msi must be between 0 and 100\n")
         return EXIT_USAGE
 
+    repo_root = Path(args.repo_root).expanduser()
+    if not repo_root.is_dir():
+        sys.stderr.write(f"error: repository root does not exist: {repo_root}\n")
+        return EXIT_USAGE
+
     config = dict(DEFAULT_CONFIG)
     if args.min_msi is not None:
         config["min_msi"] = args.min_msi
@@ -736,6 +1503,38 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         config["require_mutation_section"] = False
     if args.no_evidence:
         config["require_execution_evidence"] = False
+    config["require_provenance"] = bool(args.require_provenance)
+    config["repo_root"] = str(repo_root)
+
+    global_findings: List[Finding] = []
+    actual_functions: Optional[List[Dict[str, Any]]] = None
+    if args.require_actual_complexity and not args.actual_complexity:
+        global_findings.append(
+            Finding(
+                "",
+                "COMPLEXITY_REPORT_MISSING",
+                "--require-actual-complexity was set but --actual-complexity PATH was not provided; "
+                "Gate 3 cannot cross-check reported V(G) values against the AST report",
+                "actual-complexity-report.json",
+                0,
+            )
+        )
+    elif args.actual_complexity:
+        report_path = Path(args.actual_complexity).expanduser()
+        records, load_error = _load_actual_complexity(report_path, repo_root)
+        if load_error:
+            global_findings.append(
+                Finding(
+                    "",
+                    "COMPLEXITY_REPORT_MISSING",
+                    load_error,
+                    str(report_path),
+                    0,
+                )
+            )
+        else:
+            actual_functions = records
+    config["actual_functions"] = actual_functions
 
     tasks_dir = Path(args.tasks_dir).expanduser()
     if not tasks_dir.is_dir():
@@ -748,16 +1547,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         sys.stderr.write(f"error: {exc}\n")
         return EXIT_USAGE
 
-    errors = list(findings)
+    errors = list(global_findings) + list(findings)
     if args.strict:
-        for w in warnings:
+        for warning in warnings:
             errors.append(
                 Finding(
-                    task=w.get("task", ""),
-                    code=w.get("code", "STRICT_WARNING"),
-                    message=w.get("message", ""),
-                    file=w.get("file", "03-qa-verification.md"),
-                    line=w.get("line", 0),
+                    task=warning.get("task", ""),
+                    code=warning.get("code", "STRICT_WARNING"),
+                    message=warning.get("message", ""),
+                    file=warning.get("file", "03-qa-verification.md"),
+                    line=warning.get("line", 0),
                 )
             )
 
@@ -776,15 +1575,17 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     else:
         if errors:
             sys.stdout.write(f"Gate 3 FAILED: {len(errors)} violation(s) in {scanned} task(s).\n")
-            for f in errors:
-                loc = f"{f.file}:{f.line}" if f.line else f.file
-                sys.stdout.write(f"  [{f.task}] {f.code}: {f.message} ({loc})\n")
+            for finding in errors:
+                loc = f"{finding.file}:{finding.line}" if finding.line else finding.file
+                sys.stdout.write(f"  [{finding.task}] {finding.code}: {finding.message} ({loc})\n")
         else:
             sys.stdout.write(f"Gate 3 PASSED: verified {scanned} task(s) with signoff.\n")
 
-        for w in warnings:
-            loc = f"{w.get('file', '03-qa-verification.md')}:{w.get('line', 0)}"
-            sys.stdout.write(f"  warning [{w.get('code', 'WARNING')}] {w.get('message', '')} ({loc})\n")
+        for warning in warnings:
+            loc = f"{warning.get('file', '03-qa-verification.md')}:{warning.get('line', 0)}"
+            sys.stdout.write(
+                f"  warning [{warning.get('code', 'WARNING')}] {warning.get('message', '')} ({loc})\n"
+            )
 
     return EXIT_PASS if passed else EXIT_VIOLATIONS
 

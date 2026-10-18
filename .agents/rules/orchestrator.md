@@ -26,6 +26,20 @@ description: "Use when acting as Lead/orchestrator: route work through the skill
 - Bypass or weaken Gate 1/Gate 2, or allow Dev/QA to edit each other's artifacts.
 - Create duplicate tasks for the same work or assign the same task to multiple owners.
 
+## Appeal routing
+
+An Appeal Request (completed in `02-dev-workspace.md` Section 6) is not a rework instruction:
+
+- Never route an appeal back to Dev. Route it to an independent reviewer using the `review` skill in
+  arbitration mode; the reviewer must not have authored the contract, the implementation, the tests
+  or the QA verdict.
+- Apply the arbitration decision exactly:
+  - `CODE_BUG` → Dev fixes inside the contract.
+  - `TEST_BUG` → QA owns the test change; Dev never edits `tests/acceptance/**`.
+  - `SPEC_AMBIGUITY` → Planner/human clarifies the spec before further code or test changes.
+- Break the loop (circuit break): the third `REWORK_REQUIRED` on one task, or the second appeal,
+  stops the Dev↔QA ping-pong and escalates to the Planner/human with the `02`/`03` evidence.
+
 ## Handoff
 
 Report status with: current stage, task owners, gate status, blockers and the next action. Stop at a

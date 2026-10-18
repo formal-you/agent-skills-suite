@@ -14,6 +14,7 @@ The installer copies or links, from this checkout into --target:
     .agents/skills/<name>   (selected skills; --dest controls the destination root)
     .agents/rules/*.md      (unless --no-with-rules)
     tools/rbac_audit.py     (unless --no-with-audit)
+    tools/mutation_gate.py  (unless --no-with-audit)
     templates/ci/*.yml      (only with --with-ci, into <target>/.github/workflows/)
 
 It never writes outside --target, refuses to replace an existing item without --force, and
@@ -182,11 +183,14 @@ def build_items(target, dest_root, selected, with_rules, with_audit, with_ci):
             items.append(InstallItem("rule", path.name, path, rules_dest / path.name))
 
     if with_audit:
-        audit = SOURCE_ROOT / "tools" / "rbac_audit.py"
-        if audit.is_file():
-            items.append(InstallItem("audit", "rbac_audit.py", audit, target / "tools" / "rbac_audit.py"))
-        else:
-            problems.append("tools/rbac_audit.py is missing from the suite checkout")
+        for tool_name in ("rbac_audit.py", "mutation_gate.py"):
+            tool_source = SOURCE_ROOT / "tools" / tool_name
+            if tool_source.is_file():
+                items.append(
+                    InstallItem("audit", tool_name, tool_source, target / "tools" / tool_name)
+                )
+            else:
+                problems.append("tools/" + tool_name + " is missing from the suite checkout")
 
     if with_ci:
         ci_root = SOURCE_ROOT / "templates" / "ci"
@@ -350,7 +354,7 @@ def build_parser():
         "--with-audit",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="install tools/rbac_audit.py (default: on)",
+        help="install tools/rbac_audit.py and tools/mutation_gate.py (default: on)",
     )
     parser.add_argument(
         "--print-oneliner",

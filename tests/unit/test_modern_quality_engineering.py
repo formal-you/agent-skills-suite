@@ -285,6 +285,19 @@ class QualityGateLinterEngine:
         return errors, warnings
 
 
+def yaml_job_block(text: str, job_name: str) -> str:
+    """Return the YAML block for one top-level job (helper for structural tests)."""
+    marker = "\n  " + job_name + ":\n"
+    start = text.index(marker) + 1
+    lines = text[start:].splitlines()
+    block = [lines[0]]
+    for line in lines[1:]:
+        if line.startswith("  ") and not line.startswith("    "):
+            break
+        block.append(line)
+    return "\n".join(block)
+
+
 # ==============================================================================
 # TIER 1: FEATURE COVERAGE TESTS
 # ==============================================================================
@@ -631,6 +644,32 @@ def sample_logic(a, b):
         self.assertIn("rbac_audit.py", quality_gate_content)
         self.assertIn("verification_linter.py", quality_gate_content)
         self.assertIn("complexity", quality_gate_content.lower())
+
+    def test_f26_quality_gate_truthful_semantics(self) -> None:
+        """Feature 26: Gate 3 cannot be skipped, cross-validates artifacts, mutation is fail-closed."""
+        text = (CI_DIR / "quality-gate.yml").read_text(encoding="utf-8")
+
+        gate3 = yaml_job_block(text, "gate3-verification")
+        self.assertIn("always()", gate3)
+        self.assertIn("needs.rbac-audit.result == 'skipped'", gate3)
+        self.assertIn("--actual-complexity", gate3)
+        self.assertIn("--require-actual-complexity", gate3)
+        self.assertIn("actions/download-artifact", gate3)
+
+        complexity = yaml_job_block(text, "complexity-gate")
+        self.assertIn("actions/upload-artifact", complexity)
+        self.assertIn("complexity-report", complexity)
+
+        acceptance = yaml_job_block(text, "acceptance-tests")
+        self.assertIn("pip install -r requirements.txt", acceptance)
+        self.assertIn("--junitxml", acceptance)
+        self.assertIn("tests/acceptance", acceptance)
+
+        mutation = yaml_job_block(text, "mutation-active-check")
+        self.assertNotIn("|| true", mutation)
+        self.assertIn("tools/mutation_gate.py", mutation)
+        self.assertIn("--min-msi 80", mutation)
+        self.assertNotIn("continue-on-error", text)
 
     def test_f25_authoritative_ci_documentation_and_guides(self) -> None:
         """Feature 25: Authoritative CI gate documentation in AGENTS.md, rules, and CI README."""

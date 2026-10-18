@@ -9,9 +9,11 @@ idea    → prd-generator → spec-generator → task-decomposition → Gate 1 (
 change  → change (brownfield proposal + one task bundle) → the same Gate 1/2 → dev ↔ qa → Gate 3 → converge
 ```
 
-This directory is the **single source of truth**. The skills are prompt-first: they work with any
-agent harness and degrade to a manual checklist when no helper script or Python interpreter is
-available. Deterministic gates are stdlib-only helpers; repository CI is the authoritative enforcement
+This directory is the runtime source of truth (mirrored byte-for-byte to
+`skills/workflow/<name>/`). The skills are prompt-first: they work with any agent harness and degrade
+to a manual checklist when no helper script or Python interpreter is available. Deterministic gates
+are stdlib-only helpers; the multi-language complexity checker additionally uses optional
+tree-sitter/lizard engines with a Python AST fallback. Repository CI is the authoritative enforcement
 layer (see `.agents/rules` and `docs/skills-compatibility.md`).
 
 Chinese Guide: [docs/skills-guide.zh-CN.md](../../docs/skills-guide.zh-CN.md).
@@ -96,10 +98,14 @@ The lifecycle features a decoupled, multi-stage gate architecture:
    independent, read-only reviewer agent. It issues `PASS`, `REQUEST CHANGES`, or `BLOCKED`.
 
 3. **Gate 3 — Deterministic QA Verification Gate (`verification_linter.py`)**:
-   Audits `03-qa-verification.md` upon `QA_PASSED` signoff, ensuring that Basis Path coverage satisfies
-   $\text{Test Cases} \ge V(G)$, Mutation Testing evidence is non-empty, and $\text{MSI} \ge 80\%$.
+   Audits `03-qa-verification.md` upon `QA_PASSED` signoff, cross-checks the Section 3 V(G) values
+   against the real AST artifact (`--actual-complexity`), ensures Basis Path coverage satisfies
+   $\text{Test Cases} \ge V(G)$, and Mutation Testing evidence is compliant with $\text{MSI} \ge 80\%$
+   ($\ge 90\%$ for `risk_level: core` tasks).
    ```bash
-   python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir ./tasks --strict --json
+   python .agents/skills/quality-engineering/scripts/verification_linter.py \
+     --tasks-dir ./tasks --actual-complexity artifacts/complexity-report.json \
+     --require-actual-complexity --strict --json
    ```
 
 4. **Convergence — Spec Write-Back (`converge.py`)**:
@@ -125,7 +131,8 @@ Quality enforcement spans four distinct stages:
 
 2. **Stage 2: Test Environment (Sandbox & Topology Verification)**:
    - Ephemeral container or sandbox environments isolate external dependencies (databases, messaging, APIs).
-   - Validates live topology connectivity and ADR architecture contract compatibility.
+   - The CI template installs declared project dependencies and runs an acceptance-test collection
+     probe; network isolation is advisory unless `pytest-socket` is installed.
 
 3. **Stage 3: Pre-merge / PR Gate (L2 Authoritative Layer)**:
    - Mandatory CI gating triggered on every pull request:
@@ -133,14 +140,17 @@ Quality enforcement spans four distinct stages:
      2. Gate 1 static plan & BDD check: `python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks --json`
      3. Cyclomatic complexity static check: Enforces single-function $V(G) \le 10$ across changed lines.
      4. Full acceptance test execution: Runs `tests/acceptance/**`.
-     5. Mutation testing kill ratio audit: Verifies $\text{MSI} \ge 80\%$.
-     6. Gate 3 QA verification audit: `python .agents/skills/qa/scripts/verification_linter.py --tasks-dir tasks --strict --json`
-     7. Gate 2 Reviewer signoff: Independent reviewer approves PR semantics.
+     5. Mutation testing kill ratio audit: fail-closed on trunk via `tools/mutation_gate.py`
+        (normalized report + $\text{MSI} \ge 80\%$); PR Gate 3 audits the recorded evidence.
+     6. Gate 3 QA verification audit: `python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir tasks --actual-complexity artifacts/complexity-report.json --require-actual-complexity --strict --json`
+     7. Gate 2 Reviewer signoff: independent reviewer approves PR semantics (human/branch-protection
+        step; not a shipped CI job).
 
 4. **Stage 4: Post-merge & Staging/Release (Regression & Convergence)**:
    - Full mainline test suite execution prevents cross-PR regressions.
-   - Automated specification convergence: `python .agents/skills/converge/scripts/converge.py apply`
-     appends confirmed deviations to `.specs/02-tech-spec.md` and archives completed task bundles.
+   - Specification convergence is manual/optional in the shipped template:
+     `python .agents/skills/converge/scripts/converge.py apply --task tasks/<task-id>` appends
+     confirmed deviations to `.specs/02-tech-spec.md` and archives completed task bundles.
    - Mainline mutation baseline refresh and performance benchmark tracking.
 
 ---

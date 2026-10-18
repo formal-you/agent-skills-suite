@@ -3,6 +3,7 @@
 > 适用对象：使用 `.agents/skills/` 的开发者、Planner、Dev、QA、Reviewer Agent 与 CI/CD 运维工程师。  
 > 对应版本：技能 `metadata.version` 2.x（基础流程）、3.x（brownfield/收敛/分发）与 4.x（现代质量工程：BDD + 圈复杂度 + 变异测试 + 4 阶段分层测试流水线）。  
 > v3 用法见 [`brownfield-convergence.zh-CN.md`](brownfield-convergence.zh-CN.md)；CI 门禁与工作流模板见 [`templates/ci/README.md`](../templates/ci/README.md)。  
+> **v3.2.0 加固**：Gate 3 与真实 AST artifact 交叉核验、变异测试 fail-closed、错误码注册表与 triage、证据 provenance 与 Appeal/仲裁；详见 [`skills-remediation.zh-CN.md`](skills-remediation.zh-CN.md)。
 > 本文系统说明十个技能如何协同工作、现代质量工程三支柱如何落地、四阶段测试流水线与 CI 权威门禁如何运转。
 
 ---
@@ -13,7 +14,7 @@
 
 核心要点：
 
-- **自包含与免安装**：技能不再强依赖外部重型引擎；脚手架、占位符校验、Gate 1 规划门禁（`plan_linter.py`）与 Gate 3 验收门禁（`verification_linter.py`）均为 **Python 标准库** 脚本，无第三方依赖；
+- **自包含与免安装**：脚手架、占位符校验、Gate 1 规划门禁（`plan_linter.py`）与 Gate 3 验收门禁（`verification_linter.py`）均为 **Python 标准库** 脚本；多语言复杂度检查（`complexity_check.py`）的 tree-sitter/lizard 是**可选依赖**，Python AST 是其标准库 fallback；
 - **现代质量工程三支柱**：
   1. **BDD 行为驱动规格**：任务契约 `01-contract.md` 采用结构化 Given-When-Then 定义验收场景，QA 验收测试严格对齐；
   2. **圈复杂度控制流分析**：Dev 编码严格遵循单函数 McCabe $V(G) \le 10$；QA 遵循基本路径测试基线规则（用例数 $\ge V(G)$），数学上覆盖所有线性独立路径；
@@ -457,6 +458,7 @@ $$\text{MSI} = \frac{\text{Killed} + \text{TimedOut}}{\text{Total} - \text{Equiv
   - 针对微服务、数据库、外部 API 依赖，拉起 Ephemeral / Sandbox 独立容器与环境；
   - 验证运行依赖、环境变量、网络连通性与服务 Mock，排除环境就绪缺陷；
   - 验证 ADR 中规定的架构约束与拓扑协议。
+- **模板实际提供的能力**：`quality-gate.yml` 会安装项目声明的依赖并运行 `pytest --collect-only`（或 unittest discover）做就绪探针；网络隔离为 `advisory`，除非项目安装 `pytest-socket` 才会加 `--disable-socket`。不要把模板描述成完整的容器/网络沙箱。
 
 ### 6.3 阶段三：合并前测试（Pre-merge / PR Gate — quality-engineering 自动化门禁）
 - **目标**：由 `quality-engineering` 构建的 CI 流水线作为拉取请求（PR）合入主干的绝对权威守门人，执行不可绕过的确定性门禁。
@@ -473,27 +475,30 @@ $$\text{MSI} = \frac{\text{Killed} + \text{TimedOut}}{\text{Total} - \text{Equiv
      验证切片大小（$\le 3$ 文件、50–250 行）、DAG 无环、Given-When-Then BDD 结构无缺失。
   3. **圈复杂度门禁**：
      ```bash
-     python .agents/skills/quality-engineering/scripts/complexity_check.py --json
+     python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src --json
      ```
-     由 `quality-engineering` 提供的静态分析脚本对 PR 中新增/修改的每个函数执行控制流复杂度计算，若存在 $V(G) > 10$ 则告警，存在 $V(G) > 15$ 则直接构建失败。
-  4. **验收与集成测试套件全量跑通**：执行 `tests/acceptance/**` 与 `tests/integration/**` 用例，必须 100% 通过。
-  5. **变异测试杀伤力审计（MSI $\ge 80\%$）**：针对 `touch_files` 执行变异测试，未能有效击杀变异体则构建失败。
-  6. **Gate 3 验收证据静态审计**：
+     由 `quality-engineering` 提供的静态分析脚本对源码执行控制流复杂度计算，若存在 $V(G) > 10$ 则告警，存在 $V(G) > 15$ 则直接构建失败。没有 `src/` 且未显式传 `--src-dir` 时退出码为 2（fail-closed），不会静默扫描 `.`。
+  4. **验收与集成测试套件全量跑通**：模板先安装项目依赖并做 collection 探针，再执行 `tests/acceptance/**`；pytest 可用时产出 JUnit XML，否则回退 unittest。
+  5. **变异测试硬门禁（MSI $\ge 80\%$）**：主干 push 时由 `tools/mutation_gate.py` 执行项目 `MUTATION_COMMAND` 并校验归一化报告；命令/报告缺失或 MSI 不足均 fail-closed。PR 阶段 Gate 3 仍审计 QA 记录的证据。
+  6. **Gate 3 验收证据交叉核验**：
      ```bash
-     python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir tasks --strict --json
+     python .agents/skills/quality-engineering/scripts/verification_linter.py \
+       --tasks-dir tasks \
+       --actual-complexity artifacts/complexity-report.json \
+       --require-actual-complexity --strict --json
      ```
-     严格核查 `03-qa-verification.md` 中圈复杂度与变异得分表格的存在性与合法性。
-  7. **Gate 2 Reviewer 语义签署**：由具有审查权限的只读 Agent 或人工 Reviewer 审查无误后签署 PASS。
+     将 `03` Section 3 的 V(G) 与真实 AST artifact 逐函数核对；缺失函数、伪造函数、V(G) 不一致都会失败。任一变异表不合规也会失败。
+  7. **Gate 2 Reviewer 语义签署**：由具有审查权限的只读 Agent 或人工 Reviewer 审查后签署 PASS；这是人工/分支保护步骤，不是模板里的 CI job。
 
 ### 6.4 阶段四：代码合并后测试（Post-merge & Staging / Release — quality-engineering 流水线）
 - **目标**：合并入主干后的全局完整性维护与技术规格闭环。
 - **执行内容**：
   1. **主干全量回归测试**：在主干执行全部服务、模块与集成验收用例，防止不同分支并发合并产生隐式破坏；
-  2. **自动化触发规格收敛（Converge）**：
+  2. **规格收敛（Converge，手动/可选）**：
      ```bash
      python .agents/skills/converge/scripts/converge.py apply --task tasks/<task-id>
      ```
-     自动将 Dev 记录在 `02` 中的偏差表以追加模式写回 `.specs/02-tech-spec.md`，更新状态至 `CONVERGED`，并将任务包归档至 `tasks/archive/`；
+     将 Dev 记录在 `02` 中的偏差表以追加模式写回 `.specs/02-tech-spec.md`，更新状态至 `CONVERGED`，并将任务包归档至 `tasks/archive/`。当前 `quality-gate.yml` **没有**自动 converge job，需要显式触发；
   3. **基线更新与性能跟踪**：全量更新仓库变异测试基线与 Benchmark 性能指标。
 
 ### 6.5 CI 权威强制门禁实战指南
@@ -501,52 +506,70 @@ $$\text{MSI} = \frac{\text{Killed} + \text{TimedOut}}{\text{Total} - \text{Equiv
 仓库在 `templates/ci/` 提供了开箱即用的 GitHub Actions 门禁模板：
 
 ```yaml
-# templates/ci/quality-gate.yml
-name: Quality Engineering Gate (Authoritative)
+# templates/ci/quality-gate.yml (simplified; see the template for full steps)
+name: Quality Engineering Gate
 
 on:
   pull_request:
-    branches: [main]
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main, master]
 
 permissions:
   contents: read
 
 jobs:
-  quality-gate:
+  gate1-plan-linter:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks --spec .specs/02-tech-spec.md --json
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
+  rbac-audit:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: {fetch-depth: 0}
+      - run: python tools/rbac_audit.py --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --tasks-dir tasks --json
 
-      - name: 1. RBAC Role Audit (Authoritative L1)
-        run: |
-          python tools/rbac_audit.py --base ${{ github.event.pull_request.base.sha }} \
-            --head ${{ github.event.pull_request.head.sha }} --tasks-dir tasks --json
+  complexity-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src --json > artifacts/complexity-report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: complexity-report, path: artifacts/complexity-report.json}
 
-      - name: 2. Gate 1 - Plan Linter & BDD Validation
-        run: |
-          python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks \
-            --spec .specs/02-tech-spec.md --json
+  acceptance-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python -m pip install -r requirements.txt   # when present
+      - run: python -m pytest --collect-only -q tests/acceptance
+      - run: python -m pytest tests/acceptance -q --junitxml=artifacts/acceptance-junit.xml
 
-      - name: 3. Static Cyclomatic Complexity Check (Tree-sitter / Lizard Multi-Language Engine)
-        run: |
-          pip install "tree-sitter<0.22" tree-sitter-languages lizard
-          python .agents/skills/quality-engineering/scripts/complexity_check.py --json
-
-      - name: 4. Run Acceptance Tests
-        run: |
-          python -m pytest tests/acceptance/
-
-      - name: 5. Gate 3 - QA Verification Linter (Complexity & MSI Audit)
-        run: |
-          python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir tasks --strict --json
+  gate3-verification:
+    runs-on: ubuntu-latest
+    needs: [gate1-plan-linter, rbac-audit, complexity-gate, acceptance-tests]
+    if: |
+      always() &&
+      needs.gate1-plan-linter.result == 'success' &&
+      needs.complexity-gate.result == 'success' &&
+      needs.acceptance-tests.result == 'success' &&
+      (needs.rbac-audit.result == 'success' || needs.rbac-audit.result == 'skipped')
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: {name: complexity-report, path: artifacts}
+      - run: |
+          python .agents/skills/quality-engineering/scripts/verification_linter.py \
+            --tasks-dir tasks \
+            --actual-complexity artifacts/complexity-report.json \
+            --require-actual-complexity --strict --json
 ```
 
 #### 一键集成到新仓库
@@ -582,10 +605,11 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
 
 ### 7.3 `review`（Gate 2 语义审查门禁）
 - **核心定位**：只读 Reviewer 独立执行防幻觉、正向覆盖率与 ADR 红线审查。
-- **两种模式**：
+- **模式**：
   - **Plan Review**：审查任务切片是否完整覆盖 PRD/规格，是否发明未定义实体；
-  - **Code Review**：审查 Dev 提交的代码变更是否超出契约爆炸半径，是否遵守 ADR。
-- **裁决**：输出包含行号证据的审计发现，给出唯一裁决（`PASS` / `REQUEST CHANGES` / `BLOCKED`）。
+  - **Code Review**：审查 Dev 提交的代码变更是否超出契约爆炸半径，是否遵守 ADR；
+  - **Arbitration**：当 Dev 在 `02` Section 6 提交 Appeal Request 时，独立裁决 `CODE_BUG` / `TEST_BUG` / `SPEC_AMBIGUITY`（见 `review/references/arbitration.md`）。
+- **裁决**：输出包含行号证据的审计发现；普通审查给出 `PASS` / `REQUEST CHANGES` / `BLOCKED`，仲裁给出上述三类之一。
 
 ### 7.4 `dev`（开发角色）
 - **核心职责**：在契约白名单内高质量实现业务，控制复杂度。
@@ -605,7 +629,8 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
   - **自主调用 review 技能**：自行决定调用 `review` skill 评估代码可读性、代码规范与可维护性；
   - **变异测试杀伤力基线**：针对不同项目栈自主引入知名工具（`mutmut`、`Stryker`、`go-mutesting`、`PITest`、`cargo-mutants`），击杀存活弱断言，确保 $\text{MSI} \ge 80\%$（核心模块 $\ge 90\%$）且无关键逻辑变异体存活；
   - 在 `03` 中记录完整执行证据与度量表，二选一勾选 `QA_PASSED` 或 `REWORK_REQUIRED`；
-  - 本地运行 Gate 3 静态审计（由 `quality-engineering` 提供的 `verification_linter.py`）确认合规后签署。
+  - **证据 provenance**：Section 5 记录真实 artifact 路径与 SHA-256；`Equivalent > 0` 时填写等价理由；`01-contract.md` 的 `risk_level: core` 任务使用 90% MSI 阈值；
+  - 本地运行 Gate 3 静态审计（由 `quality-engineering` 提供的 `verification_linter.py`）确认合规后签署；收到 Appeal 时先等待仲裁，不要单方面再次 `REWORK_REQUIRED`。
 
 ### 7.6 `quality-engineering`（CI 流水线构建与多阶段测试门禁）
 - **核心职责**：构建 CI 流水线，确保测试环境隔离与就绪，管理代码合并前测试与合并后测试，权威拥有并维护全套 CI 工作流模板与 CI 门禁脚本（`complexity_check.py`、`verification_linter.py`、`quality-gate.yml` 等）。
@@ -616,9 +641,9 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
     2. RBAC 角色越权审计（拦截 Dev 改测试、QA 改源码）；
     3. 圈复杂度静态门禁（调用基于 Tree-sitter / Lizard 多语言解析的 `complexity_check.py` 严格校验 $V(G) \le 10$，拦截 $V(G) > 15$）；
     4. 验收与集成测试套件执行（100% 通过要求）；
-    5. Gate 3 验收静态审查（调用 `verification_linter.py` 严格核查 `03` 中的基本路径覆盖与 MSI $\ge 80\%$ 变异证据）。
-  - **代码合并后测试（Post-merge 流水线）**：主干合入后执行全量主干回归测试、自动化触发规格收敛（Converge）、持续追踪变异基线与性能 Benchmark；
-  - **CI 资产与工具唯一归属**：权威维护 CI 工作流模板（`quality-gate.yml`、`plan-gate.yml`、`rbac-gate.yml`）与确定性门禁检查工具（`complexity_check.py`、`verification_linter.py`）。
+    5. Gate 3 验收交叉审查（调用 `verification_linter.py --actual-complexity ... --require-actual-complexity`，将 `03` 的 V(G) 与真实 AST artifact 核对，并核查基本路径覆盖与 MSI $\ge 80\%$，core 为 90%）。
+  - **代码合并后测试（Post-merge 流水线）**：主干合入后执行全量主干回归测试、按需手动触发规格收敛（Converge）、持续追踪变异基线与性能 Benchmark；
+  - **CI 资产与工具唯一归属**：权威维护 CI 工作流模板（`quality-gate.yml`、`plan-gate.yml`、`rbac-gate.yml`）与确定性门禁检查工具（`complexity_check.py`、`verification_linter.py`、`tools/mutation_gate.py`）。
 
 ### 7.7 `converge`（规格收敛）
 - **核心职责**：在任务达到 `QA_PASSED` 后，闭环写回规格并归档。
@@ -671,11 +696,14 @@ tasks/<task-id>/
 | 故障现象 | 根因分析 | 推荐处理步骤 |
 | :--- | :--- | :--- |
 | Gate 1 报 `BDD_MISSING_PRECONDITION` / `BDD_MISSING_ACTION` | `01-contract.md` 中 `edge_cases` 未严格遵循 Given-When-Then 格式 | 检查每条 edge_case，修正为 `"Given ..., When ..., Then ..."` 三段式 |
-| Gate 1 报 `TOUCH_FILE_FORBIDDEN` | `touch_files` 中包含了 `tests/acceptance/` | 移除验收测试路径，验收测试专属于 QA 角色 |
-| Gate 3 报 `COMPLEXITY_MISSING_SECTION` / `COMPLEXITY_EMPTY_TABLE` | 勾选了 `QA_PASSED` 但 `03` 未包含或未填复杂度表 | 在 `03` 第 3 节填写修改函数的圈复杂度与路径映射 |
-| Gate 3 报 `BASIS_PATH_DEFICIT` | 验收测试用例数量少于函数圈复杂度 $V(G)$ | 补充独立路径的黑盒测试用例，使 $\text{用例数} \ge V(G)$ |
-| Gate 3 报 `MUTATION_SCORE_BELOW_THRESHOLD` | 变异得分低于 80%（$\text{MSI} < 80\%$） | 检查未杀伤的变异体，消除弱断言，补充强校验断言并重新变异 |
-| CI RBAC 报 `DEV_TOUCHED_ACCEPTANCE_TESTS` | Dev 提交的变更中包含了验收测试文件 | 将验收测试从 Dev 提交中剥离，交由 QA 编写 |
+| Gate 1 报 `FORBIDDEN_TOUCH_FILE` | `touch_files` 中包含了 `tests/acceptance/` | 移除验收测试路径，验收测试专属于 QA 角色 |
+| Gate 3 报 `COMPLEXITY_MISSING_SECTION` | 勾选了 `QA_PASSED` 但 `03` 未包含或未填复杂度表 | 在 `03` 第 3 节填写修改函数的圈复杂度与路径映射 |
+| Gate 3 报 `COMPLEXITY_BASIS_PATH_INSUFFICIENT` | 验收测试用例数量少于函数圈复杂度 $V(G)$ | 补充独立路径的黑盒测试用例，使 $\text{用例数} \ge V(G)$ |
+| Gate 3 报 `COMPLEXITY_MISMATCH_WITH_AST` / `COMPLEXITY_FUNCTION_MISSING_IN_03` | `03` 的 V(G) 与真实 AST 不一致，或漏列了 touch_files 中的函数 | 用 `complexity_check.py --json` 的 `functions` 重填 Section 3 |
+| Gate 3 报 `QA_INVALID_MSI_SCORE` | 变异得分低于 80%（core 为 90%） | 检查未杀伤的变异体，消除弱断言，补充强校验断言并重新变异 |
+| Gate 3 报 `EVIDENCE_MISSING_ARTIFACT` / `EVIDENCE_HASH_INVALID` | 开启了 provenance 但 artifact 路径/哈希缺失或不匹配 | 在 `03` Section 5 写入真实 artifact 路径与 SHA-256 |
+| CI RBAC 报 `DEV_EDITED_ACCEPTANCE_TESTS` / `QA_EDITED_SOURCE` | Dev 改了验收测试或 QA 改了源码 | revert 越权改动，按角色边界重新提交 |
+| 变异 job 报 `MUTATION_REPORT_MISSING` / `MUTATION_THRESHOLD_FAILED` | `MUTATION_COMMAND` 未配置/未生成报告，或 MSI 不足 | 配置归一化报告；击杀存活变异体直到 MSI 达标 |
 | `converge` 拒绝执行（exit 1） | `03` 未勾选 `QA_PASSED`，或 `02` 偏差表为空 | 确保 QA 验收通过，并在 `02` 偏差表中写明偏差记录（无偏差填 `None` 行） |
 
 ---
@@ -691,14 +719,19 @@ python -m unittest discover -s tests/unit -p "test_*.py"
 # 2. 运行 Gate 1 规划期静态检查
 python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks --json
 
-# 3. 运行圈复杂度静态检查（McCabe V(G) <= 10）
-python .agents/skills/quality-engineering/scripts/complexity_check.py --json
+# 3. 运行圈复杂度静态检查（McCabe V(G) <= 10；无 src/ 时需显式传 --src-dir）
+python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src --json
 
-# 4. 运行 Gate 3 验收期静态检查
-python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir tasks --strict --json
+# 4. 运行 Gate 3 验收期静态检查（--actual-complexity 用于交叉核验）
+python .agents/skills/quality-engineering/scripts/verification_linter.py \
+  --tasks-dir tasks --actual-complexity artifacts/complexity-report.json \
+  --require-actual-complexity --strict --json
 
 # 5. 运行 RBAC 角色边界审计
 python tools/rbac_audit.py --base HEAD~1 --role dev --tasks-dir tasks
+
+# 6. 运行变异硬门禁（需要项目提供 MUTATION_COMMAND 与归一化报告）
+python tools/mutation_gate.py check --report artifacts/mutation-report.json --min-msi 80
 ```
 
 ---
@@ -709,6 +742,7 @@ python tools/rbac_audit.py --base HEAD~1 --role dev --tasks-dir tasks
 - [技能类别索引（skills/README.md）](../skills/README.md)
 - [Brownfield 增量变更与规格收敛指南](brownfield-convergence.zh-CN.md)
 - [CI 自动化门禁配置与工作流模板](../templates/ci/README.md)
+- [门禁加固改造执行手册](skills-remediation.zh-CN.md)
 - [宿主兼容性与工具安装指南](skills-compatibility.md)
 - [角色规则与权威强制模型](../.agents/rules/enforcement.md)
 

@@ -103,12 +103,13 @@ uv run tools/quickstart.py --target ../adopting-repo --copy --with-ci
 ```
 
 It installs skills into `--dest` (default `.agents/skills/`), the rules,
-`tools/rbac_audit.py`, and, with `--with-ci`, the GitHub Actions workflows from
-`templates/ci/`: `rbac-gate.yml` (L1 RBAC audit on every pull request),
+`tools/rbac_audit.py`, `tools/mutation_gate.py`, and, with `--with-ci`, the GitHub Actions workflows
+from `templates/ci/`: `rbac-gate.yml` (L1 RBAC audit on every pull request),
 `plan-gate.yml` (Gate 1 on `tasks/**` and `.specs/**` changes), and `quality-gate.yml`
-(multi-stage quality gate owned by `quality-engineering`: Gate 1, RBAC, complexity check,
-acceptance tests, and Gate 3 audit). All workflows need only `permissions: contents: read`;
-`rbac-gate.yml` and `quality-gate.yml` also need `fetch-depth: 0`. The audit
+(multi-stage quality gate owned by `quality-engineering`: Gate 1, RBAC, complexity artifact,
+acceptance tests + JUnit, Gate 3 cross-validation, and the fail-closed mutation gate). All workflows
+need only `permissions: contents: read`; `rbac-gate.yml` and `quality-gate.yml` also need
+`fetch-depth: 0`. The audit
 workflow resolves the role from the repository variable `RBAC_ROLE` or from the
 `Agent-Role:` commit trailer. Installation, pinning and troubleshooting are documented
 in `templates/ci/README.md`.
@@ -124,7 +125,7 @@ layered, and only the lower layers are authoritative:
 | Layer | Mechanism | Scope | Guarantee |
 | :--- | :--- | :--- | :--- |
 | L0 | Prompt rules (`AGENTS.md`, role rules) and skill instructions | every harness | advisory |
-| L1 | `tools/rbac_audit.py` in CI (git diff + declared role) | any git repository | authoritative for committed changes |
+| L1 | `tools/rbac_audit.py` and `tools/mutation_gate.py` in CI (git diff + declared role; fail-closed mutation report) | any git repository | authoritative for committed changes |
 | L2 | Branch protection, required reviewers, CODEOWNERS | repository settings | authoritative |
 
 Prompt rules are **not** physical enforcement. The authoritative protection is L1 plus repository
@@ -142,11 +143,13 @@ global CLI.
 | No Python, no engine | Full prompt workflow; manual fallback in each SKILL.md |
 | Python, no engine | scaffold/lint helpers work; `scripts/engine.py` exits `2` with install guidance |
 | Engine installed | `engine.py` forwards to the engine; scaffold/lint still work |
-| CI | Gates run with the engine installed or with the stdlib helpers |
+| CI | Gates run with the optional multi-language engines installed, or with the stdlib fallback |
 
 ## Helper contract
 
-All bundled helpers are stdlib-only Python (`>=3.9`), resolve paths from their own
+Bundled helpers are stdlib-only Python (`>=3.9`) with one deliberate exception:
+`complexity_check.py` optionally imports `tree-sitter`/`lizard` for multi-language AST analysis and
+falls back to the Python `ast` engine. All helpers resolve paths from their own
 location, never write outside their output directory, and support `--help` and
 `--version`.
 

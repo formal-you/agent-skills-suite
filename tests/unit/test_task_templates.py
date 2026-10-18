@@ -142,6 +142,48 @@ class TemplateStructureTests(unittest.TestCase):
                     if marker in line:
                         self.assertTrue(stripped.startswith("- [ ]"), f"unexpected marker line: {line}")
 
+    def test_qa_template_records_provenance_and_equivalent_justification(self) -> None:
+        qa = template_text("03-qa-verification.template.md")
+        self.assertIn("| Equivalent mutant justification |  |", qa)
+        for field in (
+            "| Artifact path |  |",
+            "| Artifact SHA-256 |  |",
+            "| Tool version |  |",
+            "| Timestamp (UTC) |  |",
+        ):
+            self.assertIn(field, qa, "missing Section 5 provenance row: " + field)
+        # The Section 3/4 main table columns stay frozen for the Gate 3 parser.
+        self.assertIn(
+            "| Target Source File | Mutation Tool / Recipe | Total Mutants | Killed | Survived | "
+            "Timeout | Equivalent | MSI (%) | Pass/Fail (>=80%) |",
+            qa,
+        )
+        self.assertIn(
+            "| Function / Module | Cyclomatic Complexity V(G) | Independent Basis Paths | "
+            "Test Case IDs | Compliance (<=10) |",
+            qa,
+        )
+
+    def test_contract_template_declares_optional_risk_level(self) -> None:
+        frontmatter = extract_frontmatter(template_text("01-contract.template.md"))
+        self.assertRegex(frontmatter, r"(?m)^risk_level: standard\b")
+        self.assertIn("standard | core", frontmatter)
+
+    def test_dev_template_has_optional_appeal_block(self) -> None:
+        dev = template_text("02-dev-workspace.template.md")
+        self.assertIn("## 6. Appeal Request", dev)
+        for key in (
+            "appeal_id:", "target_case:", "spec_anchor:", "reason:", "evidence:", "requested_verdict:",
+        ):
+            self.assertIn(key, dev, "appeal block misses: " + key)
+        self.assertIn("CODE_BUG | TEST_BUG | SPEC_AMBIGUITY", dev)
+        self.assertNotIn('appeal_id: "AP-', dev, "appeal block must be empty by default")
+
+    def test_process_template_has_no_appeal_sample_events(self) -> None:
+        text = template_text("04-process.template.md")
+        for code in ("APPEAL_RAISED", "APPEAL_RESOLVED"):
+            self.assertNotIn(code, text, "appeal event code must not ship in the 04 template: " + code)
+
     def test_process_event_table_is_header_and_separator_only(self) -> None:
         text = template_text("04-process.template.md")
         lines = text.splitlines()
@@ -405,6 +447,25 @@ class SkillAndRulesTests(unittest.TestCase):
         orchestrator = read_text(RULES_DIR / "orchestrator.md")
         for needle in ("PRD → spec → task bundles", "Gate 1", "Gate 2", "one owner", "Must not"):
             self.assertIn(needle, orchestrator, "orchestrator rule misses: " + needle)
+
+    def test_dev_protocol_and_qa_protocol_cover_appeals(self) -> None:
+        dev_protocol = read_text(ROOT / ".agents" / "skills" / "dev" / "references" / "dev-protocol.md")
+        for needle in ("When to appeal", "When not to appeal", "Never special-case test values", "spec anchor"):
+            self.assertIn(needle, dev_protocol, "dev protocol appeal guidance misses: " + needle)
+        qa_protocol = read_text(ROOT / ".agents" / "skills" / "qa" / "references" / "qa-protocol.md")
+        self.assertIn("Appeal hold", qa_protocol)
+        self.assertIn("do not re-issue", qa_protocol.lower())
+        self.assertIn("wait for the independent arbitration decision", qa_protocol)
+
+    def test_orchestrator_routes_appeals_and_lifecycle_defines_events(self) -> None:
+        orchestrator = read_text(RULES_DIR / "orchestrator.md")
+        for needle in (
+            "Appeal", "CODE_BUG", "TEST_BUG", "SPEC_AMBIGUITY", "independent reviewer", "circuit break",
+        ):
+            self.assertIn(needle, orchestrator, "orchestrator appeal routing misses: " + needle)
+        lifecycle = read_text(SKILL_DIR / "references" / "role-lifecycle.md")
+        for code in ("APPEAL_RAISED", "APPEAL_RESOLVED"):
+            self.assertIn(code, lifecycle, "role lifecycle misses event code: " + code)
 
     def test_agent_rules_documents_enforcement_layers(self) -> None:
         text = read_text(AGENT_RULES_MD)

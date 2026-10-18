@@ -88,16 +88,28 @@ On `REWORK_REQUIRED`:
 4. Tooling increments `retry_count` (capped by the configured limit). A task that keeps failing is a
    planning or scope problem: escalate instead of bypassing the contract.
 
+### 5.1 Appeal path
+
+`REWORK_REQUIRED` is not the only legal response to a disputed verdict. Dev may complete the
+`appeal` block in `02-dev-workspace.md` Section 6 with a `requested_verdict` of `CODE_BUG`,
+`TEST_BUG` or `SPEC_AMBIGUITY`. The orchestrator then routes the task to an independent reviewer
+(arbitration mode of `review`), not back to Dev; `03` and the tests stay untouched until the decision.
+A second appeal on the same task, or a third `REWORK_REQUIRED`, breaks the loop to the Planner/human
+instead of continuing the ping-pong.
+
 ## 6. `04-process.md` event contract
 
-Only a **real checked checkbox line** is a trigger. A bare token in prose, an unchecked box or a
-template instruction is not. Each event is appended once per task and code (idempotent).
+Only a **real checked checkbox line**, or a **completed Appeal Request block** in `02`, is a trigger.
+A bare token in prose, an unchecked box or a template instruction is not. Each event is appended once
+per task and code; appeal events additionally key on `appeal_id` (idempotent).
 
-| Checked marker | Event code | `macro_status` | `current_lock_holder` | Retry |
+| Checked marker or completed block | Event code | `macro_status` | `current_lock_holder` | Retry |
 | :--- | :--- | :--- | :--- | :--- |
 | `- [x] WAITING_FOR_QA` in `02` | `HANDOFF_QA_REQUESTED` | `VERIFYING` | `QAAgent` | unchanged |
 | `- [x] QA_PASSED` in `03` | `TASK_TERMINATED_DONE` | `DONE` | `None` | unchanged |
 | `- [x] REWORK_REQUIRED` in `03` | `REWORK_TRIGGERED` | `REWORKING` | `DevAgent` | +1, capped |
+| Completed `appeal` block in `02` Section 6 | `APPEAL_RAISED` | `REWORKING` | `ReviewerAgent` | unchanged |
+| Arbitration decision recorded by the orchestrator | `APPEAL_RESOLVED` | `REWORKING` (`BLOCKED` for `SPEC_AMBIGUITY`) | `DevAgent` / `QAAgent` / `PlannerAgent` | unchanged |
 
 Event rows use the table columns: event ID (`EV-AUTO`), timestamp (UTC), event code, actor, payload
 and duration. `micro_phase` and `last_heartbeat` are tooling-owned; they are never inferred from prose.
@@ -122,6 +134,8 @@ git history remain the source of truth.
 - **Missing upstream document**: stop and report it; do not reconstruct it from memory.
 - **Ambiguity**: record an open question in `01` notes and ask the Planner/owner; do not invent.
 - **Out-of-scope edit needed**: split the task or escalate; never edit outside `touch_files`.
+- **Disputed QA verdict**: complete the `02` Section 6 appeal block; do not patch code around the
+  test and do not lower the bar.
 - **No tooling/Python**: use the manual checklists in `SKILL.md` and this reference; the workflow must
   not depend on optional tooling.
 - **Tool failure**: report the command and exit code; never hand-edit `04` to "fix" it.
