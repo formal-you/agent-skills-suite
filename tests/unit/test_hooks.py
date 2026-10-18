@@ -74,6 +74,9 @@ class RbacGuardTests(unittest.TestCase):
         result = run_hook(RBAC, antigravity_payload(target), env_extra={"AGENT_ROLE": "dev"})
         self.assert_denied(result)
 
+    @unittest.skipUnless(
+        os.name == "nt", "backslash paths are a Windows-only input; POSIX harnesses send slashes"
+    )
     def test_dev_windows_backslash_acceptance_denied(self):
         target = str(REPO_ROOT).replace("/", "\\") + "\\tests\\acceptance\\test_login.py"
         result = run_hook(RBAC, antigravity_payload(target), env_extra={"AGENT_ROLE": "dev"})
