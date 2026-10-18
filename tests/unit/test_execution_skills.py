@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SKILLS = ROOT / ".agents" / "skills"
 EXEC_SKILLS = ("dev", "qa")
+EXPECTED_VERSIONS = {"dev": "2.0.0", "qa": "2.1.0"}
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 ABS_PATH_MARKERS = ("D:\\", "C:\\", "/home/", "/Users/")
 
@@ -41,7 +42,11 @@ class ExecutionSkillStructureTests(unittest.TestCase):
             self.assertRegex(fm, r'(?m)^description: ".+Use when .+Do not use .+"$')
             self.assertIn("license:", fm)
             self.assertIn("compatibility:", fm)
-            self.assertRegex(fm, r'(?m)^\s+version: "2\.0\.0"$')
+            self.assertRegex(
+                fm,
+                r'(?m)^\s+version: "' + re.escape(EXPECTED_VERSIONS[name]) + r'"$',
+                name + " version must be " + EXPECTED_VERSIONS[name],
+            )
             self.assertRegex(fm, r"(?m)^\s+category: execution$")
 
     def test_skills_stay_compact(self) -> None:

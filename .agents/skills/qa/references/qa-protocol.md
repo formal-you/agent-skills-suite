@@ -46,6 +46,39 @@ QA must author and execute acceptance tests using well-known, idiomatic open-sou
 - **Rust**: `cucumber-rs` (`cargo test --test cucumber`)
 - **C# / .NET**: `Reqnroll`, `SpecFlow` (`dotnet test --filter Category=Acceptance`)
 
+### 2.3 Test design summary
+
+Before executing any test, record the test-design basis for this task in Section 2.1 of
+`03-qa-verification.md`. The summary is a design record; it is not a verdict and it does not replace
+the matrix.
+
+| Field | What to record |
+| :--- | :--- |
+| Strategy reference | Project-relative path and version of the repository test strategy document, or `baseline` when no strategy exists |
+| Risk level / critical risks | Contract risk class (`standard` or `core`) and the critical risks the matrix must cover |
+| Techniques used (and why) | Equivalence, boundary, decision table, state transition, pairwise, property-based, or mutation-aided design, with one line on why each applies |
+| Environment / data / test doubles | Environment topology, data class and seed, allowed test doubles, and substituted external dependencies |
+| Out of scope / non-goals | Risks, levels, or behaviors deliberately not tested for this task, with the reason |
+
+A summary that is empty, or that states `baseline` without a reason, is an incomplete handoff; record
+why no strategy applies.
+
+#### Strategy conflicts and escalation
+
+The repository test strategy is authoritative for global test standards; the task contract is
+authoritative for this task's expected behavior. When they conflict:
+
+- A missing or unreadable strategy is not a conflict: record `baseline` and apply the contract-derived
+  minimum.
+- If the strategy requires a stricter level, technique, threshold, or data policy than the contract,
+  follow the stricter rule unless the contract explicitly forbids it, and note the choice in Section 8.
+- If the contract requires behavior or evidence that the strategy forbids, do not silently override
+  either source. Record the conflict in Section 8 and escalate it as `SPEC_AMBIGUITY` to the
+  Planner/human (the contract owner) before issuing a verdict; hold the verdict until the ambiguity is
+  resolved.
+- If the conflict is a test-design gap rather than a specification gap, request an independent
+  test-design review from the repository test-engineering role instead of weakening the matrix.
+
 ## 3. Complexity, static code analysis, and basis path testing
 
 ### 3.1 Static Code Analysis & Linting

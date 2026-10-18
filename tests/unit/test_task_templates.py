@@ -164,6 +164,32 @@ class TemplateStructureTests(unittest.TestCase):
             qa,
         )
 
+    def test_qa_template_records_test_design_summary(self) -> None:
+        qa = template_text("03-qa-verification.template.md")
+        self.assertIn("### 2.1 Test design summary", qa)
+        self.assertIn("### 2.2 Test matrix", qa)
+        self.assertLess(
+            qa.index("### 2.1 Test design summary"),
+            qa.index("### 2.2 Test matrix"),
+            "the test design summary must precede the test matrix",
+        )
+        summary = qa.split("### 2.1 Test design summary", 1)[1].split("### 2.2 Test matrix", 1)[0]
+        for field in (
+            "Strategy reference",
+            "Risk level",
+            "Technique",
+            "Environment",
+            "Out of scope",
+        ):
+            self.assertIn(field, summary, "test design summary misses: " + field)
+        # Section 3/4/5 headings stay frozen for the Gate 3 parser.
+        for heading in (
+            "## 3. Complexity and basis path coverage",
+            "## 4. Mutation testing and MSI audit",
+            "## 5. Execution evidence",
+        ):
+            self.assertIn(heading, qa)
+
     def test_contract_template_declares_optional_risk_level(self) -> None:
         frontmatter = extract_frontmatter(template_text("01-contract.template.md"))
         self.assertRegex(frontmatter, r"(?m)^risk_level: standard\b")
