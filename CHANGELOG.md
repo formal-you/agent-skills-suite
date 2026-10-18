@@ -5,6 +5,33 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.4] - 2026-10-19
+
+### Added
+
+- **User-facing docs index**: `docs/README.md` provides the reading order and a table of current
+  guides, with the historical material explicitly separated.
+- **Gate 3 pre-check guide**: `docs/gate3-precheck.zh-CN.md` documents the QA-local command, flags,
+  exit codes, limits and the CI-authoritative boundary.
+- **Archive index**: `docs/archive/README.md` and a historical banner on the archived remediation
+  document.
+
+### Changed
+
+- Updated all current docs to link the archived remediation document under `docs/archive/` instead
+  of the moved root path.
+- `docs/skills-benchmark.zh-CN.md` is now explicitly labelled a v3.1.0 baseline snapshot and records
+  the current v3.4.3 test status; stale counts and next-step wording were corrected.
+- `docs/skills-compatibility.md` documents the QA bundled `verification_linter.py` and its parity
+  with the quality-engineering canonical copy.
+- Root `README.md` now points at the docs index, Gate 3 guide and archive.
+
+### Fixed
+
+- Removed stale links to the moved `docs/skills-remediation.zh-CN.md` from the guide, compatibility
+  and CI-profile docs.
+- Removed the ambiguity between the v3.1.0 benchmark baseline and the current implementation.
+
 ## [3.4.3] - 2026-10-19
 
 ### Changed

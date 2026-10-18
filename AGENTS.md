@@ -146,5 +146,4 @@ git diff --check
 - `CONTRIBUTING.md` — contributor setup, tests and PR conventions.
 - `docs/skills-guide.zh-CN.md`, `docs/brownfield-convergence.zh-CN.md`,
   `docs/skills-compatibility.md` — usage, convergence and harness compatibility.
-- `docs/testing-strategy.md` — the suite's own test-strategy seed; `docs/skills-remediation.zh-CN.md`
-  — hardening work packages and evidence.
+- `docs/README.md` — user-facing docs index; `docs/archive/` — historical notes (not current rules).
