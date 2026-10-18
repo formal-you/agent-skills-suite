@@ -1,7 +1,7 @@
 # 多语言 CI 参考模板（Stack Profiles）
 
 > 适用对象：使用 `quality-engineering` skill 搭建/调整 CI 的 Agent 与工程师。
-> 关联文档：[CI 门禁模板说明](../templates/ci/README.md)、[技能使用指南](skills-guide.zh-CN.md)、[门禁加固手册](skills-remediation.zh-CN.md)。
+> 关联文档：[CI 门禁模板说明](../templates/ci/README.md)、[技能使用指南](skills-guide.zh-CN.md)、[文档索引](README.md)。门禁加固的历史记录见 [archive/skills-remediation.zh-CN.md](archive/skills-remediation.zh-CN.md)（历史，不是当前规范）。
 
 ## 1. 为什么不是"一个 YAML 适配所有项目"
 

@@ -1,5 +1,9 @@
 # Agent Skills v3 加固改造执行手册
 
+> **ARCHIVED / 历史文档**：本文记录 v3.2.0 前后的加固工作，不是当前使用说明或门禁规范；链接和
+> 命令可能已失效。当前文档入口见 [`../README.md`](../README.md)，当前行为以技能、脚本、
+> [`../../AGENTS.md`](../../AGENTS.md) 和 [`../../CHANGELOG.md`](../../CHANGELOG.md) 为准。
+>
 > **读者**：执行型 LLM Agent（低级/中等能力模型）。读完本文后，你应当直接修改仓库，而不是再写一份设计方案。
 > **基线**：`VERSION` = `3.1.0`；单元测试基线 `312 passed, 1 skipped`。
 > **输入材料**：[技能使用指南](skills-guide.zh-CN.md)（现状介绍）与 [其他 Agent 点评结果](../其他agent点评结果.md)（待评估的外部点评）。

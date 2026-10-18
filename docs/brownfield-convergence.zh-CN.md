@@ -362,6 +362,8 @@ python tools/quickstart.py --target ../another-repo --copy --with-ci
 
 ## 9. 相关文档
 
+- [文档索引](README.md)
+- [Gate 3 本地预检](gate3-precheck.zh-CN.md)
 - [技能索引（英文）](../.agents/skills/README.md)
 - [技能使用指南（v2 基础流程）](skills-guide.zh-CN.md)
 - [宿主兼容 / 安装 / 分发](skills-compatibility.md)

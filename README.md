@@ -1,8 +1,8 @@
-# Agent Skills Suite v3.4.3
+# Agent Skills Suite v3.4.4
 
 [![CI](https://github.com/formal-you/agent-skills-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/formal-you/agent-skills-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.4.3-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.4.4-blue.svg)](CHANGELOG.md)
 
 Eleven prompt-first, harness-neutral skills that turn an idea or an existing codebase into
 planned, reviewed, implemented and spec-converged work - plus the rules, helper scripts and
@@ -131,12 +131,15 @@ python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks   -
 
 - `AGENTS.md` - always-loaded rules plus the canonical skill-change and git-flow workflow
 - `CONTRIBUTING.md` - contributor setup, tests and PR conventions
+- `docs/README.md` - docs index and recommended reading order
 - `docs/skills-guide.zh-CN.md` - how the eleven skills work and how to use them
 - `docs/testing-strategy.md` - the suite's own seed test strategy (example; adopters generate their own from the skill template)
+- `docs/gate3-precheck.zh-CN.md` - QA local Gate 3 pre-check: commands, flags, exit codes and CI boundary
 - `docs/brownfield-convergence.zh-CN.md` - change proposals, convergence and Gate 2 heuristics
 - `docs/skills-compatibility.md` - harness discovery, installation, enforcement layers
 - `docs/ci-stack-profiles.zh-CN.md` - Python/Node/Go/Java/Rust/.NET/C++ CI profile adoption
-- `docs/skills-benchmark.zh-CN.md` - scorecard versus open-source alternatives
+- `docs/skills-benchmark.zh-CN.md` - v3.1.0 baseline scorecard versus open-source alternatives
+- `docs/archive/` - historical design/remediation notes, not current rules
 - `.agents/rules/enforcement.md` - role write scopes and the honest enforcement model
 
 ## Development
