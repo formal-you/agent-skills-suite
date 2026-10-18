@@ -36,7 +36,7 @@ override. If an action is outside your write scope, escalate to the owner instea
 
 - Planner — `.agents/rules/planner.md`: creates task bundles; never writes source, tests or `04`.
 - Dev — `.agents/rules/dev.md`: writes `src/**` plus `02-dev-workspace.md`; never edits tests, contracts or other roles' docs.
-- QA — `.agents/rules/qa.md`: local development stage testing (integration, BDD E2E, mutation testing, static lint & complexity analysis, autonomous review invocation). Prompt-only execution skill; writes `tests/acceptance/**`, `tests/integration/**` plus `03-qa-verification.md`; never edits source or other roles' docs.
+- QA — `.agents/rules/qa.md`: local development stage testing (integration, BDD E2E, mutation testing, static lint & complexity analysis, autonomous review invocation, local Gate 3 pre-check). Prompt-first execution skill with a bundled `scripts/verification_linter.py`; writes `tests/acceptance/**`, `tests/integration/**` plus `03-qa-verification.md`; never edits source or other roles' docs.
 - Quality Engineering — `.agents/skills/quality-engineering/`: CI pipeline construction, test environment provisioning, pre-merge PR gates (Gate 1, RBAC, complexity check, acceptance tests, Gate 3 audit), post-merge automated verification, and ownership of CI workflow templates (`quality-gate.yml`), audit scripts (`complexity_check.py`, `verification_linter.py`) and the fail-closed mutation helper (`mutation_gate.py`).
 - Test Engineering — `.agents/rules/test-engineering.md`: owns the repository-wide test system (test strategy, risk-based test-design methods, data/environment and flakiness policy, test metrics, independent test-design review); writes only the agreed test-strategy document and test-design review notes; never accepts an individual task, never writes tests or `03`, and never runs CI gates.
 - Reviewer (Gate 2) — `.agents/rules/reviewer.md`: read-only semantic audit; never edits artifacts or weakens Gate 1.
@@ -53,6 +53,51 @@ override. If an action is outside your write scope, escalate to the owner instea
 - **Gate 3 (acceptance audit):** `verification_linter.py` (maintained by `quality-engineering`) deterministically audits signed-off `03` artifacts for basis path coverage and mutation MSI thresholds, and cross-checks Section 3 V(G) values against the CI-uploaded AST artifact (`--actual-complexity`); it is fail-closed on omitted/phantom/mismatched functions and on any non-compliant mutation table.
 - **Mutation gate:** `tools/mutation_gate.py` runs the project's `MUTATION_COMMAND` on trunk pushes, validates the normalized report, and enforces the MSI threshold. A missing command/report is a failure, never a skip.
 - **Enforcement honesty (L0-L2):** prompt rules are advisory and bypassable (L0). The authoritative layer is the CI Quality Gate (`templates/ci/quality-gate.yml`, `tools/rbac_audit.py`, `tools/mutation_gate.py`) (L1) coupled with branch protection and CODEOWNERS (L2); no local hook adapter is shipped.
+
+## Skill change workflow (authoring -> optimization -> tests -> git flow)
+
+This section applies when changing the **skill suite itself** (`SKILL.md`, `references/`, assets,
+scripts, rules, templates, manifests, CI or docs). It does not replace the per-task Planner -> Dev ->
+QA -> converge pipeline.
+
+1. **Issue first.** Create a GitHub issue with problem, scope, acceptance criteria and test plan.
+   A change without a linked issue is not ready for a PR unless the user explicitly asks for a
+   quick fix.
+2. **Branch from `main`.** Never commit directly to `main`. Use `feat/<topic>`, `fix/<topic>`,
+   `docs/<topic>` or `chore/<topic>`; keep one logical change per branch.
+3. **Author or optimize.**
+   - Edit canonical `.agents/skills/<name>/` and the byte-identical mirror `skills/workflow/<name>/`.
+   - Keep `SKILL.md` under 200 lines, canonical English, and self-contained (no runtime dependency on
+     another skill or on repository-only `docs/`, `tools/` or CI files).
+   - Put detail in `references/` or `assets/`; keep templates token-free where Gate 1 scans them.
+   - If behavior or interfaces change, update the role rule, docs, `CHANGELOG.md`, `VERSION` and
+     plugin/marketplace manifests.
+4. **Test before commit.**
+   - Run targeted tests, then the full suite:
+     `python -m unittest discover -s tests/unit -p "test_*.py"`.
+   - Verify dual-tree parity, skill self-containment, `SKILL.md` line limits, YAML/JSON parse,
+     `git diff --check`, and the CI matrix (Ubuntu/Windows, Python 3.9/3.12, plugin manifests).
+   - Never delete, skip or weaken a test to make a change pass.
+5. **Commit.** Use conventional commit messages (`feat(scope): ...`, `fix(scope): ...`,
+   `docs(scope): ...`). Stage only intended files; never commit secrets, generated caches or
+   unrelated reformatting.
+6. **Pull request.** Push the branch and open a PR against `main` with `Closes #<issue>`, a summary,
+   the test evidence and risk/rollback notes. Required checks must be green before merge.
+7. **Merge and sync.** Merge with the repository's configured method and delete the branch, then
+   `git switch main && git pull --ff-only`. Do not force-push `main` or a shared branch.
+8. **Tag and release.** For a user-visible release, update `VERSION`, `CHANGELOG.md` and plugin
+   manifests first, create an annotated tag `vX.Y.Z` (feat -> minor, fix/docs -> patch by convention),
+   push the tag, and verify the release workflow and GitHub release. Never tag an unmerged or WIP
+   branch.
+9. **Definition of done.** Tests and CI checks pass; mirrors are byte-identical; docs, version,
+   changelog and manifests agree; PR is merged; tag/release verified when the change is released;
+   evidence is recorded in the PR/issue.
+10. **Prohibited shortcuts.** Direct commits to `main`; `git push --force` on shared branches;
+    `|| true` or `continue-on-error` to hide gate failures; deleting or skipping tests; editing only
+    one tree; committing secrets; declaring done without command output or CI evidence.
+
+When the user says "standard open-source workflow", "git flow", "issue/PR", "commit/push/PR/tag" or
+equivalent, execute this section without asking for a separate process description.
 
 ## References
 

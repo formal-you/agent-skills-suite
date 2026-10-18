@@ -1,8 +1,8 @@
-# Agent Skills Suite v3.4.1
+# Agent Skills Suite v3.4.2
 
 [![CI](https://github.com/formal-you/agent-skills-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/formal-you/agent-skills-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.4.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.4.2-blue.svg)](CHANGELOG.md)
 
 Eleven prompt-first, harness-neutral skills that turn an idea or an existing codebase into
 planned, reviewed, implemented and spec-converged work - plus the rules, helper scripts and
@@ -129,6 +129,8 @@ python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks   -
 
 ## Docs
 
+- `AGENTS.md` - always-loaded rules plus the canonical skill-change and git-flow workflow
+- `CONTRIBUTING.md` - contributor setup, tests and PR conventions
 - `docs/skills-guide.zh-CN.md` - how the eleven skills work and how to use them
 - `docs/testing-strategy.md` - the suite's own seed test strategy (example; adopters generate their own from the skill template)
 - `docs/brownfield-convergence.zh-CN.md` - change proposals, convergence and Gate 2 heuristics
