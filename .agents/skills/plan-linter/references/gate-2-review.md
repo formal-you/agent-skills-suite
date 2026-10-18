@@ -99,3 +99,28 @@ SKILL.md: for every task bundle, check task_id vs directory name, touch_files
 count and prefixes, estimated_lines, origin_spec_anchor, adherence_adrs, the
 three dod commands, edge case count, required documents and the dependency graph.
 The result is a manual review, not a script result; say so explicitly.
+
+## Gate 1 error codes reference
+
+| Error Code | Meaning | Remediation |
+| :--- | :--- | :--- |
+| `MISSING_LINT` | Contract lacks required `dod.lint` or `dod.type_check` | Provide machine-checkable commands in contract DoD |
+| `MISSING_ADRS` | `adherence_adrs` is empty or missing | Reference at least one applicable project ADR |
+| `INVALID_ANCHOR` | `origin_spec_anchor` does not match `#sec-[a-z0-9-]+` | Specify valid anchor matching upstream spec |
+| `MISSING_DOC` | Missing required document (`02`, `03`, or `04`) | Create or restore document from template |
+| `TASK_ID_MISMATCH` | `task_id` in frontmatter differs from directory name | Set `task_id` equal to directory name |
+| `DUPLICATE_TASK_ID` | More than one bundle declares identical `task_id` | Assign unique task IDs |
+| `DEPENDENCY_NOT_FOUND` | Contract declares prerequisite task that does not exist | Create dependency or remove invalid entry |
+| `DAG_CYCLE` | Circular dependency chain detected | Resolve dependency loop into a DAG |
+| `FORBIDDEN_TOUCH_FILE` | Contract touches forbidden prefix (`tests/acceptance/`) | Remove forbidden path; QA role owns acceptance tests |
+| `PLACEHOLDER` | Template tokens (`{{...}}`, `[TBD]`, `TODO`) remain | Replace or fill all placeholders before review |
+| `TOUCH_FILE_MISSING` | `modify` action targets a nonexistent file path | Check path spelling or change action to `create` |
+| `TOUCH_FILE_EXISTS` | `create` action targets an already existing path | Check path spelling or change action to `modify` |
+| `TOUCH_PATH_OUTSIDE_ROOT` | Path escapes repo root or uses backslashes | Use repository-relative path with forward slashes |
+| `SPEC_SECTION_UNCOVERED` | Base spec anchor unreferenced (`--require-full-coverage`) | Map uncovered section to a task contract |
+| `ANCHOR_NOT_IN_SPEC` | Contract anchor does not exist in base tech spec | Align anchor with `.specs/02-tech-spec.md` |
+| `CHANGE_PROPOSAL_MISSING` | Brownfield bundle lacks corresponding proposal | Scaffold proposal in `.specs/changes/` |
+| `CHANGE_NOT_OPEN` | Proposal status is not `proposed` or `applied` | Reopen proposal or archive bundle |
+| `MICRO_REQUIRES_CHANGE_ID` | Micro task missing `change_id` frontmatter key | Declare `change_id` for micro task |
+| `MICRO_TOO_MANY_TOUCH_FILES` | Micro task touches more than 1 file | Constrain micro task to exactly 1 touch file |
+| `MICRO_DIFF_TOO_SMALL` / `MICRO_DIFF_TOO_LARGE` | Micro diff outside budget (default 10–49 lines) | Adjust diff or resize to standard class |

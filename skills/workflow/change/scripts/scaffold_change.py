@@ -65,6 +65,7 @@ dod:
   lint: "{{LINT_COMMAND}}"
   test_file: "{{TEST_FILE_PATH}}"
   edge_cases:
+    # Format: "Given [precondition], When [action], Then [outcome]"
     - "{{EDGE_CASE_1}}"
     - "{{EDGE_CASE_2}}"
 ---
@@ -85,9 +86,22 @@ Only the paths declared in frontmatter touch_files may be created or modified.
 
 ## 4. Behavioral contract and invariants
 
-1. Input validation: {{INVARIANT_INPUT_VALIDATION}}
-2. State transitions: {{INVARIANT_STATE_TRANSITIONS}}
-3. Idempotency and data consistency: {{INVARIANT_IDEMPOTENCY}}
+### Feature: {{TASK_TITLE}}
+
+#### Scenario 1: Input validation
+- **Given** {{INVARIANT_INPUT_VALIDATION_GIVEN}}
+- **When** {{INVARIANT_INPUT_VALIDATION_WHEN}}
+- **Then** {{INVARIANT_INPUT_VALIDATION_THEN}}
+
+#### Scenario 2: State transitions
+- **Given** {{INVARIANT_STATE_TRANSITIONS_GIVEN}}
+- **When** {{INVARIANT_STATE_TRANSITIONS_WHEN}}
+- **Then** {{INVARIANT_STATE_TRANSITIONS_THEN}}
+
+#### Scenario 3: Idempotency and data consistency
+- **Given** {{INVARIANT_IDEMPOTENCY_GIVEN}}
+- **When** {{INVARIANT_IDEMPOTENCY_WHEN}}
+- **Then** {{INVARIANT_IDEMPOTENCY_THEN}}
 
 ## 5. Inherited architecture decisions
 
@@ -156,10 +170,10 @@ INLINE_QA = """# QA Verification
 
 ## 2. Test matrix
 
-| Case ID | Category | Scenario / attack vector | Expected result | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| TC-01 | Normal path |  |  |  |
-| TC-02 | Boundary |  |  |  |
+| Case ID | Category | Given (Precondition) | When (Trigger / Action) | Then (Expected Observable Outcome) | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| TC-01 | Normal path |  |  |  |  |
+| TC-02 | Boundary |  |  |  |  |
 
 ## 3. Execution evidence
 

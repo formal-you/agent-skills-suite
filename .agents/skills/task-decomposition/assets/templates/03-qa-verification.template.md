@@ -21,14 +21,42 @@ Fill a value only once it is known; empty cells are valid until then.
 Acceptance tests live under `tests/acceptance/` and are authored by QA only. Add one row per case;
 do not read the implementation before writing the black-box assertions.
 
-| Case ID | Category | Scenario / attack vector | Expected result | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| TC-01 | Normal path |  |  |  |
-| TC-02 | Boundary |  |  |  |
-| TC-03 | Duplicate / replay |  |  |  |
-| TC-04 | Authorization / security |  |  |  |
+| Case ID | Category | Given (Precondition) | When (Trigger / Action) | Then (Expected Observable Outcome) | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| TC-01 | Normal path |  |  |  |  |
+| TC-02 | Boundary |  |  |  |  |
+| TC-03 | Duplicate / replay |  |  |  |  |
+| TC-04 | Authorization / security |  |  |  |  |
 
-## 3. Execution evidence
+## 3. Complexity and basis path coverage
+
+Verify that every function modified in `touch_files` satisfies cyclomatic complexity limits ($V(G) \le 10$)
+and has at least $V(G)$ independent basis path test cases mapped.
+
+| Function / Module | Cyclomatic Complexity V(G) | Independent Basis Paths | Test Case IDs | Compliance (<=10) |
+| :--- | :--- | :--- | :--- | :--- |
+|  |  |  |  |  |
+
+## 4. Mutation testing and MSI audit
+
+Record mutation testing results for every modified source file declared in `touch_files`.
+Ensure the kill ratio satisfies $\text{MSI} \ge 80\%$ ($\ge 90\%$ for security-critical modules).
+
+| Target Source File | Mutation Tool / Recipe | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail (>=80%) |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+|  |  |  |  |  |  |  |  |  |
+
+| Metric / Field | Value |
+| :--- | :--- |
+| Mutation tool / engine |  |
+| Total mutants generated |  |
+| Killed mutants |  |
+| Timed-out mutants |  |
+| Equivalent mutants |  |
+| Survived mutants |  |
+| Mutation Score Indicator (MSI) |  |
+
+## 5. Execution evidence
 
 | Field | Value |
 | :--- | :--- |
@@ -37,20 +65,20 @@ do not read the implementation before writing the black-box assertions.
 | Tests (total / passed / failed) |  |
 | Coverage |  |
 
-## 4. Boundary and anti-cheat audit
+## 6. Boundary and anti-cheat audit
 
 - [ ] Every changed path is listed in `01-contract.md` → `touch_files`
 - [ ] Dev did not modify `tests/acceptance/` or `01-contract.md`
 - [ ] Implementation honors every decision in `adherence_adrs`
 
-## 5. Verdict
+## 7. Verdict
 
 Check exactly one box:
 
 - [ ] QA_PASSED
 - [ ] REWORK_REQUIRED
 
-## 6. Verdict notes
+## 8. Verdict notes
 
 <!-- Explain the verdict and include complete failure traces for REWORK_REQUIRED. -->
 

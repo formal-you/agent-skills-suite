@@ -18,7 +18,8 @@ rules layer as optional context and work without it.
 | Architect | `architect.md` | `.specs/adr/*.md`, `.specs/02-tech-spec.md`, `.specs/02-tech-spec/` | `.specs/01-prd*`, `src/`, `tests/`, `tasks/` |
 | Planner | `planner.md` | `tasks/<task-id>/` while planning | `.specs/`, `src/`, `tests/` |
 | Dev | `dev.md` | `src/**`, `tasks/<task-id>/02-dev-workspace.md` | `01-contract.md`, `03-qa-verification.md`, `04-process.md`, `tests/acceptance/**` |
-| QA | `qa.md` | `tests/acceptance/**`, `tasks/<task-id>/03-qa-verification.md` | `src/**`, `01-contract.md`, `02-dev-workspace.md`, `04-process.md` |
+| QA | `qa.md` | `tests/acceptance/**`, `tests/integration/**`, `tasks/<task-id>/03-qa-verification.md` | `src/**`, `01-contract.md`, `02-dev-workspace.md`, `04-process.md` |
+| Quality Engineering | `quality-engineering` skill | CI workflows (`.github/workflows/*`, `templates/ci/*`) | `tasks/`, `src/`, `tests/` (audited/executed in CI) |
 | Reviewer (Gate 2) | `reviewer.md` | none (read-only semantic audit) | `.specs/`, `tasks/`, `src/`, `tests/` |
 | Orchestrator / Lead | `orchestrator.md` | coordination artifacts only (task board, status, routing notes) | all role documents, `.specs/`, `src/`, `tests/`, `tasks/` |
 

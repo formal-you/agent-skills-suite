@@ -39,21 +39,97 @@ them but does not create or edit them.
 ## 3. Implement and verify
 
 1. Implement the smallest end-to-end vertical slice that satisfies the contract.
-2. Run in this order: type check → lint → existing project tests → edge-case checks. Use the exact
-   `dod.type_check`/`dod.lint` commands, not equivalents you invented. `dod.test_file` is the
-   QA-owned acceptance target: run it only if it already exists; never create or edit
-   `tests/acceptance/**`.
+2. Run in this order: type check → lint → existing project tests → edge-case checks → cyclomatic
+   complexity self-audit ($V(G) \le 10$). Use the exact `dod.type_check`/`dod.lint` commands, not
+   equivalents you invented. `dod.test_file` is the QA-owned acceptance target: run it only if it
+   already exists; never create or edit `tests/acceptance/**`.
 3. Capture the command and result for `02-dev-workspace.md`. If the acceptance target is not
    authored yet, record that and leave acceptance execution to QA. If a command cannot run, report
    the command and error instead of omitting the check.
-4. If a DoD command fails, fix the implementation and rerun. Do not tick the handoff box early.
+4. If a DoD command fails or any function violates complexity limits, fix or refactor the
+   implementation and rerun. Do not tick the handoff box early.
 
-## 4. Fill `02-dev-workspace.md`
+## 4. Cyclomatic complexity control and refactoring patterns
+
+Every function implemented or modified in `touch_files` must be evaluated for cyclomatic
+complexity to guarantee maintainability, bounded blast radius, and testability.
+
+### 4.1. Definition and calculation
+
+McCabe Cyclomatic Complexity $V(G)$ quantifies the number of linearly independent execution paths
+through a function's control flow graph:
+
+$$V(G) = E - N + 2P$$
+
+where:
+- $E$ is the number of edges in the control flow graph.
+- $N$ is the number of nodes (basic blocks).
+- $P$ is the number of connected components ($P = 1$ for a single function: $V(G) = E - N + 2$).
+
+In practice across modern programming languages, $V(G)$ equals the number of decision points
+plus one:
+
+$$V(G) = 1 + D$$
+
+Decision points ($D$) include:
+- Conditional branching statements: `if`, `elif` / `else if`.
+- Conditional / ternary expressions: `x if cond else y`, `cond ? a : b`.
+- Loop constructs: `for`, `while`, `async for`.
+- Pattern matching / switch case statements: each `case` / `match` pattern arm.
+- Exception handlers: `catch` / `except`.
+- Short-circuiting boolean operators: `&&`, `||`, `and`, `or`.
+- Explicit assertion statements: `assert`.
+
+### 4.2. Strict thresholds
+
+| Complexity Range | Classification | Action Required |
+| :--- | :--- | :--- |
+| $V(G) \le 10$ | **Standard** | Approved for production without exception. Represents modular, low-risk logic easily verified by independent paths. |
+| $11 \le V(G) \le 15$ | **Warning** | Requires explicit architectural justification in `02-dev-workspace.md` Section 2 ("Implementation notes"). Dev must explain why further decomposition would harm cohesion or readability and confirm basis path coverage. |
+| $V(G) > 15$ | **Critical** | Strictly prohibited. Dev must refactor the function into smaller, decoupled units before requesting QA. Handoff with $V(G) > 15$ triggers immediate rejection. |
+
+### 4.3. Standard refactoring patterns
+
+When a function approaches or exceeds the warning threshold, apply these standard patterns:
+
+1. **Extract Method / Decomposition**:
+   Split compound algorithms into discrete helper functions with single responsibilities. Each
+   extracted helper has its own localized $V(G) \le 10$, reducing cognitive load and isolating
+   independent execution paths.
+
+2. **Strategy / Lookup Table Dispatch**:
+   Replace deeply nested `if-elif-else` chains or expansive `switch/case` trees with a dictionary
+   or map mapping dispatch keys to handler callables or strategy classes. This transforms an $O(N)$
+   branching cascade into an $O(1)$ lookup with $V(G) \le 2$.
+
+3. **Guard Clauses / Early Return**:
+   Invert nested conditionals. Validate input preconditions, boundary constraints, and error
+   states at the beginning of the function and return or raise immediately. This flattens deep
+   indentation and eliminates pyramid code structures.
+
+4. **Polymorphism / State Pattern**:
+   When branching repeatedly on type tags, status enums, or lifecycle phases, encapsulate
+   state-dependent behavior within polymorphic subclasses or state objects instead of cascading
+   conditional checks.
+
+### 4.4. Dev-QA handshake
+
+Before handing off the task bundle:
+1. **Dev self-audit**: Dev audits the cyclomatic complexity of every function in `touch_files`
+   (using static analysis tooling or control flow graph inspection).
+2. **Document in 02**: Any function in the warning range ($11 \le V(G) \le 15$) must be accompanied
+   by an architectural justification in `02-dev-workspace.md` Section 2.
+3. **QA verification contract**: QA calculates $V(G)$ for each modified function and verifies that
+   the acceptance test suite contains at least $V(G)$ independent basis path test cases. Any
+   function with $V(G) > 15$ or an unjustified $V(G) \ge 11$ results in `REWORK_REQUIRED`.
+
+## 5. Fill `02-dev-workspace.md`
 
 The template is a blank role form; fill these sections in place:
 
 - **Execution metadata**: Dev agent, branch, base commit, handoff commit, handoff time (UTC).
-- **Implementation notes**: design decisions, trade-offs, deviations from the plan.
+- **Implementation notes**: design decisions, trade-offs, architectural justification for any
+  functions with warning complexity ($11 \le V(G) \le 15$), and deviations from the plan.
 - **Actual changes**: one row per changed file with action, path and approximate lines; net lines
   added/removed. Every path must be in `touch_files`.
 - **Implementation deviations**: one row per place where the implementation differs from the
@@ -61,12 +137,14 @@ The template is a blank role form; fill these sections in place:
   behavior |` with IDs `DEV-001`, `DEV-002`, ...; operation `add` | `modify` | `remove`; and an
   existing or newly added `#sec-*` anchor. Write None in every cell when nothing deviated - a
   blank table blocks convergence.
-- **Self-verification**: tick only items that actually passed.
+- **Self-verification**: tick only items that actually passed, confirming that all touched
+  functions satisfy cyclomatic complexity limits ($V(G) \le 10$, or $11 \le V(G) \le 15$ with
+  justification).
 - **Handoff to QA**: check `- [x] WAITING_FOR_QA` only after every item above passes.
 
 Do not edit `01-contract.md`, `03-qa-verification.md` or `04-process.md`.
 
-## 5. Handoff and rework
+## 6. Handoff and rework
 
 Handoff is a single checked box, not a prose message:
 
@@ -78,7 +156,7 @@ On `REWORK_REQUIRED`, QA's traces in `03` are the input. Fix only inside the con
 DoD, update `02` for the new attempt, and hand off again. Repeated failures are a planning or
 scope signal: escalate rather than bypassing the contract.
 
-## 6. After QA_PASSED: convergence owns the spec
+## 7. After QA_PASSED: convergence owns the spec
 
 Dev's responsibility ends with a truthful `02-dev-workspace.md`. Once QA checks `QA_PASSED`, the
 `converge` skill owns the spec write-back:
@@ -92,7 +170,7 @@ Dev's responsibility ends with a truthful `02-dev-workspace.md`. Once QA checks 
 - On `REWORK_REQUIRED`, update the Implementation deviations table for the new attempt and hand
   off again; do not write spec prose to compensate for an unresolved rework.
 
-## 7. `04-process.md`
+## 8. `04-process.md`
 
 `04` is derived output. Its initial state is `TODO` / `UNASSIGNED` / `None` / retry `0` with an
 empty event table. When the handoff box is checked, optional repository tooling appends
@@ -100,10 +178,11 @@ empty event table. When the handoff box is checked, optional repository tooling 
 `QAAgent`. If the tooling is absent, leave `04` as initialized and rely on git/CI; never write
 event rows by hand.
 
-## 8. Failure escalation checklist
+## 9. Failure escalation checklist
 
 - Missing/ambiguous contract → Planner/owner.
 - Required file outside `touch_files` → split the task.
 - DoD command unavailable → report exact command and error; do not claim a pass.
+- High complexity cannot be decoupled without architectural/spec change → escalate to Planner/Architect.
 - Repeated rework → escalate with evidence from `02`/`03`.
 - Environment/tooling failure → report command and exit code; do not hand-edit derived files.

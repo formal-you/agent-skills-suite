@@ -75,6 +75,14 @@ PLACEHOLDER_PATTERNS = [
     re.compile(r"\[TBD\]"),
     re.compile(r"\bTODO\b"),
 ]
+GHERKIN_EDGE_CASE_RE = re.compile(
+    r"^\s*Given\s+(?P<given>.+?),\s+When\s+(?P<when>.+?),\s+Then\s+(?P<then>.+?)\s*$",
+    re.IGNORECASE,
+)
+GHERKIN_PREFIXED_RE = re.compile(
+    r"^(?:Scenario:\s*(?P<scenario>.+?)\s*\|\s*)?Given\s+(?P<given>.+?),\s+When\s+(?P<when>.+?),\s+Then\s+(?P<then>.+?)$",
+    re.IGNORECASE,
+)
 
 
 class UsageError(Exception):
@@ -469,7 +477,227 @@ class Finding(object):
         }
 
 
-def _validate_contract(task_dir, contract, text, config, findings):
+def _line_of_edge_case(text, ec_str):
+    for idx, line in enumerate(text.splitlines(), 1):
+        if ec_str in line:
+            return idx
+    return _line_of(text, "edge_cases") or 1
+
+
+def _lint_bdd_edge_cases(task_name, contract_file, text, edge_cases, findings, warnings):
+    if not isinstance(edge_cases, list):
+        return
+    for idx, ec in enumerate(edge_cases, 1):
+        if not isinstance(ec, str):
+            continue
+        line_num = _line_of_edge_case(text, ec)
+        cleaned = ec.strip().strip('"').strip("'")
+        if not cleaned:
+            continue
+
+        match = GHERKIN_PREFIXED_RE.match(cleaned) or GHERKIN_EDGE_CASE_RE.match(cleaned)
+        if match:
+            given = (match.group("given") or "").strip()
+            when = (match.group("when") or "").strip()
+            then = (match.group("then") or "").strip()
+            if not given:
+                findings.append(
+                    Finding(
+                        task_name,
+                        "BDD_MISSING_PRECONDITION",
+                        "Edge case %d missing Given precondition: %r" % (idx, ec),
+                        contract_file,
+                        line_num,
+                    )
+                )
+            if not when:
+                findings.append(
+                    Finding(
+                        task_name,
+                        "BDD_MISSING_ACTION",
+                        "Edge case %d missing When action: %r" % (idx, ec),
+                        contract_file,
+                        line_num,
+                    )
+                )
+            if not then:
+                findings.append(
+                    Finding(
+                        task_name,
+                        "BDD_MISSING_OUTCOME",
+                        "Edge case %d missing Then outcome: %r" % (idx, ec),
+                        contract_file,
+                        line_num,
+                    )
+                )
+        else:
+            has_given = bool(re.search(r"\bGiven\b", cleaned, re.IGNORECASE))
+            has_when = bool(re.search(r"\bWhen\b", cleaned, re.IGNORECASE))
+            has_then = bool(re.search(r"\bThen\b", cleaned, re.IGNORECASE))
+            if has_given or has_when or has_then:
+                if not has_given:
+                    findings.append(
+                        Finding(
+                            task_name,
+                            "BDD_MISSING_PRECONDITION",
+                            "Edge case %d missing Given precondition: %r" % (idx, ec),
+                            contract_file,
+                            line_num,
+                        )
+                    )
+                else:
+                    g_match = re.search(r"\bGiven\s+(.*?)(?=,\s*When\b|,\s*Then\b|$)", cleaned, re.IGNORECASE)
+                    if not g_match or not g_match.group(1).strip():
+                        findings.append(
+                            Finding(
+                                task_name,
+                                "BDD_MISSING_PRECONDITION",
+                                "Edge case %d has empty Given precondition: %r" % (idx, ec),
+                                contract_file,
+                                line_num,
+                            )
+                        )
+
+                if not has_when:
+                    findings.append(
+                        Finding(
+                            task_name,
+                            "BDD_MISSING_ACTION",
+                            "Edge case %d missing When action: %r" % (idx, ec),
+                            contract_file,
+                            line_num,
+                        )
+                    )
+                else:
+                    w_match = re.search(r"\bWhen\s+(.*?)(?=,\s*Then\b|$)", cleaned, re.IGNORECASE)
+                    if not w_match or not w_match.group(1).strip():
+                        findings.append(
+                            Finding(
+                                task_name,
+                                "BDD_MISSING_ACTION",
+                                "Edge case %d has empty When action: %r" % (idx, ec),
+                                contract_file,
+                                line_num,
+                            )
+                        )
+
+                if not has_then:
+                    findings.append(
+                        Finding(
+                            task_name,
+                            "BDD_MISSING_OUTCOME",
+                            "Edge case %d missing Then outcome: %r" % (idx, ec),
+                            contract_file,
+                            line_num,
+                        )
+                    )
+                else:
+                    t_match = re.search(r"\bThen\s+(.*?)$", cleaned, re.IGNORECASE)
+                    if not t_match or not t_match.group(1).strip():
+                        findings.append(
+                            Finding(
+                                task_name,
+                                "BDD_MISSING_OUTCOME",
+                                "Edge case %d has empty Then outcome: %r" % (idx, ec),
+                                contract_file,
+                                line_num,
+                            )
+                        )
+            else:
+                if warnings is not None:
+                    warnings.append(
+                        {
+                            "task": task_name,
+                            "code": "BDD_INVALID_SCENARIO",
+                            "message": "Edge case %d does not follow Given-When-Then BDD format: %r" % (idx, ec),
+                            "file": contract_file,
+                            "line": line_num,
+                        }
+                    )
+
+
+def _lint_bdd_section4_scenarios(task_name, contract_file, text, findings):
+    lines = text.splitlines()
+    in_sec4 = False
+    sec4_lines = []
+    for line_no, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if stripped.startswith("## 4."):
+            in_sec4 = True
+            continue
+        if in_sec4:
+            if stripped.startswith("## ") and not stripped.startswith("## 4."):
+                break
+            sec4_lines.append((line_no, line))
+
+    scenarios = []
+    current = None
+    for line_no, line in sec4_lines:
+        s = line.strip()
+        if re.match(r"^#{3,5}\s+Scenario\b", s, re.IGNORECASE):
+            if current:
+                scenarios.append(current)
+            current = {"title": s, "line": line_no, "given": None, "when": None, "then": None}
+        elif current is not None:
+            g_match = re.search(r"^[-*+]\s*(?:\*\*)?Given\s*(?::?\s*\*\*)?:?\s*(.*)$", s, re.IGNORECASE)
+            w_match = re.search(r"^[-*+]\s*(?:\*\*)?When\s*(?::?\s*\*\*)?:?\s*(.*)$", s, re.IGNORECASE)
+            t_match = re.search(r"^[-*+]\s*(?:\*\*)?Then\s*(?::?\s*\*\*)?:?\s*(.*)$", s, re.IGNORECASE)
+            if g_match:
+                val = g_match.group(1).strip().lstrip("*: ").rstrip("*: ").strip()
+                if val:
+                    current["given"] = val
+            elif w_match:
+                val = w_match.group(1).strip().lstrip("*: ").rstrip("*: ").strip()
+                if val:
+                    current["when"] = val
+            elif t_match:
+                val = t_match.group(1).strip().lstrip("*: ").rstrip("*: ").strip()
+                if val:
+                    current["then"] = val
+    if current:
+        scenarios.append(current)
+
+    for sc in scenarios:
+        sc_title = sc["title"]
+        sc_line = sc["line"]
+        if not sc.get("given"):
+            findings.append(
+                Finding(
+                    task_name,
+                    "BDD_MISSING_PRECONDITION",
+                    "Scenario %r in Section 4 is missing Given clause" % sc_title,
+                    contract_file,
+                    sc_line,
+                )
+            )
+        if not sc.get("when"):
+            findings.append(
+                Finding(
+                    task_name,
+                    "BDD_MISSING_ACTION",
+                    "Scenario %r in Section 4 is missing When clause" % sc_title,
+                    contract_file,
+                    sc_line,
+                )
+            )
+        if not sc.get("then"):
+            findings.append(
+                Finding(
+                    task_name,
+                    "BDD_MISSING_OUTCOME",
+                    "Scenario %r in Section 4 is missing Then clause" % sc_title,
+                    contract_file,
+                    sc_line,
+                )
+            )
+
+
+
+
+
+
+
+def _validate_contract(task_dir, contract, text, config, findings, warnings=None):
     task_name = contract.get("task_id") or task_dir.name
     contract_file = "01-contract.md"
 
@@ -679,6 +907,8 @@ def _validate_contract(task_dir, contract, text, config, findings):
                 _line_of(text, "dod"),
             )
         )
+    _lint_bdd_edge_cases(task_name, contract_file, text, edge_cases, findings, warnings)
+    _lint_bdd_section4_scenarios(task_name, contract_file, text, findings)
 
     for doc_name in config["require_docs"]:
         if not (task_dir / doc_name).is_file():
@@ -805,6 +1035,442 @@ def _check_topology(task_name, contract, text, config, repo_root, findings, warn
                 }
             )
 
+
+def _lint_qa_complexity(
+    task_name: str,
+    task_dir: Path,
+    findings: List[Finding],
+    warnings: Optional[List[Dict[str, Any]]] = None,
+) -> None:
+    """Audit Section 3: Cyclomatic complexity and basis path coverage."""
+    qa_path = task_dir / "03-qa-verification.md"
+    if not qa_path.is_file():
+        return
+    try:
+        qa_text = qa_path.read_text(encoding="utf-8")
+    except OSError:
+        return
+
+    qa_passed_match = re.search(r"^[-*+]\s*\[[xX]\]\s*QA_PASSED\b", qa_text, re.MULTILINE)
+    if not qa_passed_match:
+        return
+
+    verdict_line_num = 1
+    for idx, line in enumerate(qa_text.splitlines(), 1):
+        if re.search(r"^[-*+]\s*\[[xX]\]\s*QA_PASSED\b", line):
+            verdict_line_num = idx
+            break
+
+    sec_match = re.search(
+        r"^#{2,4}\s*(?:\d+\.\s*)?Complexity\s+and\s+basis\s+path\s+coverage\b.*$",
+        qa_text,
+        re.IGNORECASE | re.MULTILINE,
+    )
+    if not sec_match:
+        findings.append(
+            Finding(
+                task_name,
+                "COMPLEXITY_MISSING_SECTION",
+                "03-qa-verification.md is signed off with QA_PASSED but missing 'Complexity and basis path coverage' section",
+                "03-qa-verification.md",
+                verdict_line_num,
+            )
+        )
+        return
+
+    lines = qa_text.splitlines()
+    sec_line_num = 1
+    in_section = False
+    section_lines: List[Tuple[int, str]] = []
+    for line_idx, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if not in_section:
+            if re.match(r"^#{2,4}\s*(?:\d+\.\s*)?Complexity\s+and\s+basis\s+path\s+coverage\b", stripped, re.IGNORECASE):
+                in_section = True
+                sec_line_num = line_idx
+                continue
+        else:
+            if stripped.startswith("## ") or (stripped.startswith("### ") and not stripped.startswith("#### ")):
+                break
+            section_lines.append((line_idx, line))
+
+    header_idx = -1
+    col_headers: List[str] = []
+    separator_found = False
+    data_rows: List[Tuple[int, List[str]]] = []
+
+    for idx, (line_no, line) in enumerate(section_lines):
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            continue
+        cells = [c.strip() for c in stripped.split("|")[1:-1]]
+        if header_idx == -1:
+            lowered = [c.lower() for c in cells]
+            if any("complexity" in c or "v(g)" in c for c in lowered):
+                header_idx = idx
+                col_headers = lowered
+                continue
+        elif not separator_found:
+            if all(re.match(r"^:?-+:?$", c) for c in cells if c):
+                separator_found = True
+                continue
+        else:
+            if any(c for c in cells):
+                data_rows.append((line_no, cells))
+
+    if not data_rows:
+        findings.append(
+            Finding(
+                task_name,
+                "COMPLEXITY_MISSING_SECTION",
+                "03-qa-verification.md is signed off with QA_PASSED but Section 3 'Complexity and basis path coverage' table has no data rows",
+                "03-qa-verification.md",
+                sec_line_num,
+            )
+        )
+        return
+
+    func_col = 0
+    vg_col = 1
+    cases_col = 3
+    for i, h in enumerate(col_headers):
+        if "function" in h or "module" in h or "target" in h:
+            func_col = i
+        elif "v(g)" in h or "cyclomatic" in h or "complexity" in h:
+            vg_col = i
+        elif "test case" in h or "mapped test" in h or "test case id" in h or "test cases" in h:
+            cases_col = i
+
+    for line_no, cells in data_rows:
+        fn_name = cells[func_col] if func_col < len(cells) else ""
+        fn_name = fn_name.strip("`\"' ")
+        if not fn_name:
+            fn_name = "unknown"
+
+        vg_raw = cells[vg_col] if vg_col < len(cells) else ""
+        vg_match = re.search(r"\b(\d+)\b", vg_raw)
+        if not vg_match:
+            continue
+        vg = int(vg_match.group(1))
+
+        cases_raw = cells[cases_col] if cases_col < len(cells) else ""
+        cleaned_cases = cases_raw.strip()
+        if cleaned_cases.lower() in ("none", "n/a", "-", ""):
+            test_count = 0
+        else:
+            tc_tokens = re.findall(r"\b(?:TC|test|case)[-\w]*\b", cleaned_cases, re.IGNORECASE)
+            comma_items = [item.strip() for item in re.split(r"[,;\n]+", cleaned_cases) if item.strip()]
+            test_count = max(len(tc_tokens), len(comma_items))
+
+        if vg > 15:
+            findings.append(
+                Finding(
+                    task_name,
+                    "COMPLEXITY_EXCEEDS_MAX_THRESHOLD",
+                    f"Function {fn_name!r} has cyclomatic complexity V(G)={vg} exceeding maximum threshold of 15",
+                    "03-qa-verification.md",
+                    line_no,
+                )
+            )
+        elif 11 <= vg <= 15:
+            if warnings is not None:
+                warnings.append(
+                    {
+                        "task": task_name,
+                        "code": "COMPLEXITY_EXCEEDS_STANDARD_THRESHOLD",
+                        "message": (
+                            f"Function {fn_name!r} has cyclomatic complexity V(G)={vg} exceeding standard threshold of 10"
+                            " (requires architectural justification in 02-dev-workspace.md)"
+                        ),
+                        "file": "03-qa-verification.md",
+                        "line": line_no,
+                    }
+                )
+
+        if test_count < vg:
+            findings.append(
+                Finding(
+                    task_name,
+                    "COMPLEXITY_BASIS_PATH_INSUFFICIENT",
+                    f"Function {fn_name!r} has V(G)={vg} but only {test_count} test case(s) provided (basis path testing requires >= V(G))",
+                    "03-qa-verification.md",
+                    line_no,
+                )
+            )
+
+
+def _lint_qa_mutation(
+    task_name: str,
+    task_dir: Path,
+    findings: List[Finding],
+    warnings: Optional[List[Dict[str, Any]]] = None,
+) -> None:
+    """Audit Section 4: Mutation testing and MSI audit."""
+    qa_path = task_dir / "03-qa-verification.md"
+    if not qa_path.is_file():
+        return
+    try:
+        qa_text = qa_path.read_text(encoding="utf-8")
+    except OSError:
+        return
+
+    qa_passed_match = re.search(r"^[-*+]\s*\[[xX]\]\s*QA_PASSED\b", qa_text, re.MULTILINE)
+    if not qa_passed_match:
+        return
+
+    verdict_line_num = 1
+    for idx, line in enumerate(qa_text.splitlines(), 1):
+        if re.search(r"^[-*+]\s*\[[xX]\]\s*QA_PASSED\b", line):
+            verdict_line_num = idx
+            break
+
+    sec_match = re.search(
+        r"^#{2,4}\s*(?:\d+\.\s*)?Mutation\s+testing\s+and\s+MSI\s+audit\b.*$",
+        qa_text,
+        re.IGNORECASE | re.MULTILINE,
+    )
+    if not sec_match:
+        findings.append(
+            Finding(
+                task_name,
+                "QA_MISSING_MUTATION_EVIDENCE",
+                "03-qa-verification.md is signed off with QA_PASSED but missing 'Mutation testing and MSI audit' section",
+                "03-qa-verification.md",
+                verdict_line_num,
+            )
+        )
+        return
+
+    lines = qa_text.splitlines()
+    sec_line_num = 1
+    in_section = False
+    section_lines: List[Tuple[int, str]] = []
+    for line_idx, line in enumerate(lines, 1):
+        stripped = line.strip()
+        if not in_section:
+            if re.match(r"^#{2,4}\s*(?:\d+\.\s*)?Mutation\s+testing\s+and\s+MSI\s+audit\b", stripped, re.IGNORECASE):
+                in_section = True
+                sec_line_num = line_idx
+                continue
+        else:
+            if stripped.startswith("## ") or (stripped.startswith("### ") and not stripped.startswith("#### ")):
+                break
+            section_lines.append((line_idx, line))
+
+    raw_tables: List[List[Tuple[int, str]]] = []
+    current_block: List[Tuple[int, str]] = []
+
+    for line_no, line in section_lines:
+        stripped = line.strip()
+        if stripped.startswith("|"):
+            current_block.append((line_no, line))
+        else:
+            if current_block:
+                raw_tables.append(current_block)
+                current_block = []
+    if current_block:
+        raw_tables.append(current_block)
+
+    table_results: List[Dict[str, Any]] = []
+
+    for block in raw_tables:
+        header_idx = -1
+        col_headers: List[str] = []
+        separator_found = False
+        data_rows: List[Tuple[int, List[str]]] = []
+
+        for idx, (line_no, line) in enumerate(block):
+            stripped = line.strip()
+            cells = [c.strip() for c in stripped.split("|")[1:-1]]
+            if header_idx == -1:
+                lowered = [c.lower() for c in cells]
+                if any(
+                    "mutation" in c
+                    or "msi" in c
+                    or "file" in c
+                    or "metric" in c
+                    or "target" in c
+                    or "field" in c
+                    or "value" in c
+                    or "tool" in c
+                    for c in lowered
+                ):
+                    header_idx = idx
+                    col_headers = lowered
+                    continue
+                if idx + 1 < len(block):
+                    next_stripped = block[idx + 1][1].strip()
+                    next_cells = [c.strip() for c in next_stripped.split("|")[1:-1]]
+                    if next_cells and all(re.match(r"^:?-+:?$", c) for c in next_cells if c):
+                        header_idx = idx
+                        col_headers = lowered
+                        continue
+            elif not separator_found:
+                if all(re.match(r"^:?-+:?$", c) for c in cells if c):
+                    separator_found = True
+                    continue
+            else:
+                if any(c for c in cells):
+                    data_rows.append((line_no, cells))
+
+        if not col_headers or not separator_found:
+            continue
+
+        is_kv_format = (
+            len(col_headers) == 2
+            and any("metric" in c or "field" in c for c in col_headers)
+            and any("value" in c for c in col_headers)
+        )
+
+        tbl_findings: List[Finding] = []
+        compliant_rows = 0
+
+        if is_kv_format:
+            kv_data_rows = [
+                (lno, cells)
+                for lno, cells in data_rows
+                if len(cells) >= 2 and cells[1].strip() != ""
+            ]
+            if not kv_data_rows:
+                table_results.append({
+                    "format": "kv",
+                    "has_data": False,
+                    "compliant": False,
+                    "findings": [],
+                })
+                continue
+
+            msi_found = False
+            for line_no, cells in data_rows:
+                if len(cells) < 2:
+                    continue
+                key_cell = cells[0].lower()
+                val_cell = cells[1].strip()
+                if "msi" in key_cell or "mutation score" in key_cell:
+                    msi_found = True
+                    score_match = re.search(r"(\d+(?:\.\d+)?)\s*%?", val_cell)
+                    if not score_match:
+                        tbl_findings.append(
+                            Finding(
+                                task_name,
+                                "QA_INVALID_MSI_SCORE",
+                                f"Invalid or non-numeric MSI score {val_cell!r} in mutation audit table",
+                                "03-qa-verification.md",
+                                line_no,
+                            )
+                        )
+                    else:
+                        msi_score = float(score_match.group(1))
+                        if msi_score < 80.0:
+                            tbl_findings.append(
+                                Finding(
+                                    task_name,
+                                    "QA_INVALID_MSI_SCORE",
+                                    f"Mutation Score Indicator (MSI) {msi_score:.1f}% is below required 80% threshold",
+                                    "03-qa-verification.md",
+                                    line_no,
+                                )
+                            )
+                        else:
+                            compliant_rows += 1
+            if not msi_found:
+                tbl_findings.append(
+                    Finding(
+                        task_name,
+                        "QA_INVALID_MSI_SCORE",
+                        "Missing Mutation Score Indicator (MSI) metric in mutation audit table",
+                        "03-qa-verification.md",
+                        sec_line_num,
+                    )
+                )
+
+            table_results.append({
+                "format": "kv",
+                "has_data": True,
+                "compliant": len(tbl_findings) == 0 and compliant_rows > 0,
+                "findings": tbl_findings,
+            })
+        else:
+            file_col = 0
+            msi_col = -1
+            for i, h in enumerate(col_headers):
+                if "file" in h or "target" in h or "source" in h:
+                    file_col = i
+                elif "msi" in h or "score" in h:
+                    msi_col = i
+
+            if msi_col == -1:
+                msi_col = 7 if len(col_headers) > 7 else len(col_headers) - 2
+
+            target_data_rows = []
+            for line_no, cells in data_rows:
+                target_file = cells[file_col].strip("`\"' ") if file_col < len(cells) else ""
+                msi_raw = cells[msi_col].strip() if msi_col < len(cells) else ""
+                if any(c.strip() for c in cells) and (bool(target_file) or bool(msi_raw)):
+                    target_data_rows.append((line_no, cells, target_file, msi_raw))
+
+            if not target_data_rows:
+                table_results.append({
+                    "format": "per_target",
+                    "has_data": False,
+                    "compliant": False,
+                    "findings": [],
+                })
+                continue
+
+            for line_no, cells, target_file, msi_raw in target_data_rows:
+                tf_display = target_file if target_file else "unknown"
+                score_match = re.search(r"(\d+(?:\.\d+)?)\s*%?", msi_raw)
+                if not score_match:
+                    tbl_findings.append(
+                        Finding(
+                            task_name,
+                            "QA_INVALID_MSI_SCORE",
+                            f"Target file {tf_display!r} has invalid or missing MSI score {msi_raw!r} in 03-qa-verification.md",
+                            "03-qa-verification.md",
+                            line_no,
+                        )
+                    )
+                else:
+                    score = float(score_match.group(1))
+                    if score < 80.0:
+                        tbl_findings.append(
+                            Finding(
+                                task_name,
+                                "QA_INVALID_MSI_SCORE",
+                                f"Target file {tf_display!r} has MSI score {score:.1f}% below required 80% threshold",
+                                "03-qa-verification.md",
+                                line_no,
+                            )
+                        )
+                    else:
+                        compliant_rows += 1
+
+            table_results.append({
+                "format": "per_target",
+                "has_data": True,
+                "compliant": len(tbl_findings) == 0 and compliant_rows > 0,
+                "findings": tbl_findings,
+            })
+
+    if not any(t["has_data"] for t in table_results):
+        findings.append(
+            Finding(
+                task_name,
+                "QA_MISSING_MUTATION_EVIDENCE",
+                "03-qa-verification.md is signed off with QA_PASSED but Section 4 'Mutation testing and MSI audit' table has no data rows",
+                "03-qa-verification.md",
+                sec_line_num,
+            )
+        )
+        return
+
+    if any(t["compliant"] for t in table_results):
+        return
+
+    for t in table_results:
+        if t["has_data"]:
+            findings.extend(t["findings"])
 
 def _collect_spec_anchors(spec_path):
     try:
@@ -1094,7 +1760,7 @@ def lint(
             )
         contract["_text"] = text
         contracts.append((contract.get("task_id") or task_dir.name, contract))
-        _validate_contract(task_dir, contract, text, config, findings)
+        _validate_contract(task_dir, contract, text, config, findings, warnings)
         _scan_placeholders(contract.get("task_id") or task_dir.name, task_dir, config, findings)
         _check_topology(
             contract.get("task_id") or task_dir.name,
@@ -1105,6 +1771,19 @@ def lint(
             findings,
             warnings,
         )
+        _lint_qa_complexity(
+            contract.get("task_id") or task_dir.name,
+            task_dir,
+            findings,
+            warnings,
+        )
+        _lint_qa_mutation(
+            contract.get("task_id") or task_dir.name,
+            task_dir,
+            findings,
+            warnings,
+        )
+
 
     _check_graph(contracts, findings)
     _check_change_proposals(contracts, changes_dir, findings, warnings)

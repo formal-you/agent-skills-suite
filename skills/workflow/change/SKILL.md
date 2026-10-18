@@ -15,9 +15,7 @@ PRD. One change produces **one proposal** plus **exactly one four-document task 
 passes, the confirmed deltas are written back into the spec and the proposal is archived. This skill
 is prompt-first: every step has a manual fallback and the bundled scripts are optional helpers.
 
-Pipeline position: `spec-generator` (once, upstream) -> **change** -> `task-decomposition`
-(bundle) -> `plan-linter` (Gate 1) -> `review` (Gate 2) -> `dev` ->
-`qa` -> `converge` -> archive.
+Pipeline position: `spec-generator` -> **change** -> `task-decomposition` -> `plan-linter` (Gate 1) -> `review` (Gate 2) -> `dev` -> `qa` -> `converge` -> archive.
 
 ```text
 existing spec + bounded change
@@ -64,8 +62,7 @@ existing spec + bounded change
 | `tasks/<change-id>/01-contract.md` ... `04-process.md` | Planner / Dev / QA / tooling | Exactly one four-document bundle, reusing the task-decomposition templates. |
 
 The proposal is **not** a PRD and **not** a replacement spec. It is a delta that names the existing
-anchors it changes. Full lifecycle and sizing rules:
-[references/brownfield-protocol.md](references/brownfield-protocol.md).
+anchors it changes. Full lifecycle and sizing rules: [references/brownfield-protocol.md](references/brownfield-protocol.md).
 
 ## Workflow
 
@@ -77,9 +74,9 @@ anchors it changes. Full lifecycle and sizing rules:
    ```
 
    Read `.specs/change-context/standards.md` before planning. Its "Implicit constraints"
-   section is binding: use only the commands it evidences, respect the declared test layout,
-   language/runtime versions, and existing anchors. Exit code `1` from `--check` means
-   the report is stale; regenerate it before planning. Never hand-edit the report.
+   section is binding: use only the commands it evidences, respect declared test layout,
+   runtime floors, and existing anchors. Exit code `1` from `--check` means the report is
+   stale; regenerate before planning. Never hand-edit the report.
 
 2. **Scaffold the proposal and one task bundle** (the only step that writes files):
 
@@ -89,71 +86,44 @@ anchors it changes. Full lifecycle and sizing rules:
      --title "Rate limit login attempts" \
      --anchor "#sec-auth-tokens" \
      --kind modify \
-     --size-class micro \
-     --estimated-lines 40 \
+     --size-class micro --estimated-lines 40 \
      --touch-files "modify:src/auth/rate_limit.py" \
      --repo-root .
    ```
 
-   The scaffolder refuses an unknown anchor and a missing base spec, computes
-   `base_spec_sha256`, and delegates the bundle to the `task-decomposition` skill's scaffolder when
-   that skill is installed (`scaffold_task.py --change-id ... --size-class ...`).
-   When that sibling is absent it still emits a minimal inline four-document bundle and prints a
-   warning. Use `--dry-run` to preview and `--force` to overwrite an existing change
-   directory.
+   The scaffolder validates anchors against the base spec, computes `base_spec_sha256`,
+   and delegates to `task-decomposition` (`scaffold_task.py`) or emits a minimal inline
+   bundle if absent. Use `--dry-run` to preview and `--force` to overwrite disposable runs.
 
-3. **Planner fills the proposal and the contract.** Replace every guide in the proposal (motivation,
-   the `[CHG-<n>]` hunks, affected paths, invariants/NFR impact, rollback, verification) and
-   the remaining Planner-only contract placeholders (`module`, `adherence_adrs`,
-   `dod`, edge cases, invariant prose). Do not invent paths or anchors. `02` and
-   `03` stay blank role forms; `04` is tooling-owned. Keep the proposal
-   `status: proposed`.
+3. **Planner fills the proposal and the contract.** Replace guides in proposal (`motivation`,
+   `[CHG-<n>]` hunks, paths, invariants/NFR, rollback, verification) and contract placeholders
+   (`module`, `adherence_adrs`, `dod`, edge cases, invariant prose). Do not invent paths or anchors.
+   Keep `02`/`03` blank role forms; keep proposal `status: proposed`.
 
-4. **Gate 1, then Gate 2.** Run the deterministic Gate 1 on the filled contracts (and the open
-   proposal), then the read-only semantic review:
+4. **Gate 1, then Gate 2.** Run deterministic Gate 1, then independent semantic review:
 
    ```bash
-   # from the plan-linter skill directory (when that skill is installed)
-   python scripts/plan_linter.py --tasks-dir tasks \
-     --repo-root . --spec .specs/02-tech-spec.md --changes-dir .specs/changes
-   # from this skill directory
+   python scripts/plan_linter.py --tasks-dir tasks --repo-root . --spec .specs/02-tech-spec.md --changes-dir .specs/changes
    python scripts/lint_change.py --change-id CHG-001-rate-limit --repo-root .
    ```
 
-   Gate 1 must pass before implementation; Gate 2 must not report `BLOCKED` or
-   `REQUEST CHANGES`. Neither gate is a substitute for the other.
+   Gate 1 must pass before implementation; Gate 2 must not report `BLOCKED` or `REQUEST CHANGES`.
 
-5. **Implement and verify.** Run `dev` (only the contract's `touch_files`, fill
-   `02`, hand off) and then `qa` (independent acceptance tests under
-   `tests/acceptance/`, fill `03`, one verdict). The proposal moves to
-   `applied` once implementation and verification are complete but the spec write-back has
-   not happened yet.
+5. **Implement and verify.** Run `dev` (only declared `touch_files`, fill `02`, hand off) and
+   `qa` (independent tests under `tests/acceptance/`, fill `03`, one verdict). Proposal
+   moves to `applied` once implementation and verification pass.
 
-6. **Converge and archive.** After `QA_PASSED`, run the `converge` skill (when
-   installed) to fold the confirmed implementation deviations back into
-   `.specs/02-tech-spec.md`, write `.specs/changes/<change-id>/convergence.md`, move
-   the bundle to `tasks/archive/<task-id>/`, and set the proposal `status: archived`.
-   Without the converge skill, perform the same write-back manually: append an attributed, dated
-   "Converged changes" section to the spec, record it in `convergence.md`, then set
-   `status: archived`. Never rewrite existing spec prose; append.
+6. **Converge and archive.** After `QA_PASSED`, run `converge` to append confirmed deviations
+   to `.specs/02-tech-spec.md`, write `convergence.md`, move bundle to `tasks/archive/`, and
+   set proposal `status: archived`. Without `converge`, perform identical append write-back manually.
 
 ## Manual fallback (no Python)
 
-1. Build the standards list by hand: configuration files at the repo root, test directories, top-level
-   source directories, runtime versions, and the existing `#sec-*` anchors in `.specs`.
-2. Copy `assets/templates/proposal.template.md` to
-   `.specs/changes/<change-id>/proposal.md` and fill every token (`{{...}}`); compute
-   `base_spec_sha256` with any SHA-256 tool over the base spec file.
-3. Create the four task documents under `tasks/<change-id>/`: copy them from the
-   `task-decomposition` skill when it is installed, otherwise use the minimal four-document
-   structure in [`references/brownfield-protocol.md`](references/brownfield-protocol.md), rename
-   away `.template` where applicable, and fill the contract frontmatter
-   with `change_id`, `size_class`, `origin_spec_anchor`,
-   `estimated_lines`, `dependencies`, and `touch_files`
-   (`create`/`modify`).
-4. Run the Gate 1 checklist manually from `plan-linter` and the Gate 2 checklist from
-   `review`; record the evidence in the task bundle.
-5. Follow steps 5 and 6 above with the same artifacts.
+1. Build standards list by hand: repo-root configs, test/source trees, runtimes, `#sec-*` anchors.
+2. Copy `assets/templates/proposal.template.md` to `.specs/changes/<change-id>/proposal.md`, fill every token (`{{...}}`), and compute `base_spec_sha256`.
+3. Create `tasks/<change-id>/` four-document bundle using `task-decomposition` templates or the fallback in [references/brownfield-protocol.md](references/brownfield-protocol.md).
+4. Run Gate 1 / Gate 2 checklists manually; record evidence in the bundle.
+5. Follow workflow steps 5–6 with the same artifacts.
 
 ## Quality-gate checklist
 
@@ -161,63 +131,49 @@ anchors it changes. Full lifecycle and sizing rules:
 - [ ] Proposal frontmatter complete, `status: proposed`, `kind` correct,
       `base_spec_sha256` current.
 - [ ] Every `[CHG-<n>]` block names a real `#sec-*` anchor that exists in the base spec.
-- [ ] Exactly one task bundle exists; its `change_id` equals the proposal id and its
+- [ ] Exactly one task bundle exists; `change_id` equals proposal id and
       `origin_spec_anchor` is one of the proposal's `impact_anchors`.
-- [ ] Diff budget honored: micro is one touch file (default 10-49 lines); standard is 1-3 files
-      (default 50-250 lines). Numbers are configurable in the plan-linter config.
-- [ ] Gate 1 passes on the filled contract and the proposal is open (`proposed`/`applied`).
-- [ ] Gate 2 review has no blocking findings; the reviewer is independent and read-only.
+- [ ] Diff budget honored: micro is 1 touch file (default 10-49 lines); standard is
+      1-3 files (default 50-250 lines). Numbers configurable in plan-linter config.
+- [ ] Gate 1 passes on the filled contract and proposal is open (`proposed`/`applied`).
+- [ ] Gate 2 review has no blocking findings; reviewer is independent and read-only.
 - [ ] Dev implemented only `touch_files`; QA issued exactly one verdict with evidence.
-- [ ] Converge appended the deltas to the spec and the proposal is `archived`.
+- [ ] Converge appended deltas to the spec and the proposal is `archived`.
 
 ## Anti-hallucination rules
 
-- **Never invent file paths.** Every `touch_files` entry must be an existing file to
-  `modify` or a new file inside an existing directory to `create`; paths are
-  repo-relative and forward-slashed.
-- **Every diff hunk names a real anchor.** Reuse an existing `#sec-*` anchor; the scaffolder
-  refuses an anchor that is absent from the base spec and `lint_change.py` rejects one that
-  drifted.
-- **Do not invent commands or conventions.** Only commands evidenced by declared configuration (the
-  standards report's section 6) may appear in the contract DoD.
-- **A structural change escalates.** If the change needs a new spec section/anchor, a new component,
-  a new ADR, or a new cross-cutting invariant, stop and use `spec-generator`; do not widen a
-  change.
-- **Do not overstate the gates.** Gate 1 is deterministic bookkeeping, Gate 2 is a prompt, and the
-  authoritative audit trail is git plus repository CI. Optional scripts are helpers, never
-  enforcement guarantees.
+- **Never invent file paths.** Every `touch_files` entry must be an existing file
+  to `modify` or a new file in an existing directory to `create` (repo-relative, forward-slashed).
+- **Every diff hunk names a real anchor.** Reuse an existing `#sec-*` anchor;
+  the scaffolder and linter reject missing or drifted anchors.
+- **Do not invent commands or conventions.** Only commands evidenced by declared
+  configuration (the standards report) may appear in the contract DoD.
+- **A structural change escalates.** If the change needs a new spec section/anchor,
+  a new component, a new ADR, or an invariant change, stop and use `spec-generator`.
+- **Do not overstate the gates.** Gate 1 is deterministic bookkeeping, Gate 2 is
+  prompt review; git and CI remain authoritative.
 
 ## Helper scripts
 
-- `scripts/standards_extract.py` - deterministic repository-standards extractor; writes
-  `.specs/change-context/standards.md`; `--json`, `--check`,
-  `--dry-run`, `--version`.
-- `scripts/scaffold_change.py` - creates the proposal and one task bundle;
-  `--dry-run`, `--force`, `--json`, `--version`.
-- `scripts/lint_change.py` - proposal/bundle consistency and base-spec drift check;
-  `--json`, `--version`.
+- `scripts/standards_extract.py` — deterministic standards extractor; writes
+  `.specs/change-context/standards.md` (`--json`, `--check`, `--dry-run`, `--version`).
+- `scripts/scaffold_change.py` — creates proposal and one task bundle
+  (`--dry-run`, `--force`, `--json`, `--version`).
+- `scripts/lint_change.py` — proposal/bundle consistency and base-spec drift check
+  (`--json`, `--version`).
 
-All helpers are standard-library-only, resolve their own directory, never import repository code,
-and use exit codes `0` success, `1` content-gate failure, `2` usage/refusal,
-`3` unexpected error.
+All helpers are stdlib-only, resolve their own directory, and exit `0` (success), `1` (gate failure), `2` (usage error), `3` (unexpected error).
 
 ## Failure handling
 
-- **Missing base spec**: stop. A brownfield change has no meaning without a base; scaffold exits
-  `2`.
-- **Unknown anchor**: stop and reuse an existing anchor, or escalate to `spec-generator`.
-- **Stale standards report or spec drift** (`--check`/lint exit `1`): regenerate the
-  report, rebase the proposal on the new spec, and rerun Gate 1; never edit the recorded
-  `base_spec_sha256` by hand.
-- **Change directory already exists**: rerun with `--force` only when the previous scaffold is
-  disposable; otherwise edit the existing proposal.
-- **Optional script unavailable**: follow the manual fallback; the workflow must not depend on Python.
+- **Missing base spec**: Stop. A brownfield change requires a base spec; scaffold exits `2`.
+- **Unknown anchor**: Stop and reuse an existing anchor, or escalate to `spec-generator`.
+- **Stale report or spec drift** (exit `1`): Regenerate report, rebase proposal, rerun Gate 1; never hand-edit `base_spec_sha256`.
+- **Change directory exists**: Rerun with `--force` only if disposable; otherwise edit existing proposal.
+- **Scripts unavailable**: Follow manual fallback; workflow is prompt-first.
 
 ## Honest limits
 
-- The standards report describes declared configuration, not necessarily enforced practice; it is a
-  prompt for the Planner, not proof of compliance.
-- `base_spec_sha256` detects any byte change to the base spec (including formatting); after
-  convergence the archived proposal is exempt from the drift check because the spec intentionally
-  changed.
+- The standards report describes declared configuration, not necessarily enforced practice; it is a prompt for the Planner, not proof of compliance.
+- `base_spec_sha256` detects any byte change to the base spec; after convergence the archived proposal is exempt from drift checks.
 - Optional scripts are bypassable; CI plus repository permissions remain authoritative.

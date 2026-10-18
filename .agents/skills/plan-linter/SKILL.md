@@ -1,6 +1,6 @@
 ---
 name: plan-linter
-description: "Run the Gate 1 deterministic static check on task bundles and follow the Gate 2 review checklist before development starts. Use when task contracts exist under tasks/ and you need to verify blast radius, diff budget (standard and micro), declared-file topology, traceability anchors, the spec anchor coverage matrix, inherited ADRs, machine-checkable acceptance criteria, required documents, change proposals and dependency acyclicity. Do not use when the spec or task decomposition is still being written, or when you only need to review a single source change."
+description: "Run the Gate 1 deterministic static check on task bundles before development starts and follow the Gate 2 review checklist. Use when task contracts exist under tasks/ and you need to verify blast radius, diff budget, declared-file topology, traceability anchors, spec anchor coverage, inherited ADRs, machine-checkable acceptance criteria, and DAG acyclicity. Do not use for code execution, CI pipeline construction, AST/complexity checks, or test audits (owned by quality-engineering)."
 license: MIT
 compatibility: "Harness-agnostic. Python >= 3.9 optional; without Python follow the manual checklist in references/gate-2-review.md."
 metadata:
@@ -8,13 +8,13 @@ metadata:
   category: spec-pipeline
 ---
 
-# Plan Linter
+# Plan Linter (Gate 1 Planning Validator)
 
-Two gates run before implementation:
+This skill has a single, strictly bounded responsibility: **Gate 1 deterministic static validation of planned task contracts and bundles under `tasks/` before development starts**.
 
 - **Gate 1** is a deterministic script in this skill: fast, offline, stdlib only.
-- **Gate 2** is a prompt-only semantic review. It is not automated. The script
-  never claims to perform it.
+- **Gate 2** is a prompt-only semantic review (`review` skill, with `references/gate-2-review.md` as fallback).
+- **Non-goals**: plan-linter does NOT execute code, does NOT build or run CI pipelines, does NOT perform AST/code complexity analysis, and does NOT audit tests. All CI pipelines and verification gates are owned by `quality-engineering`; local testing is owned by `qa`.
 
 ## Gate 1: deterministic checks
 
@@ -44,34 +44,23 @@ Everything is checked; the order in the output is stable.
 ## Quick start
 
 ```bash
-# human-readable report, default tasks directory
+# Standard report or machine-readable JSON
 python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks
-
-# machine-readable result for CI or another agent
 python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks --json
 
-# custom thresholds and extra forbidden prefixes
+# Custom configuration or legacy format
 python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks --config plan-linter.json
-
-# legacy contracts only
 python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks --legacy
 
-# skip the placeholder scan (rare; document why)
-python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks --no-placeholder-scan
-
-# Gate 2 heuristics: coverage matrix, real-file topology, brownfield proposals
+# Gate 2 heuristics and blocking CI mode
 python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks \
-  --repo-root . --spec .specs/02-tech-spec.md --changes-dir .specs/changes \
-  --coverage-out artifacts/coverage.json --json
-
-# make the heuristics blocking in CI
+  --repo-root . --spec .specs/02-tech-spec.md --changes-dir .specs/changes --json
 python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks \
   --spec .specs/02-tech-spec.md --strict-topology --strict-anchor --require-full-coverage
 ```
 
-The script is optional. If Python is unavailable, use
-references/gate-2-review.md as a manual checklist and review the same fields by
-hand.
+The script is optional. If Python is unavailable, use `references/gate-2-review.md` as a
+manual checklist and review the same fields by hand.
 
 **Gate 2 is the separate `review` skill.** After Gate 1 exits 0, use the `review` skill
 (plan-review mode) when it is installed for the independent semantic audit. This skill
@@ -117,18 +106,14 @@ dod:
 ```
 
 Rules:
-
-- task_id must equal the task directory name.
-- Paths are repository-relative and use forward slashes.
-- touch_files may not point at a forbidden prefix (tests/acceptance/ by default).
-- Do not leave placeholders such as mustache variables, [TBD] or TODO in 01/02/03.
+- `task_id` must equal the task directory name; paths are repo-relative with forward slashes.
+- `touch_files` may not point at forbidden prefixes (`tests/acceptance/` by default).
+- Do not leave placeholders (`{{...}}`, `[TBD]`, `TODO`) in 01/02/03.
 
 ### Legacy fallback
 
-Contracts without YAML frontmatter are parsed with a table fallback that
-understands the pre-v2 Chinese and English layouts. A successful legacy run
-prints a LEGACY_FORMAT warning so the migration debt stays visible. Both
-formats are validated by the same checks. Add --legacy to force the fallback.
+Contracts without YAML frontmatter use a table fallback for pre-v2 layouts,
+printing a `LEGACY_FORMAT` warning. Add `--legacy` to force the fallback.
 
 ## Configuration
 
@@ -174,43 +159,30 @@ per project; unknown keys produce a warning, while wrongly typed values exit 2.
 }
 ```
 
-`coverage` is present only when `--spec` is passed. `--coverage-out` writes the same
-object as a standalone file so a reviewer or CI job can diff it between runs.
+`coverage` is present only when `--spec` is passed; `--coverage-out` writes it to a file.
 
-Each error object has the keys task, code, message, file and line. Error codes
-are stable English identifiers such as MISSING_LINT, MISSING_ADRS,
-INVALID_ANCHOR, MISSING_DOC, TASK_ID_MISMATCH, DUPLICATE_TASK_ID,
-DEPENDENCY_NOT_FOUND, DAG_CYCLE, FORBIDDEN_TOUCH_FILE, PLACEHOLDER,
-TOUCH_FILE_MISSING, TOUCH_FILE_EXISTS, TOUCH_PATH_OUTSIDE_ROOT,
-SPEC_SECTION_UNCOVERED, ANCHOR_NOT_IN_SPEC, CHANGE_PROPOSAL_MISSING,
-CHANGE_NOT_OPEN, INVALID_SIZE_CLASS, INVALID_CHANGE_ID, MICRO_REQUIRES_CHANGE_ID,
-MICRO_TOO_MANY_TOUCH_FILES, MICRO_DIFF_TOO_SMALL and MICRO_DIFF_TOO_LARGE.
-Archived proposals produce the warning CHANGE_ALREADY_ARCHIVED instead of an error, and
-the directories listed in ignore_task_dirs (default tasks/archive) are never scanned as
-pending bundles.
+Each error object has keys `task`, `code`, `message`, `file`, and `line`. Error codes
+are stable English identifiers (e.g. `MISSING_DOC`, `TASK_ID_MISMATCH`, `DAG_CYCLE`,
+`PLACEHOLDER`, `TOUCH_FILE_MISSING`, `SPEC_SECTION_UNCOVERED`). Archived proposals
+produce `CHANGE_ALREADY_ARCHIVED` instead of an error, and `ignore_task_dirs`
+(`tasks/archive`) are never scanned as pending bundles. Full error reference: `references/gate-2-review.md`.
 
 ## Gate 2: semantic review (prompt only)
 
-After Gate 1 passes, read references/gate-2-review.md and perform the review as
-an independent reviewer. Summarise the result as either:
+After Gate 1 passes, follow `references/gate-2-review.md` as an independent reviewer. Summarise as either:
+- `Gate 2 Plan Review Passed: 0 omissions, 0 hallucinations`; or
+- Finding list: task directory, contaminated fields, and violated ADR ids.
 
-- Gate 2 Plan Review Passed: 0 omissions, 0 hallucinations; or
-- a list of task directories, contaminated fields and violated ADR ids.
+Gate 2 is manual: a script cannot judge semantic truthfulness. Do not pass unless reviewed.
 
-Gate 2 is deliberately manual: a static script cannot judge whether a business
-entity is invented. Do not report a Gate 2 pass unless the review actually ran.
-
-## Portability and limits
-
-The script uses only the Python standard library and resolves nothing outside
-its own directory, so the skill directory can be copied elsewhere and still run
-(for example, copy it to a temporary directory and run --help or --tasks-dir).
-It never writes files.
-
-It does not:
-
-- execute the DoD commands (no type-check or test execution);
-- judge whether a spec section is *semantically* covered: the coverage matrix is
-  anchor-level bookkeeping, and a task can reference an anchor without implementing it;
-- check the prose quality of a contract;
-- replace the repository's git-based RBAC audit.
+## Portability, boundaries and non-goals
+ 
+The script is stdlib-only, resolves relative to its own directory, and never writes files.
+ 
+Strict boundaries and non-goals:
+- **No code execution**: never runs DoD commands, application code, or test suites.
+- **No CI orchestration**: does not build, manage, or run CI pipelines (owned by `quality-engineering`).
+- **No AST or complexity analysis**: does not compute cyclomatic complexity $V(G)$ (owned by `quality-engineering`).
+- **No test or verification audit**: does not audit test evidence or mutation MSI (Gate 3 owned by `quality-engineering`).
+- **No semantic judgment**: does not judge semantic truthfulness (Gate 2 is prompt review).
+- **No RBAC enforcement**: does not replace the git-based RBAC audit.

@@ -55,12 +55,18 @@ increments it.
 | `{{TYPE_CHECK_COMMAND}}` | Type-check command that must exit 0. |
 | `{{LINT_COMMAND}}` | Lint command that must exit 0. |
 | `{{TEST_FILE_PATH}}` | Acceptance test file owned by QA. |
-| `{{EDGE_CASE_1}}` / `{{EDGE_CASE_2}}` | At least two edge/negative assertions. |
+| `{{EDGE_CASE_1}}` / `{{EDGE_CASE_2}}` | At least two edge/negative assertions formatted as "Given [precondition], When [action], Then [outcome]". |
 | `{{GOAL_AND_SCOPE}}` | One-paragraph goal and scope. |
 | `{{OUT_OF_SCOPE}}` | Explicit non-goals. |
-| `{{INVARIANT_INPUT_VALIDATION}}` | Input-validation invariant. |
-| `{{INVARIANT_STATE_TRANSITIONS}}` | State-transition invariant. |
-| `{{INVARIANT_IDEMPOTENCY}}` | Idempotency/consistency invariant. |
+| `{{INVARIANT_INPUT_VALIDATION_GIVEN}}` | Input validation scenario: precondition or initial state. |
+| `{{INVARIANT_INPUT_VALIDATION_WHEN}}` | Input validation scenario: trigger action or input stimulus. |
+| `{{INVARIANT_INPUT_VALIDATION_THEN}}` | Input validation scenario: expected observable outcome or error response. |
+| `{{INVARIANT_STATE_TRANSITIONS_GIVEN}}` | State transition scenario: precondition or initial state. |
+| `{{INVARIANT_STATE_TRANSITIONS_WHEN}}` | State transition scenario: mutation trigger or transition event. |
+| `{{INVARIANT_STATE_TRANSITIONS_THEN}}` | State transition scenario: expected target state and terminal properties. |
+| `{{INVARIANT_IDEMPOTENCY_GIVEN}}` | Idempotency/consistency scenario: precondition or existing system state. |
+| `{{INVARIANT_IDEMPOTENCY_WHEN}}` | Idempotency/consistency scenario: repeated request or concurrent execution. |
+| `{{INVARIANT_IDEMPOTENCY_THEN}}` | Idempotency/consistency scenario: identical outcome with no redundant side effects. |
 | `{{INHERITED_ADR_SUMMARY}}` | One-line summary of inherited ADR decisions. |
 | `{{NOTES}}` | Open questions or notes for the implementer. |
 

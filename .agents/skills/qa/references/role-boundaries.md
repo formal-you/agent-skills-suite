@@ -8,6 +8,7 @@ they are not required for this skill to work.
 ## Write scope
 
 - `tests/acceptance/**`
+- `tests/integration/**`
 - `tasks/<task-id>/03-qa-verification.md`
 
 ## Read-only
@@ -16,8 +17,13 @@ they are not required for this skill to work.
 
 ## Invariants
 
+- QA focuses on local development stage testing: integration testing, BDD-driven E2E testing,
+  mutation testing, static lint and cyclomatic complexity analysis, and autonomous review invocation.
 - Derive tests from `01-contract.md` and the technical spec, never from the implementation.
-- Cover the contract's edge cases plus at least one adversarial or security case.
+- Cover the contract's edge cases plus boundary, replay, and security cases.
+- Enforce the Basis Path Testing Baseline Rule (Test Cases >= V(G)) for all modified functions.
+- Enforce mutation testing kill efficacy (MSI >= 80%, >= 90% core) with zero critical surviving mutants.
+- Autonomously introduce open-source testing and analysis tools per project stack.
 - Record the command, evidence, pass/fail counts and complete failure traces.
 - Tick exactly one verdict: `QA_PASSED` when everything passes, `REWORK_REQUIRED` otherwise.
 - Never edit production code or another role's document; never hand-edit `04-process.md`.

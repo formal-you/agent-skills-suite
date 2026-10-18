@@ -29,16 +29,19 @@ them when present; the skill never grants extra access.
 
 ## Inputs
 
-- `tasks/<task-id>/01-contract.md` — authoritative YAML frontmatter and the readable contract.
-- Inherited ADRs and the spec anchors referenced by the contract.
+- `tasks/<task-id>/01-contract.md` — authoritative YAML frontmatter, `touch_files`, `dod`, Section 4
+  BDD behavioral scenarios (Given-When-Then invariants), and inherited ADRs.
+- Spec anchors referenced by the contract.
 - Project commands for type check and lint, the existing test suite, and the QA-owned acceptance
-  target declared in `dod`.
+  target declared in `dod.test_file`.
 - `tasks/<task-id>/02-dev-workspace.md` — the blank form you fill.
 
 ## Outputs
 
 - Code changes **only** for paths listed in `touch_files`.
-- A completed `02-dev-workspace.md` with metadata, actual changes, self-verification and the
+- Code adhering to BDD invariants and cyclomatic complexity limits ($V(G) \le 10$ standard, warning
+  $11-15$ justified in `02`, critical $> 15$ prohibited).
+- A completed `02-dev-workspace.md` with metadata, actual changes, self-verification, and the
   **Implementation deviations** table (rows `DEV-001`, `DEV-002`, ... or an explicit None row).
 - Exactly one handoff marker: `- [x] WAITING_FOR_QA`, checked only when every DoD item passes.
 - No edits to `01-contract.md`, `03-qa-verification.md`, `04-process.md` or
@@ -46,28 +49,31 @@ them when present; the skill never grants extra access.
 
 ## Workflow
 
-1. **Confirm scope.** Read `01-contract.md` frontmatter first. Check that `task_id` equals the
-   directory name and that `touch_files`, `dod` and `adherence_adrs` are present. If anything is
-   missing or contradictory, stop and report it instead of guessing.
-2. **Prepare the work.** Use the project's branch/commit convention, claim the task if the project
-   has a claim protocol, and note the base commit. Do not reopen an already accepted task unless a
-   reviewer reopens it.
-3. **Implement the vertical slice.** Change only files in `touch_files`; keep the slice
-   end-to-end and independent. Do not create test files under `tests/acceptance/`; those belong to
-   QA. If a required file is outside the list, stop and escalate rather than widening scope.
-4. **Run the machine-checkable DoD.** Execute `dod.type_check` and `dod.lint`, then run the
-   project's existing tests; consider every `dod.edge_cases` item. `dod.test_file` is the QA-owned
-   acceptance target: run it only if it already exists, never author or edit it. If it does not
-   exist yet, record that in `02` and let QA run it during verification. Capture commands/results.
+1. **Confirm scope and BDD contract.** Read `01-contract.md` frontmatter and Section 4 BDD scenarios.
+   Check that `task_id` equals the directory name, and that `touch_files`, `dod`, `adherence_adrs`
+   and Given-When-Then invariants are defined. Report missing or contradictory items to the Planner.
+2. **Prepare the work.** Note the base commit and adhere to project branch/commit conventions. Do not
+   reopen an already accepted task unless a reviewer reopens it.
+3. **Implement vertical slice under BDD and complexity limits.** Change only files in `touch_files`.
+   Implement logic fulfilling the Given-When-Then invariants declared in Section 4 and `dod.edge_cases`.
+   Control single-function cyclomatic complexity ($V(G) \le 10$ standard). If complexity approaches
+   the warning limit ($11-15$), apply refactoring patterns (Extract Method, Strategy / Lookup Table,
+   Guard Clauses). If $V(G) > 15$, refactor before proceeding. Do not edit or create `tests/acceptance/**`.
+4. **Run machine-checkable DoD and self-verification.** Execute `dod.type_check` and `dod.lint`, then
+   run the project's existing tests; consider every `dod.edge_cases` item. Self-audit cyclomatic
+   complexity on all touched functions. The acceptance target (`dod.test_file`) is QA-owned: run it
+   only if it already exists, never author or edit it. If it does not exist yet, record that in `02`
+   and let QA run it during verification. Capture commands/results.
 5. **Fill `02-dev-workspace.md`.** Record branch, base/handoff commit, design notes, one row per
-   actually changed file, net line counts, and tick each self-verification item that is true. Leave
-   items unticked if they did not pass. Complete the **Implementation deviations** table: one row
-   per place where the code differs from the contract or spec (`DEV-001`, `DEV-002`, ...;
-   operation `add` | `modify` | `remove`; a `#sec-*` anchor), or write None in every cell when
-   nothing deviated.
-6. **Hand off to QA.** Only when every self-verification item passes, change
-   `- [ ] WAITING_FOR_QA` to `- [x] WAITING_FOR_QA`. That single checked box is the handoff
-   trigger. Do not edit `03` or `04`.
+   actually changed file, net line counts, and tick each self-verification item that is true.
+   Include explicit architectural justification for any function with warning complexity
+   ($11 \le V(G) \le 15$). Leave items unticked if they did not pass. Complete the
+   **Implementation deviations** table: one row per place where the code differs from the contract
+   or spec (`DEV-001`, `DEV-002`, ...; operation `add` | `modify` | `remove`; a `#sec-*` anchor),
+   or write None in every cell when nothing deviated.
+6. **Hand off to QA.** Only when every self-verification item passes and complexity limits are
+   satisfied, change `- [ ] WAITING_FOR_QA` to `- [x] WAITING_FOR_QA`. That single checked box is
+   the handoff trigger. Do not edit `03` or `04`.
 7. **On rework.** Read QA's failure traces in `03-qa-verification.md`, fix only within the
    contract, re-run the DoD, update `02` for the new attempt and hand off again. Escalate repeated
    failures instead of bypassing the contract.
@@ -76,7 +82,10 @@ them when present; the skill never grants extra access.
 
 - [ ] Every changed path is listed in `01-contract.md` → `touch_files`.
 - [ ] No file outside the blast radius was created or modified.
+- [ ] Implementation honors all Given-When-Then BDD scenarios and behavioral invariants.
 - [ ] Type check and lint exit successfully; the project's existing tests pass.
+- [ ] Cyclomatic complexity self-audit passes: all functions meet $V(G) \le 10$ (or $11-15$ with
+      justification in `02`); none exceed $V(G) > 15$.
 - [ ] The QA-owned acceptance target (`dod.test_file`) is declared; if it is not authored yet, that
       is recorded for QA.
 - [ ] Every `dod.edge_cases` item has an implementation/test rationale.
@@ -91,6 +100,8 @@ them when present; the skill never grants extra access.
 - **DoD command missing or not runnable**: report it with the command and error; do not hand-wave
   the check.
 - **DoD fails**: fix the implementation and rerun. Do not tick the handoff box while a check fails.
+- **Complexity exceeds threshold ($V(G) > 15$)**: refactor using Extract Method, Strategy /
+  Lookup Table, Guard Clauses, or State patterns before handoff; never hand off critical complexity.
 - **Tooling unavailable**: use the project's manual commands and record evidence in `02`; the
   workflow must not depend on optional tooling.
 
@@ -114,7 +125,7 @@ The **Implementation deviations** table is Dev's last deliverable for the task. 
 ## References
 
 - [`references/dev-protocol.md`](references/dev-protocol.md) — detailed checklists, scope
-  verification, handoff and rework procedure.
+  verification, McCabe cyclomatic complexity limits, refactoring patterns, handoff and rework procedure.
 - Role boundaries: [`references/role-boundaries.md`](references/role-boundaries.md) — write scope,
   read-only scope, invariants and the honest enforcement model (bundled; no external files needed).
 - Repository rules: read `AGENTS.md` and any role-rules files when the adopting project defines
