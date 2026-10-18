@@ -532,6 +532,7 @@ def dispatch_strategy(action, val):
         skill_names = [
             "change", "converge", "dev", "plan-linter", "prd-generator",
             "qa", "quality-engineering", "review", "spec-generator", "task-decomposition",
+            "test-engineering",
         ]
         mismatches: List[str] = []
         for name in skill_names:
@@ -829,11 +830,11 @@ def boundary_fn(x):
     def test_skill_md_line_count_under_200(self) -> None:
         """Boundary: Every SKILL.md across all skills (including change and plan-linter) must strictly stay below 200 lines."""
         skill_files = sorted(set(SKILLS_DIR.rglob("SKILL.md")) | set(AGENTS_SKILLS_DIR.rglob("SKILL.md")))
-        # Guard: Ensure we found all skills across both trees (10 in skills/, 10 in .agents/skills/)
+        # Guard: Ensure we found all skills across both trees (12 in skills/, 12 in .agents/skills/)
         self.assertGreaterEqual(
             len(skill_files),
-            20,
-            f"Expected at least 20 SKILL.md files (10 per tree), found {len(skill_files)}",
+            24,
+            f"Expected at least 24 SKILL.md files (12 per tree), found {len(skill_files)}",
         )
         inspected_skills = {p.parent.name for p in skill_files}
         mandatory_skills = (
@@ -841,11 +842,13 @@ def boundary_fn(x):
             "plan-linter",
             "dev",
             "qa",
+            "quality-engineering",
             "review",
             "task-decomposition",
             "converge",
             "prd-generator",
             "spec-generator",
+            "test-engineering",
             "diagnose-windows-sandbox-acl",
         )
         for mandatory_skill in mandatory_skills:

@@ -172,6 +172,14 @@ uv tool install agent-spec-suite     # or: pip install agent-spec-suite
 is not part of the PRD -> spec -> task pipeline; install it only on Windows hosts
 where DSH sandbox ACL diagnosis is relevant.
 
+## Global methodology skill
+
+`test-engineering` is a prompt-only workflow skill: it ships `SKILL.md`, `references/` and
+`assets/templates/`, but no `scripts/`, so it has no runtime dependency. It owns the repository-wide
+test strategy and design standards and can review a task's test design (`DESIGN_READY` /
+`DESIGN_GAPS`), but it never accepts a task, writes tests or `03`, or runs CI gates. Per-task
+acceptance stays with `qa`; CI gates stay with `quality-engineering`.
+
 ## Versioning and change notes
 
 - Each skill declares `metadata.version` in `SKILL.md`.

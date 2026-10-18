@@ -4,7 +4,8 @@
 > 对应版本：技能 `metadata.version` 2.x（基础流程）、3.x（brownfield/收敛/分发）与 4.x（现代质量工程：BDD + 圈复杂度 + 变异测试 + 4 阶段分层测试流水线）。  
 > v3 用法见 [`brownfield-convergence.zh-CN.md`](brownfield-convergence.zh-CN.md)；CI 门禁与工作流模板见 [`templates/ci/README.md`](../templates/ci/README.md)。  
 > **v3.2.0 加固**：Gate 3 与真实 AST artifact 交叉核验、变异测试 fail-closed、错误码注册表与 triage、证据 provenance 与 Appeal/仲裁；详见 [`skills-remediation.zh-CN.md`](skills-remediation.zh-CN.md)。
-> 本文系统说明十个技能如何协同工作、现代质量工程三支柱如何落地、四阶段测试流水线与 CI 权威门禁如何运转。
+> **v3.3.0 新增**：`test-engineering` 全局测试方法学技能（测试策略、测试设计方法、数据/环境与 flakiness 策略、测试指标与独立测试设计评审）；它不接收单任务、不写测试与 `03`、不运行 CI 门禁，详见 §7.8。
+> 本文系统说明十一个技能如何协同工作、现代质量工程三支柱如何落地、四阶段测试流水线与 CI 权威门禁如何运转。
 
 ---
 
@@ -23,6 +24,7 @@
   - **Gate 1（规划期门禁）**：`plan_linter.py` 专职审计任务切片、DAG 拓扑、规格锚点与 BDD 契约格式；
   - **Gate 2（语义审查门禁）**：只读 Reviewer Agent 审查正向覆盖率、反幻觉与 ADR 架构合规性；
   - **Gate 3（验收期门禁）**：`verification_linter.py` 专职审计 `03-qa-verification.md` 中的圈复杂度覆盖与变异测试杀伤力证据；
+- **全局测试方法学（跨任务）**：`test-engineering` 负责仓库级测试策略、测试设计方法（等价类/边界值/判定表/状态迁移/成对组合等）与独立测试设计评审；其 `DESIGN_READY` / `DESIGN_GAPS` 仅是设计质量标记，不是任务裁决，单任务验收仍归 `qa`，CI 门禁仍归 `quality-engineering`；
 - **四阶段分层测试流水线**：涵盖本地测试、测试环境、合并前 PR 权威门禁与合并后主干回归/规格收敛，提供开箱即用的 GitHub Actions 工作流模板（`templates/ci/quality-gate.yml`）。
 
 ---
@@ -69,6 +71,10 @@
 │   ├── SKILL.md
 │   ├── references/verification-protocol.md
 │   └── scripts/            # complexity_check.py (圈复杂度门禁) / verification_linter.py (Gate 3 审计)
+├── test-engineering/       # 全局测试体系：测试策略、测试设计方法、数据/环境/flakiness 策略、独立测试设计评审
+│   ├── SKILL.md
+│   ├── assets/templates/test-strategy.template.md
+│   └── references/         # test-strategy / test-design-review / role-boundaries
 └── converge/               # 收敛：QA_PASSED 后写回规格、归档任务包与 change
     ├── SKILL.md
     ├── references/convergence-protocol.md
@@ -88,6 +94,7 @@
 | `dev` | `01-contract.md` + 项目命令 | 代码变更（$V(G) \le 10$）、填好的 `02`、`WAITING_FOR_QA` | Agent（业务实现、重构自测、自证） |
 | `qa` | `01`、填好的 `02`、测试命令 | `tests/acceptance/**`、`tests/integration/**`、填好的 `03`（本地测试与审计证据）、唯一裁决 | Agent（本地集成、BDD E2E、变异杀伤、静态 Lint/复杂度、自主 review） |
 | `quality-engineering` | CI 触发事件、PR diff、`tasks/` 交付包、CI 模板 | CI 流水线状态、门禁报告（Gate 1、RBAC、圈复杂度、验收测试、Gate 3）、合并前/合并后测试结果 | CI / 脚本（`quality-gate.yml`、`complexity_check.py`、`verification_linter.py`） |
+| `test-engineering` | 质量属性、现有测试套件、缺陷/事故历史、任务契约（只读） | 商定的测试策略文档、测试设计评审记录（`DESIGN_READY` / `DESIGN_GAPS`） | Agent（跨任务测试策略与设计标准；不参与单任务裁决） |
 | `converge` | `01`、带偏差表的 `02`、勾选 `QA_PASSED` 的 `03` | 写回 `.specs/02-tech-spec.md`、`CONVERGED` 状态、归档任务包 | 脚本（`converge.py`，append-only 写回） |
 
 ---
@@ -639,6 +646,7 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
   - 在 `03` 中记录完整执行证据与度量表，二选一勾选 `QA_PASSED` 或 `REWORK_REQUIRED`；
   - **证据 provenance**：Section 5 记录真实 artifact 路径与 SHA-256；`Equivalent > 0` 时填写等价理由；`01-contract.md` 的 `risk_level: core` 任务使用 90% MSI 阈值；
   - 本地运行 Gate 3 静态审计（由 `quality-engineering` 提供的 `verification_linter.py`）确认合规后签署；收到 Appeal 时先等待仲裁，不要单方面再次 `REWORK_REQUIRED`。
+  - **与 `test-engineering` 的边界**：跨任务的测试策略、测试设计方法与数据/环境/flakiness 策略由 `test-engineering` 维护；`qa` 只负责当前任务的验收测试执行、证据记录与唯一裁决。
 
 ### 7.6 `quality-engineering`（CI 流水线构建与多阶段测试门禁）
 - **核心职责**：构建 CI 流水线，确保测试环境隔离与就绪，管理代码合并前测试与合并后测试，权威拥有并维护全套 CI 工作流模板与 CI 门禁脚本（`complexity_check.py`、`verification_linter.py`、`quality-gate.yml` 等）。
@@ -652,6 +660,7 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
     5. Gate 3 验收交叉审查（调用 `verification_linter.py --actual-complexity ... --require-actual-complexity`，将 `03` 的 V(G) 与真实 AST artifact 核对，并核查基本路径覆盖与 MSI $\ge 80\%$，core 为 90%）。
   - **代码合并后测试（Post-merge 流水线）**：主干合入后执行全量主干回归测试、按需手动触发规格收敛（Converge）、持续追踪变异基线与性能 Benchmark；
   - **CI 资产与工具唯一归属**：权威维护 CI 工作流模板（`quality-gate.yml`、`plan-gate.yml`、`rbac-gate.yml`）与确定性门禁检查工具（`complexity_check.py`、`verification_linter.py`、`tools/mutation_gate.py`）。
+- **与 `test-engineering` 的边界**：仓库级测试策略、测试设计方法与测试数据/环境/flakiness 策略由 `test-engineering` 维护；`quality-engineering` 负责把这些标准落成 CI 流水线、环境与门禁，不改写测试方法学本身。
 
 ### 7.7 `converge`（规格收敛）
 - **核心职责**：在任务达到 `QA_PASSED` 后，闭环写回规格并归档。
@@ -659,6 +668,21 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
   - 读取 `02-dev-workspace.md` 中的偏差表，以 append-only 方式追加至 `.specs/02-tech-spec.md` 末尾的 Converged changes 章节；
   - 更新 `04-process.md` 状态为 `CONVERGED`；
   - 将任务包安全归档至 `tasks/archive/<task-id>/`。
+
+### 7.8 `test-engineering`（全局测试体系）
+- **核心定位**：跨任务的全局测试方法学与独立测试设计评审，不进入单任务执行链路。
+- **使用时机**：
+  - 建立、修订或批准仓库级测试策略与质量属性；
+  - 针对某类风险、技术栈或功能域选择测试层级（unit / integration / contract / acceptance / E2E）与设计方法（等价类、边界值、判定表、状态迁移、成对组合等）；
+  - 定义测试数据、测试环境、测试替身与 flakiness 治理策略；
+  - 在 QA 执行前，独立评审某个任务或特性的**测试设计**（设计评审，不是验收）；
+  - 定义测试指标、测试证据口径并向 `qa` 与 `quality-engineering` 交接。
+- **不该使用的时机**：单任务验收、证据采集与唯一裁决（归 `qa`）；CI 流水线、门禁与运行环境（归 `quality-engineering`）；Gate 2 语义审查与代码审查（归 `review`）；实现与任务切片（归 `dev` 与规划技能）。
+- **产出**：
+  - 商定的测试策略文档：目标、质量属性、风险矩阵、测试层级与技术选型、数据/环境/替身/flakiness 策略、指标、RACI 与落地路线图；
+  - 独立测试设计评审记录：分级发现 + 唯一标记 `DESIGN_READY`（无 blocker/major）或 `DESIGN_GAPS`（存在阻塞/重要缺口）。
+- **边界**：`test-engineering` 只写商定的测试策略文档与测试设计评审记录；不接收单任务、不写测试或 `03-qa-verification.md`、不改源码、不运行或替代 CI 门禁。`DESIGN_READY` / `DESIGN_GAPS` 是设计质量意见，**不是** `QA_PASSED` / `REWORK_REQUIRED`，也不是 CI 门禁结果。
+- **诚实边界**：该技能仅提示词驱动，无法强制实施标准或角色隔离；权威门禁仍来自 CI 与分支保护。
 
 ---
 
@@ -680,6 +704,7 @@ tasks/<task-id>/
 | **Dev** | `src/**` (白名单), `02-dev-workspace.md` | `tests/acceptance/**`, `01`, `03`, `04` | 单函数圈复杂度 $V(G) \le 10$, DoD 全通 |
 | **QA** | `tests/acceptance/**`, `tests/integration/**`, `03-qa-verification.md` | `src/**`, `01`, `02`, `04` | 本地集成/BDD E2E、用例数 $\ge V(G)$, 变异得分 $\text{MSI} \ge 80\%$ |
 | **Quality Engineering** | CI 工作流 (`.github/workflows/*`, `templates/ci/*`) | `tasks/`, `src/`, `tests/` (CI 中只读门禁与回归) | 测试环境就绪、CI 门禁与回归全绿、Gate 3 审计全通 |
+| **Test Engineering** | 商定的测试策略文档、测试设计评审记录 | `tasks/`, `src/`, `tests/`, CI 产物（只读） | 测试策略覆盖、设计方法与风险匹配、`DESIGN_READY`/`DESIGN_GAPS` |
 | **Reviewer** | 只读（输出 Review 报告至独立终端/文件） | 任何工程与任务产物 | 反幻觉、正向覆盖率、ADR 架构红线 |
 
 ---

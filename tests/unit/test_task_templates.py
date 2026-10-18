@@ -428,7 +428,7 @@ class SkillAndRulesTests(unittest.TestCase):
         names = sorted(path.name for path in RULES_DIR.glob("*.md"))
         self.assertEqual(
             names,
-            ["architect.md", "dev.md", "enforcement.md", "orchestrator.md", "planner.md", "pm.md", "qa.md", "reviewer.md"],
+            ["architect.md", "dev.md", "enforcement.md", "orchestrator.md", "planner.md", "pm.md", "qa.md", "reviewer.md", "test-engineering.md"],
         )
         self.assertFalse(
             (RULES_DIR / "README.md").exists(),

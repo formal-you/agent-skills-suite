@@ -20,6 +20,7 @@ rules layer as optional context and work without it.
 | Dev | `dev.md` | `src/**`, `tasks/<task-id>/02-dev-workspace.md` | `01-contract.md`, `03-qa-verification.md`, `04-process.md`, `tests/acceptance/**` |
 | QA | `qa.md` | `tests/acceptance/**`, `tests/integration/**`, `tasks/<task-id>/03-qa-verification.md` | `src/**`, `01-contract.md`, `02-dev-workspace.md`, `04-process.md` |
 | Quality Engineering | `quality-engineering` skill | CI workflows (`.github/workflows/*`, `templates/ci/*`) | `tasks/`, `src/`, `tests/` (audited/executed in CI) |
+| Test Engineering | `test-engineering.md` | the agreed test-strategy document and test-design review notes | `tasks/`, `src/`, `tests/` and CI artifacts (reviewed read-only) |
 | Reviewer (Gate 2) | `reviewer.md` | none (read-only semantic audit) | `.specs/`, `tasks/`, `src/`, `tests/` |
 | Orchestrator / Lead | `orchestrator.md` | coordination artifacts only (task board, status, routing notes) | all role documents, `.specs/`, `src/`, `tests/`, `tasks/` |
 
@@ -107,6 +108,9 @@ host-side hook adapter; adopters may add local hooks, but they are best-effort a
 - The **planner** never writes source, tests or `04`; it also never fills `02`/`03` for other roles.
 - **Dev** never edits tests, the contract, QA's report or the process file.
 - **QA** never edits source, Dev's workspace, the contract or the process file.
+- **Test Engineering** never accepts an individual task, writes tests or `03-qa-verification.md`,
+  edits source, or runs CI gates; it only writes the agreed test-strategy document and test-design
+  review notes, and its `DESIGN_READY`/`DESIGN_GAPS` marker is not a task verdict.
 - **Architect** never invents domain content and never edits source, tests, tasks or the PRD.
 - **PM** never edits architecture, tasks, source or tests.
 - **Reviewer** never edits artifacts, weakens Gate 1, or rewrites a contract to make it pass.
@@ -125,5 +129,7 @@ is a planning signal, not a licence.
 - `.agents/skills/review/SKILL.md` — independent plan (Gate 2) and change/code review workflow.
 - `.agents/skills/dev/SKILL.md` — Dev implementation, self-verification and handoff workflow.
 - `.agents/skills/qa/SKILL.md` — QA black-box verification, evidence and verdict workflow.
+- `.agents/skills/test-engineering/SKILL.md` — repository-wide test strategy, test-design standards
+  and independent test-design review (design markers only, never a task verdict).
 
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)

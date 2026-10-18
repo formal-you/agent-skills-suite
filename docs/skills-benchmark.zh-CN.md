@@ -1,7 +1,7 @@
 # 技能套件评分与开源对标（2026-10）
 
-> **评分对象**：本仓库发布树（`skills/<category>/<name>/` 可安装布局：十个 workflow 技能
-> prd-generator、spec-generator、task-decomposition、change、plan-linter、review、dev、qa、quality-engineering、converge，
+> **评分对象**：本仓库发布树（`skills/<category>/<name>/` 可安装布局：十一个 workflow 技能
+> prd-generator、spec-generator、task-decomposition、change、plan-linter、review、dev、qa、quality-engineering、test-engineering、converge，
 > 外加一个 platform 助手 diagnose-windows-sandbox-acl；同时提供 `.claude-plugin/` 插件与市场清单），
 > 评审基线为 v3.1.0 发布包；`.agents/skills/` 是 AGENTS 发现机制的镜像布局。  
 > **对比对象**：当前公开的知名 spec-driven / agent-workflow 开源项目。  
@@ -16,6 +16,11 @@
 > **v3.2.0 更新（2026-10-19）**：门禁真实性加固（Gate 3 与真实 AST artifact 交叉核验、变异测试
 > fail-closed、plan-linter 单一职责、错误码注册表与 triage 路由、证据 provenance、Appeal/仲裁）。
 > 本文的评分口径与基线仍为 v3.1.0；v3.2.0 的加固作为"确定性/防作弊"维度的事实性提升，不重打分。
+>
+> **v3.3.0 更新（2026-10-19）**：新增 `test-engineering` 全局测试方法学技能（测试策略、风险驱动的
+> 测试设计方法、测试数据/环境与 flakiness 策略、测试指标、独立测试设计评审）；它不接收单任务、
+> 不写测试与 `03`、不运行 CI 门禁。本文的评分口径与基线仍为 v3.1.0，**不重新打分**；下面的组件
+> 评分表仍只覆盖 v3.1.0 基线的十个技能，`test-engineering` 作为全局方法学技能不进入本表。
 
 ---
 
@@ -94,7 +99,7 @@ Taskmaster           3.08  ██████▏
 
 ### 2.3 数据与证据
 
-- 本套件（发布树）：`skills/` 可安装布局（十个 workflow 技能 + `diagnose-windows-sandbox-acl`）、
+- 本套件（发布树）：`skills/` 可安装布局（十一个 workflow 技能 + `diagnose-windows-sandbox-acl`）、
   `.claude-plugin/` 插件与市场清单、`tools/`、`templates/ci/`、`docs/`、`tests/unit/`；发布包内实测
   **301 个黑盒单元测试（1 skip）**，这是本文引用的发布基线。
 - 上游开发仓库另有完整测试套件（539 个单元测试 + 109 个 E2E），**不随发布包分发**，仅作上游证据，
@@ -123,7 +128,7 @@ Taskmaster           3.08  ██████▏
 
 ## 4. 本套件的组件评分
 
-组件分为定性 1–5，不与上表权重直接相加；用于回答"十个 workflow 技能各自值多少"
+组件分为定性 1–5，不与上表权重直接相加；用于回答"v3.1.0 基线中的十个 workflow 技能各自值多少"
 （`diagnose-windows-sandbox-acl` 只做环境诊断，不参与流程评分）。
 
 | 组件 | 分数 | 理由 | 主要短板 |
@@ -242,7 +247,7 @@ Taskmaster           3.08  ██████▏
 1. **生态与公开采用**：插件清单已交付，但还没有发布到公共插件市场，没有公开示例库、社区与
    `skills-ref validate`；`quickstart` / `install_skills.py` 只解决"能不能装"，不解决"有多少人在用"。
 2. **多 agent 编排**：没有 per-task implementer/reviewer 的独立子代理编排（cc-sdd/BMAD 更强）。
-3. **上手成本**：需要理解四文档、十个 workflow 技能（外加一个 platform 助手）、两层门禁与配置阈值；仍比 OpenSpec/Taskmaster 重。
+3. **上手成本**：需要理解四文档、十一个 workflow 技能（外加一个 platform 助手）、两层门禁与配置阈值；仍比 OpenSpec/Taskmaster 重。
 4. **真实证据**：上游开发仓库有内部单仓库试点记录（未随发布包分发），但仍没有公开任务集 A/B、
    跨项目返工率数据；当前评分仍以自评为主。
 5. **brownfield 深度**：`change` 的 delta 仍需 Planner 手写，standards 提取是确定性启发式而非代码语义
@@ -291,7 +296,7 @@ v3.1.0 的交付项已经做完：**3.90 → 4.16**。
 
 ## 10. 数据来源与免责声明
 
-- 本套件（发布树）：`skills/`（十个 workflow + platform 可安装布局）、`.claude-plugin/`、`.agents/skills/`、
+- 本套件（发布树）：`skills/`（十一个 workflow + platform 可安装布局）、`.claude-plugin/`、`.agents/skills/`、
   `.agents/rules/`、`tools/`、`templates/ci/`、`tests/unit/`；[技能使用指南](skills-guide.zh-CN.md)、
   [brownfield 与收敛](brownfield-convergence.zh-CN.md)、[宿主兼容性](skills-compatibility.md)、
   [技能布局说明](../.agents/skills/README.md)、[发布测试基线](../tests/unit/)。

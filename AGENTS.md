@@ -38,6 +38,7 @@ override. If an action is outside your write scope, escalate to the owner instea
 - Dev — `.agents/rules/dev.md`: writes `src/**` plus `02-dev-workspace.md`; never edits tests, contracts or other roles' docs.
 - QA — `.agents/rules/qa.md`: local development stage testing (integration, BDD E2E, mutation testing, static lint & complexity analysis, autonomous review invocation). Prompt-only execution skill; writes `tests/acceptance/**`, `tests/integration/**` plus `03-qa-verification.md`; never edits source or other roles' docs.
 - Quality Engineering — `.agents/skills/quality-engineering/`: CI pipeline construction, test environment provisioning, pre-merge PR gates (Gate 1, RBAC, complexity check, acceptance tests, Gate 3 audit), post-merge automated verification, and ownership of CI workflow templates (`quality-gate.yml`), audit scripts (`complexity_check.py`, `verification_linter.py`) and the fail-closed mutation helper (`mutation_gate.py`).
+- Test Engineering — `.agents/rules/test-engineering.md`: owns the repository-wide test system (test strategy, risk-based test-design methods, data/environment and flakiness policy, test metrics, independent test-design review); writes only the agreed test-strategy document and test-design review notes; never accepts an individual task, never writes tests or `03`, and never runs CI gates.
 - Reviewer (Gate 2) — `.agents/rules/reviewer.md`: read-only semantic audit; never edits artifacts or weakens Gate 1.
 - Orchestrator/Lead — `.agents/rules/orchestrator.md`: routes work and enforces gate order; never authors role artifacts or bypasses a gate.
 
@@ -66,6 +67,7 @@ override. If an action is outside your write scope, escalate to the owner instea
   pointers for the truthful-gate changes.
 - Review skill: `review` (Gate 2 plan review plus change/code review); execution skills: `dev`
   (implement + handoff) and `qa` (independent verification + verdict); quality engineering: `quality-engineering`
-  (CI gates + pipeline automation); brownfield entry: `change`
+  (CI gates + pipeline automation); test engineering: `test-engineering` (repository-wide test
+  strategy and independent test-design review; never a per-task verdict); brownfield entry: `change`
   (proposal -> one task bundle -> archive) and convergence: `converge` (after `QA_PASSED`, append
   deviations to `.specs/02-tech-spec.md`, move the bundle to `tasks/archive/`).
