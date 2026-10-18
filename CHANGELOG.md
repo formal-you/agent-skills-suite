@@ -7,8 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Modern Quality Engineering Triad**:
+  - Multi-language AST McCabe Cyclomatic Complexity static checker (`complexity_check.py` v2.0.0) powered by Tree-sitter (https://github.com/tree-sitter/tree-sitter) with Lizard integration and Python AST fallback, covering Python, JS/TS, Go, Rust, Java, C/C++, C#.
+  - BDD executable living documentation with stack-native open-source frameworks (pytest-bdd, Cucumber.js, Godog, Cucumber-JVM, cucumber-rs, Reqnroll/SpecFlow).
+  - Mandatory open-source mutation testing tools (mutmut, Stryker, go-mutesting, PITest, cargo-mutants, Mull) with MSI >= 80% threshold and basis path coverage (Test Cases >= V(G)).
+- **New `quality-engineering` skill**: CI pipeline construction, test environment provisioning, pre-merge PR quality gates (Gate 1 contract lint, RBAC audit, complexity check, acceptance tests, Gate 3 audit), post-merge automated verification, and ownership of CI workflow templates (`quality-gate.yml`) and audit scripts (`complexity_check.py`, `verification_linter.py`).
+- **Gate 3 Acceptance Audit**: `verification_linter.py` deterministically audits signed-off `03-qa-verification.md` artifacts for basis path coverage and mutation MSI thresholds before merge.
+
 ### Changed
 
+- **Clear division of responsibilities**:
+  - `qa`: Dedicated to local development stage testing (integration, BDD E2E, mutation testing, static lint & complexity analysis, autonomous review invocation). Refactored into a prompt-only execution skill.
+  - `quality-engineering`: CI pipeline construction, test environment provisioning, pre-merge PR gates (Gate 1, RBAC, complexity check, acceptance tests, Gate 3 audit), post-merge automated verification, and ownership of CI workflow templates (`quality-gate.yml`) and audit scripts (`complexity_check.py`, `verification_linter.py`).
+  - `plan-linter`: Strictly single responsibility for Gate 1 deterministic task contract and DAG validation before development starts.
 - Skills are now self-contained for plugin distribution: every `SKILL.md` references only files
   inside its own directory, and each role skill bundles `references/role-boundaries.md`. Repository
   agent rules (`AGENTS.md`, `.agents/rules/`) are followed when present but are no longer a runtime
