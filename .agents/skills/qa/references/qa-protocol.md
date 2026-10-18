@@ -215,6 +215,16 @@ For every run record:
 - coverage if the project reports it;
 - mutation testing tool / engine, mutant counts (Total, Killed, Survived, Timeout, Equivalent), and computed MSI (%).
 
+For CI provenance, also record in `03` Section 5:
+
+- `Artifact path` — the real test/mutation artifact under the repository root;
+- `Artifact SHA-256` — the digest of that artifact;
+- `Tool version` and `Timestamp (UTC)` — optional but recommended.
+
+When `Equivalent > 0`, fill the `Equivalent mutant justification` row and explain why the mutant is
+semantically identical; do not inflate the Equivalent count to raise MSI. Read `risk_level` from
+`01-contract.md`: `core` tasks use the 90% MSI floor, `standard` uses 80%.
+
 A verdict without a command and result is not evidence. If a test cannot run, say why and do not
 treat it as passed.
 
@@ -249,6 +259,18 @@ Keep prior attempts and evidence. On the next handoff:
 
 Repeated rework is a planning/scope signal. Escalate with evidence instead of lowering the bar or
 editing source to make tests pass.
+
+### 8.1 Appeal hold
+
+When Dev files an Appeal Request (`02-dev-workspace.md` Section 6), QA must pause the rework loop and
+wait for the independent arbitration decision:
+
+- Do not re-issue `REWORK_REQUIRED` unilaterally while an appeal is open; that would bypass the
+  arbitration layer and restart the ping-pong.
+- Do not edit the Dev's appeal block, the contract or the tests to win the dispute.
+- Apply the decision exactly: `CODE_BUG` returns the task to Dev with the same evidence; `TEST_BUG`
+  makes the test change QA's action and requires a fresh QA verdict; `SPEC_AMBIGUITY` escalates to
+  the Planner/human and blocks QA until the spec is clarified.
 
 ## 9. `04-process.md`
 

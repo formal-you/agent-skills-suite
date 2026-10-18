@@ -5,6 +5,7 @@
 task_id: "{{TASK_ID}}"
 title: "{{TASK_TITLE}}"
 module: "{{MODULE_NAME}}"
+risk_level: standard  # standard | core; optional, defaults to standard (core raises the MSI floor to 90%)
 dependencies: []  # [] when there are no dependencies; otherwise e.g. [task-000-bootstrap]
 estimated_lines: {{ESTIMATED_LINES}}
 touch_files:

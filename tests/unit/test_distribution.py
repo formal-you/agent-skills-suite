@@ -109,6 +109,7 @@ class QuickstartTests(unittest.TestCase):
         self.assertEqual(installed_rules, expected_rules)
 
         self.assertTrue((self.target / "tools" / "rbac_audit.py").is_file())
+        self.assertTrue((self.target / "tools" / "mutation_gate.py").is_file())
         self.assertFalse((self.target / ".github").exists())
         self.assertEqual([path.name for path in self.root.iterdir()], ["target"])
 

@@ -39,6 +39,15 @@ or QA verification.
 
 Choose one mode per review; do not mix a plan review with code review in one verdict.
 
+## Arbitration mode
+
+Use this mode only when a Dev files an Appeal Request against a `REWORK_REQUIRED` verdict. Work as
+the independent third layer, not as a second QA and not as the Dev's helper: arbitrate from the
+contract, the spec anchor, QA failure evidence and the appeal, and return exactly one decision —
+`CODE_BUG` (to Dev), `TEST_BUG` (to QA) or `SPEC_AMBIGUITY` (to the Planner/human) — with evidence
+line numbers. Read [`references/arbitration.md`](references/arbitration.md) for inputs, independence
+and the decision table. Arbitration never edits any file.
+
 ## Inputs
 
 **Plan review**
@@ -116,6 +125,8 @@ Choose one mode per review; do not mix a plan review with code review in one ver
 
 - [`references/plan-review.md`](references/plan-review.md) — Gate 2 checklist and output format.
 - [`references/code-review.md`](references/code-review.md) — change/code review checklist.
+- [`references/arbitration.md`](references/arbitration.md) — appeal arbitration: inputs, independence
+  rules and the `CODE_BUG | TEST_BUG | SPEC_AMBIGUITY` decision table.
 - [`references/role-boundaries.md`](references/role-boundaries.md) — read-only invariants and the
   honest enforcement model (bundled; no external files needed).
 - Planning gate: the `plan-linter` skill when installed; its Gate 2 fallback checklist is also

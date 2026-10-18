@@ -41,6 +41,8 @@ and has at least $V(G)$ independent basis path test cases mapped.
 
 Record mutation testing results for every modified source file declared in `touch_files`.
 Ensure the kill ratio satisfies $\text{MSI} \ge 80\%$ ($\ge 90\%$ for security-critical modules).
+Every mutant classified as equivalent needs a semantic justification; an unjustified equivalent
+mutant may not be excluded from the MSI denominator.
 
 | Target Source File | Mutation Tool / Recipe | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail (>=80%) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -53,10 +55,15 @@ Ensure the kill ratio satisfies $\text{MSI} \ge 80\%$ ($\ge 90\%$ for security-c
 | Killed mutants |  |
 | Timed-out mutants |  |
 | Equivalent mutants |  |
+| Equivalent mutant justification |  |
 | Survived mutants |  |
 | Mutation Score Indicator (MSI) |  |
 
 ## 5. Execution evidence
+
+Bind the evidence to real artifacts: record the artifact path (relative to the repository root), its
+SHA-256 digest, the producing tool version and the UTC timestamp. Leave the provenance rows empty
+only while the evidence is not collected yet.
 
 | Field | Value |
 | :--- | :--- |
@@ -64,6 +71,10 @@ Ensure the kill ratio satisfies $\text{MSI} \ge 80\%$ ($\ge 90\%$ for security-c
 | Result |  |
 | Tests (total / passed / failed) |  |
 | Coverage |  |
+| Artifact path |  |
+| Artifact SHA-256 |  |
+| Tool version |  |
+| Timestamp (UTC) |  |
 
 ## 6. Boundary and anti-cheat audit
 

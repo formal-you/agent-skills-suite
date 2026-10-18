@@ -14,15 +14,26 @@ Supported languages:
   - C / C++ (.c, .cc, .cpp, .cxx, .h, .hpp)
   - C# (.cs)
 
+Scan scope (fail-closed):
+  - With --src-dir, only the explicit roots are scanned.
+  - With --changed-files, only the listed files are scanned.
+  - Without either, ./src is scanned when it exists; otherwise the tool exits
+    with a usage error (exit 2). It never silently falls back to scanning ".".
+  - DEFAULT_EXCLUDE_DIRS always removes skill/tool/template/task/doc/spec trees
+    so an accidental "." scan cannot analyze repository plumbing.
+
 Thresholds:
   V(G) <= 10       — standard (approved)
   11 <= V(G) <= 15 — warning (architectural justification required in 02)
   V(G) > 15        — critical (strictly prohibited; blocks gate)
 
 Exit codes:
-  0  all functions satisfy V(G) <= 15 (no critical violations)
-  1  one or more critical violations (V(G) > 15)
-  2  usage or configuration error
+  0  every scanned function satisfies V(G) <= 15 and every collected source
+     file was analyzed (no unsupported files, no scan errors)
+  1  one or more critical violations (V(G) > 15), unsupported source files
+     when no engine is available, or scan errors
+  2  usage or configuration error (missing source root, unavailable engine,
+     unreadable/empty --changed-files list)
   3  unexpected internal error
 """
 
@@ -31,7 +42,6 @@ from __future__ import annotations
 import argparse
 import ast
 import json
-import os
 import sys
 import warnings
 from pathlib import Path
@@ -43,12 +53,15 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # Constants & Language Maps
 # ---------------------------------------------------------------------------
 
+EXIT_USAGE = 2
+
 STANDARD_THRESHOLD = 10
 WARNING_THRESHOLD = 15
 
 DEFAULT_EXCLUDE_DIRS = {
     ".git", ".venv", "venv", "env", "__pycache__", ".agents",
     "tests", ".github", "node_modules", "build", "dist",
+    "skills", "tools", "templates", "tasks", "docs", "specs",
 }
 
 EXT_TO_LANG: dict[str, str] = {
@@ -181,7 +194,17 @@ def scan_file_tree_sitter(path: Path, lang: str) -> list[dict]:
                 if lang == "tsx":
                     parser = tree_sitter_languages.get_parser("typescript")
         if not parser:
-            return scan_file_fallback_ast(path) if lang == "python" else []
+            if lang == "python":
+                return scan_file_fallback_ast(path)
+            # Fail closed: a non-Python file that cannot be parsed must not be
+            # silently dropped from the report.
+            return [{
+                "file": str(path),
+                "line": 1,
+                "function": "<engine-unavailable>",
+                "vg": -1,
+                "error": f"no tree-sitter grammar available for language '{lang}'",
+            }]
 
         tree = parser.parse(content_bytes)
     except Exception as exc:
@@ -306,42 +329,130 @@ def scan_file(path: Path, engine: str = "auto") -> list[dict]:
     return []
 
 
-def collect_source_files(roots: list[Path], exclude_dirs: set[str], engine: str = "auto") -> list[Path]:
-    allowed_exts = set(EXT_TO_LANG.keys())
+def engine_supports_file(path: Path, engine: str) -> bool:
+    """Return True when the requested engine can analyze this file."""
+    ext = path.suffix.lower()
+    if ext not in EXT_TO_LANG:
+        return False
     if engine == "ast":
-        allowed_exts = {".py"}
+        return ext == ".py"
+    if engine == "lizard":
+        return _LIZARD_AVAILABLE
+    if engine == "tree-sitter":
+        return _TREE_SITTER_AVAILABLE
+    # auto
+    return ext == ".py" or _TREE_SITTER_AVAILABLE or _LIZARD_AVAILABLE
+
+
+def collect_source_files(roots: list[Path], exclude_dirs: set[str]) -> list[Path]:
+    allowed_exts = set(EXT_TO_LANG.keys())
 
     files: list[Path] = []
+    seen: set[str] = set()
     for root in roots:
         if not root.exists():
             continue
         if root.is_file():
             if root.suffix.lower() in allowed_exts:
-                files.append(root)
+                key = str(root.resolve())
+                if key not in seen:
+                    seen.add(key)
+                    files.append(root)
             continue
+        root_abs = root.resolve()
         for candidate in sorted(root.rglob("*")):
             if not candidate.is_file():
                 continue
             if candidate.suffix.lower() not in allowed_exts:
                 continue
-            if any(part in exclude_dirs for part in candidate.parts):
+            try:
+                relative = candidate.resolve().relative_to(root_abs)
+            except (ValueError, OSError):
+                relative = candidate
+            if any(part in exclude_dirs for part in relative.parts):
                 continue
+            key = str(candidate.resolve())
+            if key in seen:
+                continue
+            seen.add(key)
             files.append(candidate)
     return files
 
 
-def build_report(records: list[dict], active_engine: str = "auto") -> dict:
-    violations = [r for r in records if r.get("vg", 0) > WARNING_THRESHOLD]
-    warnings = [r for r in records if STANDARD_THRESHOLD < r.get("vg", 0) <= WARNING_THRESHOLD]
+def build_report(
+    records: list[dict],
+    active_engine: str = "auto",
+    skipped_unsupported: list[str] | None = None,
+    skipped_missing: list[str] | None = None,
+) -> dict:
+    skipped_unsupported = list(skipped_unsupported or [])
+    skipped_missing = list(skipped_missing or [])
+
+    # vg < 1 marks a scan error placeholder (read/parse/engine errors).
+    analyzed = [r for r in records if r.get("vg", -1) >= 1]
+    errors = [r for r in records if r.get("vg", -1) < 1]
+
+    violations = [r for r in analyzed if r["vg"] > WARNING_THRESHOLD]
+    warnings = [r for r in analyzed if STANDARD_THRESHOLD < r["vg"] <= WARNING_THRESHOLD]
+    functions = [
+        {"file": r["file"], "line": r["line"], "function": r["function"], "vg": r["vg"]}
+        for r in analyzed
+    ]
+
+    passed = not violations and not skipped_unsupported and not errors
     return {
         "engine": active_engine,
-        "total_functions_scanned": len(records),
+        "total_functions_scanned": len(analyzed),
         "warnings_count": len(warnings),
         "violations_count": len(violations),
         "violations": violations,
         "warnings": warnings,
-        "passed": len(violations) == 0,
+        "functions": functions,
+        "skipped_unsupported": skipped_unsupported,
+        "skipped_missing": skipped_missing,
+        "errors": errors,
+        "passed": passed,
     }
+
+
+# ---------------------------------------------------------------------------
+# Path / Input Helpers
+# ---------------------------------------------------------------------------
+
+def display_path(path: Path, repo_root: Path) -> str:
+    """Return a repo-relative POSIX path when possible, else an absolute POSIX path."""
+    try:
+        return path.resolve().relative_to(repo_root.resolve()).as_posix()
+    except (ValueError, OSError):
+        try:
+            return path.resolve().as_posix()
+        except OSError:
+            return path.as_posix()
+
+
+def read_changed_files(list_path: Path, repo_root: Path) -> list[Path]:
+    """Read a newline-separated changed-file list, resolved against repo_root."""
+    text = list_path.read_text(encoding="utf-8", errors="replace")
+    entries: list[Path] = []
+    seen: set[str] = set()
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        candidate = Path(line)
+        if not candidate.is_absolute():
+            candidate = repo_root / candidate
+        key = str(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        entries.append(candidate)
+    return entries
+
+
+def _usage_error(message: str) -> int:
+    sys.stderr.write(f"Usage error: {message}\n")
+    return EXIT_USAGE
 
 
 # ---------------------------------------------------------------------------
@@ -359,7 +470,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         metavar="DIR",
         action="append",
         default=[],
-        help="Source directory or file to scan (repeatable). Default: src/ or . if src/ absent.",
+        help=(
+            "Source directory or file to scan (repeatable). Default: ./src when it exists; "
+            "otherwise a usage error. The tool never falls back to scanning '.' implicitly."
+        ),
+    )
+    parser.add_argument(
+        "--changed-files",
+        dest="changed_files",
+        metavar="PATH",
+        default=None,
+        help=(
+            "Path to a newline-separated list of changed files. When supplied, only those "
+            "files are scanned (paths are resolved against the current directory)."
+        ),
     )
     parser.add_argument(
         "--exclude",
@@ -406,24 +530,76 @@ def resolve_active_engine(requested_engine: str) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    repo_root = Path.cwd()
+
+    if args.engine == "tree-sitter" and not _TREE_SITTER_AVAILABLE:
+        return _usage_error(
+            "--engine tree-sitter was requested, but neither 'tree-sitter-languages' nor "
+            "'tree-sitter' is installed; install it or use --engine ast."
+        )
+    if args.engine == "lizard" and not _LIZARD_AVAILABLE:
+        return _usage_error(
+            "--engine lizard was requested, but 'lizard' is not installed; "
+            "install it or use --engine ast."
+        )
 
     exclude = DEFAULT_EXCLUDE_DIRS | set(args.exclude_dirs)
-
-    if args.src_dirs:
-        roots = [Path(d) for d in args.src_dirs]
-    else:
-        default = Path("src")
-        roots = [default] if default.is_dir() else [Path(".")]
-
     active_engine = resolve_active_engine(args.engine)
+    skipped_missing: list[str] = []
 
     try:
-        files = collect_source_files(roots, exclude, engine=args.engine)
-        all_records: list[dict] = []
-        for f in files:
-            all_records.extend(scan_file(f, engine=args.engine))
+        if args.changed_files is not None:
+            list_path = Path(args.changed_files)
+            if not list_path.is_absolute():
+                list_path = repo_root / list_path
+            if not list_path.is_file():
+                return _usage_error(f"--changed-files file not found: {args.changed_files}")
+            try:
+                entries = read_changed_files(list_path, repo_root)
+            except OSError as exc:
+                return _usage_error(f"cannot read --changed-files '{args.changed_files}': {exc}")
+            if not entries:
+                return _usage_error("--changed-files list is empty; nothing to scan.")
+            roots = []
+            for entry in entries:
+                if entry.is_file():
+                    roots.append(entry)
+                else:
+                    skipped_missing.append(display_path(entry, repo_root))
+        elif args.src_dirs:
+            roots = [Path(d) for d in args.src_dirs]
+            missing = [str(d) for d in roots if not d.exists()]
+            if missing:
+                return _usage_error("--src-dir does not exist: " + ", ".join(missing))
+        else:
+            default_src = repo_root / "src"
+            if default_src.is_dir():
+                roots = [default_src]
+            else:
+                return _usage_error(
+                    "no --src-dir supplied and './src' does not exist. "
+                    "Pass --src-dir DIR or --changed-files PATH; refusing to scan '.' implicitly."
+                )
 
-        report = build_report(all_records, active_engine=active_engine)
+        files = collect_source_files(roots, exclude)
+        all_records: list[dict] = []
+        skipped_unsupported: list[str] = []
+        for source_file in files:
+            shown = display_path(source_file, repo_root)
+            if not engine_supports_file(source_file, args.engine):
+                skipped_unsupported.append(shown)
+                continue
+            for record in scan_file(source_file, engine=args.engine):
+                normalized = dict(record)
+                normalized["file"] = shown
+                all_records.append(normalized)
+
+        report = build_report(
+            all_records,
+            active_engine=active_engine,
+            skipped_unsupported=skipped_unsupported,
+            skipped_missing=skipped_missing,
+        )
 
         if args.json_output:
             print(json.dumps(report, indent=2))
@@ -440,6 +616,18 @@ def main(argv: list[str] | None = None) -> int:
                 print("\nCritical violations:")
                 for v in report["violations"]:
                     print(f"  {v['file']}:{v['line']} {v['function']}  V(G)={v['vg']}")
+            if report["skipped_unsupported"]:
+                print("\nUnsupported files (no available engine):")
+                for skipped in report["skipped_unsupported"]:
+                    print(f"  {skipped}")
+            if report["skipped_missing"]:
+                print("\nMissing changed files (not scanned):")
+                for skipped in report["skipped_missing"]:
+                    print(f"  {skipped}")
+            if report["errors"]:
+                print("\nScan errors:")
+                for err in report["errors"]:
+                    print(f"  {err['file']}:{err['line']} {err['function']}  {err.get('error', '')}")
             status_str = "PASSED" if report["passed"] else "FAILED"
             print(f"\nResult: {status_str}")
 

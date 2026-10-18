@@ -37,20 +37,21 @@ override. If an action is outside your write scope, escalate to the owner instea
 - Planner — `.agents/rules/planner.md`: creates task bundles; never writes source, tests or `04`.
 - Dev — `.agents/rules/dev.md`: writes `src/**` plus `02-dev-workspace.md`; never edits tests, contracts or other roles' docs.
 - QA — `.agents/rules/qa.md`: local development stage testing (integration, BDD E2E, mutation testing, static lint & complexity analysis, autonomous review invocation). Prompt-only execution skill; writes `tests/acceptance/**`, `tests/integration/**` plus `03-qa-verification.md`; never edits source or other roles' docs.
-- Quality Engineering — `.agents/skills/quality-engineering/`: CI pipeline construction, test environment provisioning, pre-merge PR gates (Gate 1, RBAC, complexity check, acceptance tests, Gate 3 audit), post-merge automated verification, and ownership of CI workflow templates (`quality-gate.yml`) and audit scripts (`complexity_check.py`, `verification_linter.py`).
+- Quality Engineering — `.agents/skills/quality-engineering/`: CI pipeline construction, test environment provisioning, pre-merge PR gates (Gate 1, RBAC, complexity check, acceptance tests, Gate 3 audit), post-merge automated verification, and ownership of CI workflow templates (`quality-gate.yml`), audit scripts (`complexity_check.py`, `verification_linter.py`) and the fail-closed mutation helper (`mutation_gate.py`).
 - Reviewer (Gate 2) — `.agents/rules/reviewer.md`: read-only semantic audit; never edits artifacts or weakens Gate 1.
 - Orchestrator/Lead — `.agents/rules/orchestrator.md`: routes work and enforces gate order; never authors role artifacts or bypasses a gate.
 
 ## Gates and evidence
 
-- **Gate 1 (deterministic):** `plan-linter` has strictly single responsibility for Gate 1 deterministic task contract and DAG validation before development starts; checks contract fields, BDD Given-When-Then scenarios, DAG, placeholders, anchor coverage and real-file topology; its JSON and exit codes are the evidence.
+- **Gate 1 (deterministic):** `plan-linter` has strictly single responsibility for Gate 1 deterministic task contract and DAG validation before development starts; checks contract fields, BDD Given-When-Then scenarios, DAG, placeholders, anchor coverage and real-file topology. It does not audit the complexity/mutation evidence in `03-qa-verification.md` (Gate 3 owns that; placeholder and existence checks are allowed). Its JSON and exit codes are the evidence.
 - **Gate 2 (semantic):** an independent, read-only reviewer audits traceability, invented content and ADR alignment; it never replaces Gate 1.
 - **Modern Quality Engineering Triad & Execution:**
   - **Static Complexity Checker:** Multi-language AST McCabe Cyclomatic Complexity static checker (`complexity_check.py` v2.0.0) powered by Tree-sitter (https://github.com/tree-sitter/tree-sitter) with Lizard integration and Python AST fallback, covering Python, JS/TS, Go, Rust, Java, C/C++, C#. Dev enforces single-function cyclomatic complexity ($V(G) \le 10$) and hands off with evidence in `02`.
   - **BDD Living Documentation:** QA conducts local integration and BDD E2E testing with stack-native open-source frameworks (pytest-bdd, Cucumber.js, Godog, Cucumber-JVM, cucumber-rs, Reqnroll/SpecFlow).
   - **Mutation Testing:** Mandatory open-source mutation testing tools (mutmut, Stryker, go-mutesting, PITest, cargo-mutants, Mull) with $\text{MSI} \ge 80\%$ threshold. QA designs basis path tests ($\text{Test Cases} \ge V(G)$), records evidence in `03`, and issues exactly one verdict (`QA_PASSED` or `REWORK_REQUIRED`); `converge` folds confirmed deviations back into the spec after `QA_PASSED`.
-- **Gate 3 (acceptance audit):** `verification_linter.py` (maintained by `quality-engineering`) deterministically audits signed-off `03` artifacts for basis path coverage and mutation MSI thresholds upon QA signoff.
-- **Enforcement honesty (L0-L2):** prompt rules are advisory and bypassable (L0). The authoritative layer is the CI Quality Gate (`templates/ci/quality-gate.yml`, `tools/rbac_audit.py`) (L1) coupled with branch protection and CODEOWNERS (L2); no local hook adapter is shipped.
+- **Gate 3 (acceptance audit):** `verification_linter.py` (maintained by `quality-engineering`) deterministically audits signed-off `03` artifacts for basis path coverage and mutation MSI thresholds, and cross-checks Section 3 V(G) values against the CI-uploaded AST artifact (`--actual-complexity`); it is fail-closed on omitted/phantom/mismatched functions and on any non-compliant mutation table.
+- **Mutation gate:** `tools/mutation_gate.py` runs the project's `MUTATION_COMMAND` on trunk pushes, validates the normalized report, and enforces the MSI threshold. A missing command/report is a failure, never a skip.
+- **Enforcement honesty (L0-L2):** prompt rules are advisory and bypassable (L0). The authoritative layer is the CI Quality Gate (`templates/ci/quality-gate.yml`, `tools/rbac_audit.py`, `tools/mutation_gate.py`) (L1) coupled with branch protection and CODEOWNERS (L2); no local hook adapter is shipped.
 
 ## References
 
@@ -61,6 +62,8 @@ override. If an action is outside your write scope, escalate to the owner instea
   is the AGENTS mirror.
 - `docs/skills-guide.zh-CN.md`, `docs/brownfield-convergence.zh-CN.md`,
   `docs/skills-compatibility.md` — usage walkthrough, change/convergence and the harness matrix.
+- `docs/skills-remediation.zh-CN.md` — hardening work packages, critique adjudication and evidence
+  pointers for the truthful-gate changes.
 - Review skill: `review` (Gate 2 plan review plus change/code review); execution skills: `dev`
   (implement + handoff) and `qa` (independent verification + verdict); quality engineering: `quality-engineering`
   (CI gates + pipeline automation); brownfield entry: `change`

@@ -1,10 +1,10 @@
-# Agent Skills Suite v3.1.0
+# Agent Skills Suite v3.2.0
 
 [![CI](https://github.com/formal-you/agent-skills-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/formal-you/agent-skills-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.1.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.2.0-blue.svg)](CHANGELOG.md)
 
-Nine prompt-first, harness-neutral skills that turn an idea or an existing codebase into
+Ten prompt-first, harness-neutral skills that turn an idea or an existing codebase into
 planned, reviewed, implemented and spec-converged work - plus the rules, helper scripts and
 CI templates that make the gates enforceable.
 
@@ -81,8 +81,8 @@ from one source).
 | `skills/` | **installable layout**: `skills/<category>/<skill>/SKILL.md` (categories: `workflow`, `platform`). This is what skills.sh, Gemini and the plugin manifest read. |
 | `.agents/skills/` | The same skill files under the AGENTS discovery path, kept byte-identical by the upstream packaging build (used by tests and local installers) |
 | `.agents/rules/` | Role rules (Planner, Dev, QA, Reviewer, Orchestrator, PM, Architect) plus the `enforcement.md` role matrix and honest enforcement model |
-| `tools/` | `quickstart.py`, `install_skills.py`, `rbac_audit.py` |
-| `templates/ci/` | GitHub Actions: RBAC gate and Gate 1 plan gate |
+| `tools/` | `quickstart.py`, `install_skills.py`, `rbac_audit.py`, `mutation_gate.py` |
+| `templates/ci/` | GitHub Actions: full quality gate, RBAC gate, Gate 1 plan gate |
 | `docs/` | User guides: skills guide, brownfield/convergence guide, harness compatibility, benchmark report |
 | `tests/unit/` | Black-box tests for the skills and helpers |
 | `.claude-plugin/` | Claude Code plugin and marketplace manifests (skills point at `skills/`) |
@@ -94,8 +94,8 @@ directory, so plugin and per-skill installs need no extra checkout. Repository r
 ## Pipeline
 
 ```text
-idea    -> prd-generator -> spec-generator -> task-decomposition -> plan-linter -> review -> dev <-> qa -> converge
-change  -> change (brownfield proposal + one task bundle) -> the same gates -> dev <-> qa -> converge
+idea    -> prd-generator -> spec-generator -> task-decomposition -> plan-linter -> review -> dev <-> qa -> quality-engineering (Gate 3 + mutation) -> converge
+change  -> change (brownfield proposal + one task bundle) -> the same gates -> dev <-> qa -> quality-engineering -> converge
 ```
 
 ## Quality gates
@@ -103,7 +103,11 @@ change  -> change (brownfield proposal + one task bundle) -> the same gates -> d
 1. **Gate 1 (deterministic):** `plan-linter` checks contract fields, DAG, placeholders, the
    change proposal, anchor coverage and real-file topology.
 2. **Gate 2 (semantic):** an independent read-only reviewer audits truthfulness to the spec.
-3. **Convergence:** after `QA_PASSED`, `converge` appends confirmed deviations to the spec,
+3. **Gate 3 (evidence):** `verification_linter.py` cross-checks `03` V(G) against the live AST
+   artifact and audits basis-path coverage plus MSI (80%, 90% for `risk_level: core`).
+4. **Mutation gate:** `tools/mutation_gate.py` runs the project's mutation command on trunk and
+   fails closed on a missing report or low MSI.
+5. **Convergence:** after `QA_PASSED`, `converge` appends confirmed deviations to the spec,
    archives the task bundle and closes the change proposal.
 
 ```bash
@@ -112,7 +116,7 @@ python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks   -
 
 ## Docs
 
-- `docs/skills-guide.zh-CN.md` - how the nine skills work and how to use them
+- `docs/skills-guide.zh-CN.md` - how the ten skills work and how to use them
 - `docs/brownfield-convergence.zh-CN.md` - change proposals, convergence and Gate 2 heuristics
 - `docs/skills-compatibility.md` - harness discovery, installation, enforcement layers
 - `docs/skills-benchmark.zh-CN.md` - scorecard versus open-source alternatives

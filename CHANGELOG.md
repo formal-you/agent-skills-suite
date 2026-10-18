@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-10-19
+
 ### Added
 
 - **Modern Quality Engineering Triad**:
@@ -15,6 +17,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Mandatory open-source mutation testing tools (mutmut, Stryker, go-mutesting, PITest, cargo-mutants, Mull) with MSI >= 80% threshold and basis path coverage (Test Cases >= V(G)).
 - **New `quality-engineering` skill**: CI pipeline construction, test environment provisioning, pre-merge PR quality gates (Gate 1 contract lint, RBAC audit, complexity check, acceptance tests, Gate 3 audit), post-merge automated verification, and ownership of CI workflow templates (`quality-gate.yml`) and audit scripts (`complexity_check.py`, `verification_linter.py`).
 - **Gate 3 Acceptance Audit**: `verification_linter.py` deterministically audits signed-off `03-qa-verification.md` artifacts for basis path coverage and mutation MSI thresholds before merge.
+- **Fail-closed mutation gate**: `tools/mutation_gate.py` runs a project's `MUTATION_COMMAND`,
+  validates the normalized report, enforces MSI, and fails closed on missing command/report or low
+  score. `quickstart.py --with-ci` now installs it alongside `rbac_audit.py`.
+- **Gate 3 cross-validation**: `verification_linter.py` accepts `--actual-complexity`,
+  `--require-actual-complexity`, `--repo-root`, and `--require-provenance`; it cross-checks Section 3
+  V(G) against the live AST artifact and rejects omitted/phantom/mismatched functions.
+- **Evidence provenance and core profile**: `03-qa-verification.md` gains artifact path/SHA-256,
+  tool version, timestamp and equivalent-mutant justification rows; `01-contract.md` gains optional
+  `risk_level: standard|core` (core floors MSI at 90%).
+- **Appeal and arbitration**: `02-dev-workspace.md` gains a structured Appeal Request; `review`
+  gains an arbitration mode (`CODE_BUG` / `TEST_BUG` / `SPEC_AMBIGUITY`); orchestrator routing and
+  circuit-break rules are documented.
+- **Failure triage registry**: `quality-engineering/references/triage-routing.md` maps error codes to
+  owners, first actions, escalation triggers and forbidden shortcuts.
+- **Hardening handbook**: `docs/skills-remediation.zh-CN.md` records the critique adjudication,
+  defect ledger and ordered work packages.
 
 ### Changed
 
@@ -31,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the skills guide and the skill index now point there.
 - `tools/package_skills.py` is maintainer-only and no longer shipped; it stays in the upstream
   development repository and `RELEASING.md` documents the build. The shipped tools are
-  `quickstart.py`, `install_skills.py` and `rbac_audit.py`.
+  `quickstart.py`, `install_skills.py`, `rbac_audit.py` and `mutation_gate.py`.
 - The upstream packaging build ships only user-facing docs and self-contained skills; the audit archive,
   the pilot report, the v2 design contract and the old `docs/agent-rules.md` are not copied.
 - Benchmark report updated for v3.1.0 (nine skills plus the platform helper, plugin distribution,
@@ -40,6 +58,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `event_bus_logger.py`), `.agents/hooks.json` and their tests. The honest enforcement model is now
   prompt rules (L0, advisory), the CI RBAC audit (L1, authoritative) and branch protection (L2).
   No local hook adapter is shipped; adopters may add host-side hooks, but they stay bypassable.
+
+### Fixed
+
+- Gate 3 is no longer skipped on trunk pushes when `rbac-audit` is skipped; it uses
+  `if: always()` and explicit needs results.
+- `verification_linter.py` no longer passes when any one mutation table is compliant; all populated
+  tables must comply and agree, otherwise `MUTATION_TABLE_INCONSISTENT`.
+- `complexity_check.py` is fail-closed: it no longer scans `.` implicitly, supports
+  `--changed-files`, emits a full `functions` array, and reports unsupported/engine-unavailable files
+  instead of silently passing.
+- `plan_linter.py` no longer audits Gate 3 evidence; Gate 1 remains single-responsibility.
+- Error-code documentation and code now agree (`COMPLEXITY_BASIS_PATH_INSUFFICIENT`,
+  `QA_INVALID_MSI_SCORE`, `FORBIDDEN_TOUCH_FILE`, `QA_EDITED_SOURCE`, etc.).
+- CI acceptance installs dependencies, runs a collection probe, emits JUnit XML and uploads artifacts;
+  the stdlib-only compatibility claim now explicitly excludes the optional complexity engines.
 
 ### Removed
 

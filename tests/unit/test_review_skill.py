@@ -29,6 +29,7 @@ class ReviewSkillStructureTests(unittest.TestCase):
         self.assertTrue((REVIEW / "SKILL.md").is_file())
         self.assertTrue((REVIEW / "references" / "plan-review.md").is_file())
         self.assertTrue((REVIEW / "references" / "code-review.md").is_file())
+        self.assertTrue((REVIEW / "references" / "arbitration.md").is_file())
 
     def test_frontmatter_is_valid(self) -> None:
         text = read_text(REVIEW / "SKILL.md")
@@ -60,6 +61,23 @@ class ReviewSkillStructureTests(unittest.TestCase):
                     continue
                 path = (md.parent / target.split("#")[0]).resolve()
                 self.assertTrue(path.exists(), f"broken link in {md}: {target}")
+
+    def test_arbitration_mode_is_documented_and_compact(self) -> None:
+        text = read_text(REVIEW / "SKILL.md")
+        self.assertIn("## Arbitration mode", text)
+        self.assertIn("references/arbitration.md", text)
+        section = text.split("## Arbitration mode", 1)[1].split("\n## ", 1)[0]
+        self.assertLessEqual(
+            len(section.strip().splitlines()), 10, "arbitration mode must stay at most 10 lines"
+        )
+
+    def test_arbitration_reference_covers_inputs_and_decisions(self) -> None:
+        text = read_text(REVIEW / "references" / "arbitration.md")
+        for needle in (
+            "Independence rule", "CODE_BUG", "TEST_BUG", "SPEC_AMBIGUITY", "line numbers",
+            "never edits", "Decision:", "Circuit break",
+        ):
+            self.assertIn(needle, text, "arbitration reference misses: " + needle)
 
     def test_prompt_only_no_scripts(self) -> None:
         self.assertFalse((REVIEW / "scripts").exists(), "review skill should not ship scripts")
