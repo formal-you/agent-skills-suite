@@ -116,7 +116,12 @@ Choose one mode per review; do not mix a plan review with code review in one ver
 
 - [`references/plan-review.md`](references/plan-review.md) — Gate 2 checklist and output format.
 - [`references/code-review.md`](references/code-review.md) — change/code review checklist.
-- Repository rules: `.agents/rules/reviewer.md`; planning gate: `plan-linter/SKILL.md`.
+- [`references/role-boundaries.md`](references/role-boundaries.md) — read-only invariants and the
+  honest enforcement model (bundled; no external files needed).
+- Planning gate: the `plan-linter` skill when installed; its Gate 2 fallback checklist is also
+  bundled here as `references/plan-review.md`.
+- Repository rules: read `AGENTS.md` and any role-rules files when the adopting project defines
+  them; they may add requirements but are not required for this skill.
 
 ## Honest limits
 

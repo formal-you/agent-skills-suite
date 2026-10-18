@@ -1,8 +1,14 @@
-# Agent Rules and Enforcement
+---
+trigger: model_decision
+description: "Use when coordinating multi-agent work or checking write boundaries: role matrix, 4-document task bundle, lifecycle markers and the honest L0-L3 enforcement model."
+---
+
+# Enforcement Model and Role Write Scopes
 
 This repository uses a role-separated, 4-document task workflow. Host-agnostic rules live in
-`AGENTS.md`; role-specific rules live in `.agents/rules/*.md`. This page explains the roles, write
-scopes and the honest enforcement model.
+`AGENTS.md`; role-specific rules live in `.agents/rules/*.md`; this page explains the roles, write
+scopes and the honest enforcement model. The shipped skills are self-contained: they treat this
+rules layer as optional context and work without it.
 
 ## Role matrix
 
@@ -27,7 +33,7 @@ The reviewer is the read-only semantic gate between planning and implementation:
 
 It never replaces Gate 1: Gate 1 must pass first, and Gate 2 is prompt-driven, not automated.
 The reviewer can also perform a change/code review (diff vs contract/tests). See
-`reviewer.md`, the `review` skill, and the `plan-linter/references/gate-2-review.md` fallback.
+`reviewer.md`, the `review` skill, and the `plan-linter` skill's bundled `gate-2-review.md` fallback.
 
 ## Orchestrator
 
@@ -87,13 +93,13 @@ initial state are detailed in `task-decomposition/references/role-lifecycle.md`.
 | Layer | Mechanism | Applies to | Guarantee |
 | :--- | :--- | :--- | :--- |
 | L0 | Prompt rules (this page, `AGENTS.md`, `.agents/rules/*.md`) | every agent/harness | advisory; depends on the agent following instructions |
-| L1 | `.agents/hooks.json` + `.agents/scripts/rbac_guard.py` | hosts that support hooks (currently the Antigravity adapter) | best effort; bypassable through shell or tools that ignore hooks |
-| L2 | `tools/rbac_audit.py` in CI | every harness with git | authoritative for committed changes |
-| L3 | Branch protection / CODEOWNERS | repository settings | authoritative |
+| L1 | `tools/rbac_audit.py` in CI | every harness with git | authoritative for committed changes |
+| L2 | Branch protection / CODEOWNERS | repository settings | authoritative |
 
-L1 is **not** physical enforcement and must not be described as such. The authoritative protection
-for role isolation is L2 plus repository permissions. The audit trail is git history plus the CI
-audit; `04-process.md` is derived output, not the source of truth.
+Prompt rules are **not** physical enforcement and must not be described as such. The authoritative
+protection for role isolation is L1 plus repository permissions. The audit trail is git history plus
+the CI audit; `04-process.md` is derived output, not the source of truth. This package ships no
+host-side hook adapter; adopters may add local hooks, but they are best-effort and bypassable.
 
 ## What each role must never do
 
@@ -111,13 +117,12 @@ is a planning signal, not a licence.
 ## References
 
 - `AGENTS.md` — host-agnostic summary rules.
+- `.agents/rules/*.md` — per-role permissions and invariants.
 - `.agents/skills/README.md` — skill index, discovery and repository conventions.
 - `.agents/skills/task-decomposition/SKILL.md` — how to produce a task bundle.
 - `.agents/skills/plan-linter/SKILL.md` — deterministic Gate 1 and the Gate 2 fallback checklist.
 - `.agents/skills/review/SKILL.md` — independent plan (Gate 2) and change/code review workflow.
 - `.agents/skills/dev/SKILL.md` — Dev implementation, self-verification and handoff workflow.
 - `.agents/skills/qa/SKILL.md` — QA black-box verification, evidence and verdict workflow.
-- `.agents/rules/reviewer.md` — read-only reviewer rules (Gate 2 and change review).
-- `.agents/rules/orchestrator.md` — routing, ownership and gate-order rules for a Lead/orchestrator.
 
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)

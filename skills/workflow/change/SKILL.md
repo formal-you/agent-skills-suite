@@ -96,8 +96,8 @@ anchors it changes. Full lifecycle and sizing rules:
    ```
 
    The scaffolder refuses an unknown anchor and a missing base spec, computes
-   `base_spec_sha256`, and delegates the bundle to
-   `.agents/skills/task-decomposition/scripts/scaffold_task.py --change-id ... --size-class ...`.
+   `base_spec_sha256`, and delegates the bundle to the `task-decomposition` skill's scaffolder when
+   that skill is installed (`scaffold_task.py --change-id ... --size-class ...`).
    When that sibling is absent it still emits a minimal inline four-document bundle and prints a
    warning. Use `--dry-run` to preview and `--force` to overwrite an existing change
    directory.
@@ -113,9 +113,11 @@ anchors it changes. Full lifecycle and sizing rules:
    proposal), then the read-only semantic review:
 
    ```bash
-   python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks \
+   # from the plan-linter skill directory (when that skill is installed)
+   python scripts/plan_linter.py --tasks-dir tasks \
      --repo-root . --spec .specs/02-tech-spec.md --changes-dir .specs/changes
-   python .agents/skills/change/scripts/lint_change.py --change-id CHG-001-rate-limit --repo-root .
+   # from this skill directory
+   python scripts/lint_change.py --change-id CHG-001-rate-limit --repo-root .
    ```
 
    Gate 1 must pass before implementation; Gate 2 must not report `BLOCKED` or
@@ -142,8 +144,10 @@ anchors it changes. Full lifecycle and sizing rules:
 2. Copy `assets/templates/proposal.template.md` to
    `.specs/changes/<change-id>/proposal.md` and fill every token (`{{...}}`); compute
    `base_spec_sha256` with any SHA-256 tool over the base spec file.
-3. Copy the four templates from `.agents/skills/task-decomposition/assets/templates/` into
-   `tasks/<change-id>/`, rename away `.template`, and fill the contract frontmatter
+3. Create the four task documents under `tasks/<change-id>/`: copy them from the
+   `task-decomposition` skill when it is installed, otherwise use the minimal four-document
+   structure in [`references/brownfield-protocol.md`](references/brownfield-protocol.md), rename
+   away `.template` where applicable, and fill the contract frontmatter
    with `change_id`, `size_class`, `origin_spec_anchor`,
    `estimated_lines`, `dependencies`, and `touch_files`
    (`create`/`modify`).
@@ -180,7 +184,7 @@ anchors it changes. Full lifecycle and sizing rules:
   a new ADR, or a new cross-cutting invariant, stop and use `spec-generator`; do not widen a
   change.
 - **Do not overstate the gates.** Gate 1 is deterministic bookkeeping, Gate 2 is a prompt, and the
-  authoritative audit trail is git plus repository CI. Scripts and hooks are helpers, never
+  authoritative audit trail is git plus repository CI. Optional scripts are helpers, never
   enforcement guarantees.
 
 ## Helper scripts
@@ -216,4 +220,4 @@ and use exit codes `0` success, `1` content-gate failure, `2` usage/refusal,
 - `base_spec_sha256` detects any byte change to the base spec (including formatting); after
   convergence the archived proposal is exempt from the drift check because the spec intentionally
   changed.
-- Optional scripts and hooks are bypassable; CI plus repository permissions remain authoritative.
+- Optional scripts are bypassable; CI plus repository permissions remain authoritative.

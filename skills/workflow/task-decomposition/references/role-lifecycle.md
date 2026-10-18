@@ -3,7 +3,7 @@
 This reference defines how the four documents of a task bundle are produced, handed off and audited.
 The short version: **the Planner authors the contract, Dev implements and self-tests, QA verifies
 independently, and tooling derives `04-process.md`.** This skill owns the bundle format; it does not
-replace the role rules in `docs/agent-rules.md`.
+replace the adopting repository's role rules.
 
 ## 1. Ownership at a glance
 
@@ -103,14 +103,8 @@ Event rows use the table columns: event ID (`EV-AUTO`), timestamp (UTC), event c
 and duration. `micro_phase` and `last_heartbeat` are tooling-owned; they are never inferred from prose.
 
 **When no tooling is available**, leave `04` as initialized and rely on git/CI. Do not hand-write
-events, invent timestamps or paste lifecycle samples. If a repository uses the optional event logger:
-
-```bash
-python .agents/scripts/event_bus_logger.py --tasks-dir ./tasks
-```
-
-It is an optional adapter (Antigravity/PostToolUse or manual), not the authoritative enforcement
-layer. CI (`tools/rbac_audit.py`) and git history remain the source of truth.
+events, invent timestamps or paste lifecycle samples. The repository CI audit (when configured) and
+git history remain the source of truth.
 
 ## 7. Field ownership in `04`
 
@@ -129,5 +123,5 @@ layer. CI (`tools/rbac_audit.py`) and git history remain the source of truth.
 - **Ambiguity**: record an open question in `01` notes and ask the Planner/owner; do not invent.
 - **Out-of-scope edit needed**: split the task or escalate; never edit outside `touch_files`.
 - **No tooling/Python**: use the manual checklists in `SKILL.md` and this reference; the workflow must
-  not depend on hooks or scripts.
+  not depend on optional tooling.
 - **Tool failure**: report the command and exit code; never hand-edit `04` to "fix" it.

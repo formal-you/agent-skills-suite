@@ -13,8 +13,6 @@ The installer copies or links, from this checkout into --target:
 
     .agents/skills/<name>   (selected skills; --dest controls the destination root)
     .agents/rules/*.md      (unless --no-with-rules)
-    .agents/scripts/*.py    (unless --no-with-rules)
-    .agents/hooks.json      (when present; unless --no-with-rules)
     tools/rbac_audit.py     (unless --no-with-audit)
     templates/ci/*.yml      (only with --with-ci, into <target>/.github/workflows/)
 
@@ -183,16 +181,6 @@ def build_items(target, dest_root, selected, with_rules, with_audit, with_ci):
         for path in rule_files:
             items.append(InstallItem("rule", path.name, path, rules_dest / path.name))
 
-        scripts_root = SOURCE_ROOT / ".agents" / "scripts"
-        scripts_dest = target / ".agents" / "scripts"
-        script_files = sorted(scripts_root.glob("*.py")) if scripts_root.is_dir() else []
-        for path in script_files:
-            items.append(InstallItem("script", path.name, path, scripts_dest / path.name))
-
-        hooks = SOURCE_ROOT / ".agents" / "hooks.json"
-        if hooks.is_file():
-            items.append(InstallItem("hooks", "hooks.json", hooks, target / ".agents" / "hooks.json"))
-
     if with_audit:
         audit = SOURCE_ROOT / "tools" / "rbac_audit.py"
         if audit.is_file():
@@ -356,7 +344,7 @@ def build_parser():
         "--with-rules",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="install .agents/rules, .agents/scripts and .agents/hooks.json (default: on)",
+        help="install .agents/rules (default: on)",
     )
     parser.add_argument(
         "--with-audit",

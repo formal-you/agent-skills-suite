@@ -22,7 +22,7 @@ TEMPLATE_README = TEMPLATES_DIR / "README.md"
 SKILL_MD = SKILL_DIR / "SKILL.md"
 RULES_DIR = ROOT / ".agents" / "rules"
 AGENTS_MD = ROOT / "AGENTS.md"
-AGENT_RULES_MD = ROOT / "docs" / "agent-rules.md"
+AGENT_RULES_MD = ROOT / ".agents" / "rules" / "enforcement.md"
 SCAFFOLD = SKILL_DIR / "scripts" / "scaffold_task.py"
 LINTER = ROOT / ".agents" / "skills" / "plan-linter" / "scripts" / "plan_linter.py"
 
@@ -377,9 +377,12 @@ class SkillAndRulesTests(unittest.TestCase):
         names = sorted(path.name for path in RULES_DIR.glob("*.md"))
         self.assertEqual(
             names,
-            ["architect.md", "dev.md", "orchestrator.md", "planner.md", "pm.md", "qa.md", "reviewer.md"],
+            ["architect.md", "dev.md", "enforcement.md", "orchestrator.md", "planner.md", "pm.md", "qa.md", "reviewer.md"],
         )
-        self.assertFalse((RULES_DIR / "README.md").exists(), "rules README must move to docs/agent-rules.md")
+        self.assertFalse(
+            (RULES_DIR / "README.md").exists(),
+            "rules README must move to .agents/rules/enforcement.md",
+        )
         for name in names:
             text = read_text(RULES_DIR / name)
             frontmatter = extract_frontmatter(text)
@@ -396,7 +399,7 @@ class SkillAndRulesTests(unittest.TestCase):
 
     def test_agent_rules_documents_enforcement_layers(self) -> None:
         text = read_text(AGENT_RULES_MD)
-        for layer in ("L0", "L1", "L2", "L3"):
+        for layer in ("L0", "L1", "L2"):
             self.assertIn(layer, text)
         self.assertIn("tools/rbac_audit.py", text)
         self.assertIn("not** physical enforcement", text)
@@ -406,7 +409,7 @@ class SkillAndRulesTests(unittest.TestCase):
 
     def test_agents_md_points_to_details(self) -> None:
         text = read_text(AGENTS_MD)
-        for needle in ("docs/agent-rules.md", "01-contract.md", "02-dev-workspace.md",
+        for needle in (".agents/rules/enforcement.md", "01-contract.md", "02-dev-workspace.md",
                        "03-qa-verification.md", "04-process.md", "Goldilocks", "skills/README.md"):
             self.assertIn(needle, text)
 

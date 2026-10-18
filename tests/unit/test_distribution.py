@@ -21,7 +21,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 QUICKSTART = REPO_ROOT / "tools" / "quickstart.py"
 SKILLS_ROOT = REPO_ROOT / ".agents" / "skills"
 RULES_ROOT = REPO_ROOT / ".agents" / "rules"
-SCRIPTS_ROOT = REPO_ROOT / ".agents" / "scripts"
 TEMPLATES = REPO_ROOT / "templates" / "ci"
 CI_FILES = ("rbac-gate.yml", "plan-gate.yml")
 
@@ -109,13 +108,6 @@ class QuickstartTests(unittest.TestCase):
         installed_rules = sorted(path.name for path in (self.target / ".agents" / "rules").glob("*.md"))
         self.assertEqual(installed_rules, expected_rules)
 
-        expected_scripts = sorted(path.name for path in SCRIPTS_ROOT.glob("*.py"))
-        installed_scripts = sorted(
-            path.name for path in (self.target / ".agents" / "scripts").glob("*.py")
-        )
-        self.assertEqual(installed_scripts, expected_scripts)
-
-        self.assertTrue((self.target / ".agents" / "hooks.json").is_file())
         self.assertTrue((self.target / "tools" / "rbac_audit.py").is_file())
         self.assertFalse((self.target / ".github").exists())
         self.assertEqual([path.name for path in self.root.iterdir()], ["target"])
@@ -291,7 +283,7 @@ class QuickstartTests(unittest.TestCase):
         target = Path(payload["target"])
         for item in payload["results"]:
             self.assertIn(item["status"], ("linked", "copied"), item)
-            self.assertIn(item["kind"], ("skill", "rule", "script", "hooks", "audit", "ci"), item)
+            self.assertIn(item["kind"], ("skill", "rule", "audit", "ci"), item)
             self.assertTrue(Path(item["destination"]).is_relative_to(target), item)
 
     def test_print_oneliner(self):
@@ -389,12 +381,70 @@ class CiTemplateTests(unittest.TestCase):
             "contents: read",
             "fork",
             "pinning the suite version",
-            "hooks",
             "authoritative",
             "troubleshooting",
             "fetch-depth",
         ):
             self.assertIn(phrase, lowered, phrase)
+
+
+class SkillSelfContainmentTests(unittest.TestCase):
+    """A skill must keep working when installed alone (plugin / npx / Gemini --path)."""
+
+    SKILLS_ROOT = REPO_ROOT / ".agents" / "skills"
+    FORBIDDEN_TOKENS = ("docs/", "tools/", ".agents/rules", ".agents/scripts", "templates/ci")
+
+    def skill_directories(self):
+        return sorted(
+            path
+            for path in self.SKILLS_ROOT.iterdir()
+            if path.is_dir() and (path / "SKILL.md").is_file()
+        )
+
+    def test_skill_directories_do_not_reference_suite_files_outside_the_skill(self):
+        offenders = []
+        for skill in self.skill_directories():
+            for path in sorted(skill.rglob("*.md")):
+                text = path.read_text(encoding="utf-8", errors="replace")
+                relative = path.relative_to(REPO_ROOT).as_posix()
+                for token in self.FORBIDDEN_TOKENS:
+                    if token in text:
+                        offenders.append(relative + " -> " + token)
+                for match in re.finditer(r"\.agents/skills/([A-Za-z0-9_-]+)/", text):
+                    if match.group(1) != skill.name:
+                        offenders.append(relative + " -> .agents/skills/" + match.group(1))
+        self.assertEqual(
+            offenders,
+            [],
+            "SKILL.md and references must be self-contained; move shared content into the skill",
+        )
+
+    def test_skill_markdown_relative_links_stay_inside_the_skill(self):
+        broken = []
+        link_re = re.compile(r"\]\(([^)]+)\)")
+        for skill in self.skill_directories():
+            for path in [skill / "SKILL.md"] + sorted((skill / "references").glob("*.md")):
+                for raw in link_re.findall(path.read_text(encoding="utf-8", errors="replace")):
+                    target = raw.strip().split()[0].strip("<>")
+                    if target.startswith(("http://", "https://", "mailto:", "#")):
+                        continue
+                    target = target.split("#", 1)[0].split("?", 1)[0]
+                    if not target:
+                        continue
+                    resolved = (path.parent / target).resolve()
+                    if not resolved.exists() or not resolved.is_relative_to(skill.resolve()):
+                        broken.append(
+                            path.relative_to(REPO_ROOT).as_posix() + " -> " + target
+                        )
+        self.assertEqual(broken, [], "skill links must resolve inside the skill directory")
+
+    def test_role_skills_bundle_their_boundaries(self):
+        for name in ("qa", "dev", "review", "converge"):
+            boundaries = self.SKILLS_ROOT / name / "references" / "role-boundaries.md"
+            self.assertTrue(boundaries.is_file(), name + " lacks references/role-boundaries.md")
+            text = boundaries.read_text(encoding="utf-8")
+            self.assertIn("Write scope", text, name)
+            self.assertIn("advisory", text, name)
 
 
 if __name__ == "__main__":

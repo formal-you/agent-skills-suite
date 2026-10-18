@@ -32,10 +32,13 @@ merge tasks below the minimum.
 
 ## References
 
-- Detailed roles, write scopes and the honest enforcement model: `docs/agent-rules.md`.
+- Detailed roles, write scopes and the honest enforcement model: `.agents/rules/enforcement.md`.
+- Skills are self-contained: each skill bundles the references it needs; repository rules and
+  `docs/` are optional context that skills follow when present.
 - Skills (PRD → spec → tasks → Gate 1/2 review): `.agents/skills/README.md`.
 - Review skill: `review` (Gate 2 plan review plus change/code review).
 - Execution skills: `dev` (implement + handoff) and `qa` (independent verification + verdict).
 - Brownfield entry: `change` (proposal -> one task bundle -> archive) and convergence: `converge`
   (after `QA_PASSED`, append deviations to `.specs/02-tech-spec.md`, move the bundle to `tasks/archive/`).
-- Optional Antigravity hooks live in `.agents/hooks.json`; CI audit is the authoritative layer.
+- The authoritative enforcement layer is the CI audit (`tools/rbac_audit.py`) plus branch
+  protection; prompt rules are advisory.

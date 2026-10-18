@@ -35,8 +35,10 @@ layer (see `.agents/rules` and `docs/skills-compatibility.md`).
 The first four skills produce the plan (`change` is the brownfield entry that reuses
 `task-decomposition`), `plan-linter` validates its structure and emits Gate 2 heuristics, `review`
 audits semantics (and can review a change), `dev`/`qa` execute and verify, and `converge` closes the
-loop by writing confirmed behavior back into the spec. Role permissions still come from the
-repository rules (`.agents/rules`, `docs/agent-rules.md`), not from a skill.
+loop by writing confirmed behavior back into the spec. Skills are self-contained: each one bundles
+the role boundaries it needs in its own `references/` directory. Repository role rules
+(`.agents/rules/*.md`, including `enforcement.md`) are an optional suite layer that skills follow
+when present, not a runtime dependency.
 
 Platform-specific helpers may also live in this directory (for example a Windows sandbox
 diagnostic skill when installed). They are not part of the specification pipeline and must declare a

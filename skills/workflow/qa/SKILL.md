@@ -10,9 +10,10 @@ metadata:
 
 # QA — Independent Verification
 
-Verify one task bundle independently and issue one verdict. This skill defines the **process**;
-write permissions and role boundaries come from the repository's agent rules (for example
-`docs/agent-rules.md` and `.agents/rules/qa.md`). The skill never grants extra access.
+Verify one task bundle independently and issue one verdict. This skill defines the **process** and
+carries its own role boundaries in [`references/role-boundaries.md`](references/role-boundaries.md).
+If the adopting repository defines agent rules (`AGENTS.md`, a role-rules directory or equivalent),
+read and follow them when present; the skill never grants extra access.
 
 ## Use when
 
@@ -77,8 +78,8 @@ write permissions and role boundaries come from the repository's agent rules (fo
 - **Test environment unavailable**: report the command, error and environment; do not sign off.
 - **Out-of-scope Dev change**: issue `REWORK_REQUIRED` with the violating path.
 - **Repeated rework**: escalate with the failure history; do not lower the bar to close the task.
-- **No tooling/hooks**: run the project's commands manually and record evidence in `03`; the
-  workflow must not depend on them.
+- **No tooling**: run the project's commands manually and record evidence in `03`; the
+  workflow must not depend on it.
 
 ## `04-process.md` and tooling
 
@@ -91,15 +92,18 @@ write permissions and role boundaries come from the repository's agent rules (fo
 
 - [`references/qa-protocol.md`](references/qa-protocol.md) — test matrix, evidence format,
   anti-cheat checks and verdict rules.
-- Repository role rules: `docs/agent-rules.md` and the project's rule files (read them when
-  present; this skill does not override them).
+- Role boundaries: [`references/role-boundaries.md`](references/role-boundaries.md) — write scope,
+  read-only scope, invariants and the honest enforcement model (bundled; no external files needed).
+- Repository rules: read `AGENTS.md` and any role-rules files when the adopting project defines
+  them; they may add requirements but are not required for this skill to work.
 - Task bundle format: `task-decomposition` skill (optional sibling; this skill consumes its
   artifacts).
 
 ## Honest limits
 
-This skill does not grant write access and cannot enforce role isolation. The authoritative
-protection is repository CI (`tools/rbac_audit.py`) plus branch protection. Gate 1/2 review is a
-separate planning concern; this skill verifies a task that already passed planning.
+This skill does not grant write access and cannot enforce role isolation. Where the repository has
+CI (for example a git-based role audit) or branch protection, that is the authoritative layer.
+Gate 1/2 review is a separate planning concern; this skill verifies a task that already passed
+planning.
 
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)

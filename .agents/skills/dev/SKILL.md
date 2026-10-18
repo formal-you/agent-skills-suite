@@ -10,9 +10,10 @@ metadata:
 
 # Dev — Task Implementation
 
-Implement one task bundle and hand it to QA. This skill defines the **process**; write
-permissions and role boundaries come from the repository's agent rules (for example
-`docs/agent-rules.md` and `.agents/rules/dev.md`). The skill never grants extra access.
+Implement one task bundle and hand it to QA. This skill defines the **process** and carries its own
+role boundaries in [`references/role-boundaries.md`](references/role-boundaries.md). If the adopting
+repository defines agent rules (`AGENTS.md`, a role-rules directory or equivalent), read and follow
+them when present; the skill never grants extra access.
 
 ## Use when
 
@@ -91,18 +92,13 @@ permissions and role boundaries come from the repository's agent rules (for exam
   the check.
 - **DoD fails**: fix the implementation and rerun. Do not tick the handoff box while a check fails.
 - **Tooling unavailable**: use the project's manual commands and record evidence in `02`; the
-  workflow must not depend on hooks or scripts.
+  workflow must not depend on optional tooling.
 
 ## `04-process.md` and tooling
 
 `04-process.md` is derived output. After the handoff checkbox is checked, optional repository
 tooling appends `HANDOFF_QA_REQUESTED` and updates `macro_status`/`current_lock_holder`. Never
-hand-edit `04`; without tooling, rely on git/CI and the checked box. If the project uses the
-optional logger:
-
-```bash
-python .agents/scripts/event_bus_logger.py --tasks-dir ./tasks
-```
+hand-edit `04`; without tooling, rely on git/CI and the checked box.
 
 ## After QA_PASSED: spec write-back ownership
 
@@ -119,15 +115,17 @@ The **Implementation deviations** table is Dev's last deliverable for the task. 
 
 - [`references/dev-protocol.md`](references/dev-protocol.md) — detailed checklists, scope
   verification, handoff and rework procedure.
-- Repository role rules: `docs/agent-rules.md` and the project's rule files (read them when
-  present; this skill does not override them).
+- Role boundaries: [`references/role-boundaries.md`](references/role-boundaries.md) — write scope,
+  read-only scope, invariants and the honest enforcement model (bundled; no external files needed).
+- Repository rules: read `AGENTS.md` and any role-rules files when the adopting project defines
+  them; they may add requirements but are not required for this skill to work.
 - Task bundle format: `task-decomposition` skill (optional sibling; this skill only consumes its
   artifacts).
 
 ## Honest limits
 
-This skill does not grant write access and cannot enforce role isolation. The authoritative
-protection is repository CI (`tools/rbac_audit.py`) plus branch protection; local hooks are a
-best-effort adapter. The contract, not this document, defines the allowed blast radius.
+This skill does not grant write access and cannot enforce role isolation. Where the repository has
+CI (for example a git-based role audit) or branch protection, that is the authoritative layer. The
+contract, not this document, defines the allowed blast radius.
 
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)

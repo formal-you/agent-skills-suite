@@ -106,14 +106,18 @@ task fit; add a new entry and record the conflict.
 
 - [`references/convergence-protocol.md`](references/convergence-protocol.md) - state machine, who
   writes what, archive layout, idempotency markers, conflict rules and structural escalation.
-- Task bundle format and role lifecycle: `task-decomposition` skill.
+- Role boundaries: [`references/role-boundaries.md`](references/role-boundaries.md) — write scope,
+  invariants and the honest enforcement model (bundled; no external files needed).
+- Task bundle format and role lifecycle: `task-decomposition` skill (when installed).
 - Handoff input: `dev` skill; verdict input: `qa` skill.
-- Repository role rules: `docs/agent-rules.md` and the project's rule files.
+- Repository rules: read `AGENTS.md` and any role-rules files when the adopting project defines
+  them; they may add requirements but are not required for this skill.
 
 ## Honest limits
 
-This skill does not grant write access and cannot enforce role isolation. The authoritative
-protection is repository CI (`tools/rbac_audit.py`) plus branch protection. The bundled helper is
-an optional deterministic assistant; the markers and the written evidence are the contract.
+This skill does not grant write access and cannot enforce role isolation. Where the repository has
+CI (for example a git-based role audit) or branch protection, that is the authoritative layer. The
+bundled helper is an optional deterministic assistant; the markers and the written evidence are the
+contract.
 
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)

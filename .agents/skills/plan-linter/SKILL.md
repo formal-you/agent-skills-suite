@@ -73,8 +73,8 @@ The script is optional. If Python is unavailable, use
 references/gate-2-review.md as a manual checklist and review the same fields by
 hand.
 
-**Gate 2 is the separate `review` skill.** After Gate 1 exits 0, use
-`review/SKILL.md` (plan-review mode) for the independent semantic audit. This skill
+**Gate 2 is the separate `review` skill.** After Gate 1 exits 0, use the `review` skill
+(plan-review mode) when it is installed for the independent semantic audit. This skill
 keeps `references/gate-2-review.md` as a self-contained fallback when the review
 skill is not installed; it never replaces Gate 1.
 
@@ -213,4 +213,4 @@ It does not:
 - judge whether a spec section is *semantically* covered: the coverage matrix is
   anchor-level bookkeeping, and a task can reference an anchor without implementing it;
 - check the prose quality of a contract;
-- replace the git-based RBAC audit in tools/rbac_audit.py.
+- replace the repository's git-based RBAC audit.

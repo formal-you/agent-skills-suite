@@ -120,10 +120,11 @@ The bundle format is shared; the work is not. A short contract for the three rol
    tokens**: leave them untouched so a freshly planned bundle can pass Gate 1 before Dev/QA start.
    Never fill another role's workspace pre-emptively. Leave `04` alone: it is derived output that
    starts initialized (`TODO`/`UNASSIGNED`/`None`/retry 0) with an empty event table.
-5. **Validate (optional but recommended).** If the `plan-linter` skill is installed, run Gate 1:
+5. **Validate (optional but recommended).** If the `plan-linter` skill is installed, run its helper
+   from the plan-linter skill directory:
 
    `bash
-   python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir <tasks-dir> --json
+   python scripts/plan_linter.py --tasks-dir <tasks-dir> --json
    `
 
    Exit codes: `0` pass, `1` violations, `2` usage/config error, `3` unexpected error. Read the JSON
@@ -176,13 +177,14 @@ instantiated `01-contract.md` must contain no unresolved placeholder tokens.
 - **Missing input**: stop and report which upstream document is missing; do not reconstruct it.
 - **Ambiguous requirement**: turn it into an explicit open question in `01-contract.md` `Notes`; do not invent behavior.
 - **Scope conflict**: if a necessary edit falls outside `touch_files`, split the task or escalate to the Planner/owner.
-- **Tooling unavailable**: use the manual fallback above; the workflow must not depend on Python or hooks.
+- **Tooling unavailable**: use the manual fallback above; the workflow must not depend on Python or optional tooling.
 - **Wrapper/tooling failure**: report the command and exit code; do not silently hand-edit `04-process.md`.
 
 ## Honest limits
 
 - `04-process.md` is derived output. The authoritative audit trail is git history plus the repository
-  CI audit; optional hooks are best-effort and bypassable, never a security guarantee.
+  CI audit; no local hook adapter is shipped, and any adopter-provided hook is best-effort and
+  bypassable, never a security guarantee.
 - The Goldilocks thresholds, forbidden prefixes and required documents are repository conventions;
   they are configurable in the linter config and must not be presented as universal law.
 - Gate 2 is a prompt, not a script.

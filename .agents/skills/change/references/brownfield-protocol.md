@@ -132,3 +132,20 @@ tasks/
 - `standards_extract.py` is deterministic: the same tree produces the same report, so
   `--check` is a stable CI signal.
 - Re-running `converge` on an already archived change is a no-op (see the converge skill).
+
+## 8. Minimal four-document fallback (no sibling skill)
+
+When the `task-decomposition` skill is not installed, create `tasks/<change-id>/` with these four
+documents and the same contract fields the scaffolder would emit:
+
+| Document | Minimum content |
+| :--- | :--- |
+| `01-contract.md` | YAML frontmatter first: `task_id` (= directory name), `title`, `module`, `change_id`, `size_class`, `dependencies`, `estimated_lines`, `touch_files`, `origin_spec_anchor`, `adherence_adrs`, `dod`; then the human sections. |
+| `02-dev-workspace.md` | Token-free blank role form with Dev scope, self-verification table and the `- [ ] WAITING_FOR_QA` box unchecked. |
+| `03-qa-verification.md` | Token-free blank QA form with the test matrix, evidence section and both verdict boxes unchecked. |
+| `04-process.md` | Initialized derived state (`TODO` / `UNASSIGNED` / `None` / retry `0`, empty event table). |
+
+Keep `02`/`03`/`04` token-free so Gate 1 passes on the planned bundle. The inline fallback emitted
+by `scaffold_change.py` produces the same four documents; the manual path must not invent extra
+sections.
+

@@ -99,7 +99,7 @@ class ExecutionSkillContentTests(unittest.TestCase):
         for name in EXEC_SKILLS:
             text = read_text(SKILLS / name / "SKILL.md").lower()
             self.assertIn("does not grant write access", text)
-            self.assertIn("docs/agent-rules.md", text)
+            self.assertIn("references/role-boundaries.md", text)
 
     def test_role_rules_point_to_skills(self) -> None:
         dev_rule = read_text(ROOT / ".agents" / "rules" / "dev.md")
