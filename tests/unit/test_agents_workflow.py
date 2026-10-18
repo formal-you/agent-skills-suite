@@ -12,7 +12,7 @@ CONTRIBUTING = ROOT / "CONTRIBUTING.md"
 PR_TEMPLATE = ROOT / ".github" / "pull_request_template.md"
 
 REQUIRED_AGENTS_PHRASES = (
-    "## 6. Skill change workflow",
+    "## 4. Skill change workflow",
     "Intent and issue (risk-based)",
     "Branch and write scope",
     "Author or optimize",
@@ -52,31 +52,27 @@ class AgentsWorkflowTests(unittest.TestCase):
 
     def test_agents_is_concise_and_scannable(self) -> None:
         text = read(AGENTS)
-        self.assertLessEqual(len(text.splitlines()), 175, "AGENTS.md must stay at most 175 lines")
+        self.assertLessEqual(len(text.splitlines()), 155, "AGENTS.md must stay at most 155 lines")
         for phrase in (
             "**Purpose.**",
             "**Precedence (highest first).**",
             "**Authority.**",
             "## 1. Repository map",
-            "## 2. How to work",
+            "## 2. Work types",
             "### 2.1 Discovery and specification",
             "### 2.2 Per-task delivery",
             "### 2.3 Skill-suite development",
-            "## 7. Commands",
+            "## 5. Commands",
             "always-loaded summary",
         ):
             self.assertIn(phrase, text, "AGENTS.md misses structure phrase: " + phrase)
-        for phrase in (
-            "| PM |",
-            "| Architect |",
-            "prd-generator",
-            "spec-generator",
-            "task-decomposition",
-            "plan-linter",
-        ):
+        for phrase in ("prd-generator", "spec-generator", "task-decomposition", "plan-linter"):
             self.assertIn(phrase, text, "AGENTS.md misses discovery-stage phrase: " + phrase)
         self.assertIn("Never commit secrets/PII", text)
         self.assertIn("Bounded brownfield changes", text)
+        self.assertIn("enforcement.md#role-matrix", text)
+        self.assertNotIn("| Role | Rule |", text, "do not duplicate the role matrix")
+        self.assertNotIn("| Gate | Owner |", text, "do not duplicate the gate matrix")
         self.assertNotIn("v2.0.0", text, "do not pin tool versions in the always-loaded summary")
 
     def test_agents_role_rules_and_pipeline_skills_exist(self) -> None:

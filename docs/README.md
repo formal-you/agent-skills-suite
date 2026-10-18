@@ -25,6 +25,7 @@
 | [gate3-precheck.zh-CN.md](gate3-precheck.zh-CN.md) | QA 本地 Gate 3 预检：命令、参数、退出码、与 CI 的边界 | 当前 |
 | [ci-stack-profiles.zh-CN.md](ci-stack-profiles.zh-CN.md) | Python/Node/Go/Java/Rust/.NET/C++ 的 CI profile 采纳说明 | 当前 |
 | [brownfield-convergence.zh-CN.md](brownfield-convergence.zh-CN.md) | brownfield `change` 与 `converge` 的提案/归档流程 | 当前 |
+| [agents-maintenance.zh-CN.md](agents-maintenance.zh-CN.md) | AGENTS.md 的单一事实源、长度预算与嵌套文件决策 | 维护者文档 |
 | [skills-benchmark.zh-CN.md](skills-benchmark.zh-CN.md) | 与公开 spec-driven/agent-workflow 项目的评分对标 | v3.1.0 基线快照 |
 
 ## 归档

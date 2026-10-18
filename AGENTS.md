@@ -24,7 +24,7 @@
 | `tools/` | Maintainer helpers (`quickstart.py`, audit tools) |
 | `docs/`, `tasks/` | Guides/strategy; per-task bundles used by the delivery pipeline |
 
-## 2. How to work
+## 2. Work types
 
 ### 2.1 Discovery and specification
 
@@ -42,6 +42,7 @@
   must preserve spec anchors and record deviations; `converge` writes confirmed deviations back.
 
 ### 2.2 Per-task delivery
+
 `task bundles -> Gate 1 -> Gate 2 -> Dev <-> QA -> Gate 3 -> converge`
 
 - Planner writes `01-contract.md`; Dev writes `02-dev-workspace.md`; QA writes `03-qa-verification.md`;
@@ -51,47 +52,27 @@
 
 ### 2.3 Skill-suite development
 
-Changes to skills, rules, templates, tools, manifests, CI or docs follow §6. Use it when improving
+Changes to skills, rules, templates, tools, manifests, CI or docs follow §4. Use it when improving
 the suite rather than delivering one task bundle.
 
-## 3. Task bundles and sizing
+## 3. Roles, gates and single sources of truth
 
-- `01` Planner-owned contract; `02` Dev handoff; `03` QA evidence/verdict; `04` derived and
-  tooling-owned; `task_id` in `01` equals the directory name.
-- Goldilocks default: 1–3 touched files and 50–250 estimated diff lines. Split larger work; merge
-  smaller work. Limits are configurable.
+- **Role matrix:** [`enforcement.md#role-matrix`](.agents/rules/enforcement.md#role-matrix) is the
+  canonical list of owners, write scopes and read-only areas. Do not duplicate it here; each role
+  follows its `.agents/rules/<role>.md`.
+- **Gates:** Gate 1 `plan-linter` validates contracts/anchors/DAG; Gate 2 is independent `review`;
+  Gate 3 `verification_linter.py` audits V(G)/basis paths/MSI/provenance; mutation runs on trunk via
+  `tools/mutation_gate.py`; RBAC uses `tools/rbac_audit.py`. Canonical details:
+  [`templates/ci/README.md`](templates/ci/README.md) and the owning skills (`quality-engineering`, `qa`).
+- **Quality bar:** PRD/spec have no unresolved placeholders, stable IDs/anchors and every ADR fork
+  resolved or explicitly open before decomposition. Code: `V(G) <= 10` per function (`11-15` waiver,
+  `>15` rejected); `Test Cases >= V(G)`; `MSI >= 80%` (`>= 90%` for `risk_level: core`); no critical
+  surviving mutant; no fabricated evidence.
+- **Task bundles and Goldilocks:** `01` Planner contract, `02` Dev handoff, `03` QA evidence/verdict,
+  `04` derived and tooling-owned; `task_id` in `01` equals the directory name. Default 1–3 touched
+  files and 50–250 estimated diff lines; split larger work and merge smaller work.
 
-## 4. Roles and write scopes
-
-| Role | Rule | Owns | Never |
-| :--- | :--- | :--- | :--- |
-| PM | `.agents/rules/pm.md` | `.specs/01-prd.md`, `.specs/01-prd/` | Spec/ADRs, tasks, source, tests |
-| Architect | `.agents/rules/architect.md` | `.specs/adr/*.md`, `.specs/02-tech-spec.md`, `.specs/02-tech-spec/` | PRD content, tasks, source, tests |
-| Planner | `.agents/rules/planner.md` | Task bundles, contracts, DAG | Source, tests, `04` |
-| Dev | `.agents/rules/dev.md` | `src/**`, `02-dev-workspace.md` | Tests, contracts, other roles' docs |
-| QA | `.agents/rules/qa.md` | `tests/acceptance/**`, `tests/integration/**`, `03` | Source, `01`, `02`, `04`; uses bundled Gate 3 pre-check |
-| Quality Engineering | `.agents/skills/quality-engineering/` | CI workflows, environment, gate scripts | Local task implementation, black-box test authoring |
-| Test Engineering | `.agents/rules/test-engineering.md` | Agreed test strategy, design-review notes | Task acceptance, tests, `03`, running CI gates |
-| Reviewer | `.agents/rules/reviewer.md` | Read-only semantic Gate 2 review | Editing artifacts or weakening gates |
-| Orchestrator/Lead | `.agents/rules/orchestrator.md` | Routing, gate order, integration | Authoring role artifacts or bypassing gates |
-
-## 5. Gates and quality bar
-
-| Gate | Owner | Checks | Evidence |
-| :--- | :--- | :--- | :--- |
-| Gate 1 | `plan-linter` | Contract fields, BDD G/W/T, DAG, placeholders, anchors, topology | JSON + exit code |
-| Gate 2 | Independent reviewer | Traceability, invented content, ADR alignment | Review findings |
-| Gate 3 | `verification_linter.py` | Section 3 V(G), basis paths, Section 4 MSI, Section 5 provenance | JSON + exit code |
-| Mutation | `tools/mutation_gate.py` | `MUTATION_COMMAND` report on trunk; fail-closed | Normalized report |
-| Role audit | `tools/rbac_audit.py` | Changed paths vs role scope | CI status |
-
-Quality bar: PRD/spec have no unresolved placeholders, stable IDs/anchors and every ADR fork resolved
-or explicitly open before decomposition. Code: `V(G) <= 10` per function (`11-15` waiver, `>15`
-rejected); `Test Cases >= V(G)`; `MSI >= 80%` (`>= 90%` for `risk_level: core`); no critical surviving
-mutant; no fabricated evidence. CI plus branch protection (L1/L2) is authoritative; prompt rules are
-L0 only.
-
-## 6. Skill change workflow (authoring -> optimization -> tests -> git flow)
+## 4. Skill change workflow (authoring -> optimization -> tests -> git flow)
 
 This section applies when changing the suite itself (`SKILL.md`, `references/`, assets, scripts,
 rules, templates, manifests, CI or docs). It does not replace §2.2. Principles: small, reviewable,
@@ -146,7 +127,7 @@ reversible; evidence over claims; one writer per file; no bypassed gates.
 When the user says "standard open-source workflow", "git flow", "issue/PR", "commit/push/PR/tag" or
 equivalent, execute this section without asking for a separate process description.
 
-## 7. Commands
+## 5. Commands
 
 ```bash
 python -m unittest discover -s tests/unit -p "test_*.py"
@@ -156,18 +137,17 @@ python tools/quickstart.py --target .tmp-smoke --dry-run   # distribution smoke
 git diff --check
 ```
 
-## 8. Maintaining this file
-- Keep this always-loaded summary at most 175 lines; move detail to role rules/skill docs/guides and
-  do not duplicate role permissions, gate internals or pinned tool versions here.
-- Changes need a docs PR, the workflow guard tests and the same review rules as §6. If this file
+## 6. Maintaining this file
+- Keep this always-loaded summary at most 155 lines; move detail to the source of truth linked above.
+- Do not duplicate role permissions, gate implementation details or pinned tool versions here.
+- Changes need a docs PR, the workflow guard tests and the same review rules as §4. If this file
   conflicts with a role rule, the role rule wins for permissions; fix the stale source in the PR.
 
 ## References
 
-- `.agents/rules/enforcement.md` — role matrix, lifecycle markers, enforcement model.
-- `.agents/skills/README.md` — skill index, discovery and per-skill contract.
-- `templates/ci/README.md` — CI gates, RBAC audit and the four-stage pipeline.
-- `CONTRIBUTING.md` — contributor setup, tests and PR conventions.
-- `docs/skills-guide.zh-CN.md`, `docs/brownfield-convergence.zh-CN.md`,
-  `docs/skills-compatibility.md` — usage, convergence and harness compatibility.
-- `docs/README.md` — user-facing docs index; `docs/archive/` — historical notes (not current rules).
+- [`enforcement.md`](.agents/rules/enforcement.md) — canonical role matrix and enforcement model.
+- [`skills/README.md`](.agents/skills/README.md) — skill index, discovery and per-skill contract.
+- [`templates/ci/README.md`](templates/ci/README.md) — CI gates, RBAC audit and four-stage pipeline.
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — contributor setup, tests and PR conventions.
+- [`docs/README.md`](docs/README.md) — user-facing docs index; `docs/archive/` — historical notes.
+- [`docs/skills-guide.zh-CN.md`](docs/skills-guide.zh-CN.md) — usage walkthrough.
