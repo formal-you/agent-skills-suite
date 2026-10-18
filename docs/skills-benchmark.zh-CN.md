@@ -1,37 +1,50 @@
 # 技能套件评分与开源对标（2026-10）
 
-> **评分对象**：本仓库 v2.0.0 技能套件（`.agents/skills` 七个技能 + `tools/` + 可选引擎），
-> 评审基线为提交 `ba50e01` 之后的 `develop` 快照。  
+> **评分对象**：本仓库 v3.1.0 发布树（`skills/<category>/<name>/` 可安装布局：九个 workflow 技能
+> prd-generator、spec-generator、task-decomposition、change、plan-linter、review、dev、qa、converge，
+> 外加一个 platform 助手 diagnose-windows-sandbox-acl；同时提供 `.claude-plugin/` 插件与市场清单），
+> 评审基线为 v3.1.0 发布包；`.agents/skills/` 是 AGENTS 发现机制的镜像布局。  
 > **对比对象**：当前公开的知名 spec-driven / agent-workflow 开源项目。  
 > **重要声明**：这不是严谨的 benchmark。分数是基于公开 README/文档、仓库元数据与本仓库实测结果
 > 做出的**主观工程判断**；没有对竞品做同等深度的 hands-on 评测。星标数为 2026-10-18 的 GitHub
 > API 快照，只代表关注度，不代表质量。  
 
+> **v3.1.0 更新（2026-10-18）**：分发形态升级为可安装插件包，技能改为自包含（只引用自身目录内的
+> 文件），角色规则迁移到 `.agents/rules/*.md`（含 `enforcement.md`）并降为可选套件层；评分与证据
+> 相应更新，D6 4.4、D7 1.4，加权总分 4.16。
+
 ---
 
 ## 1. 结论先行
 
-在本套评分口径下：**本套件综合 4.12 / 5.0（v3），已进入头部区间：确定性、角色隔离与 QA 独立性领先，收敛闭环补齐；生态仍是结构性短板。**
+在本套评分口径下：**本套件综合 4.16 / 5.0（v3.1.0），已进入头部区间：确定性、角色隔离与 QA 独立性领先，收敛闭环补齐；生态仍是结构性短板。**
 
-> 2026-10-18 v3 更新：v2 的两个最大缺口（brownfield、收敛循环）已补齐。
+> 2026-10-18 v3.1.0 更新：发布形态从"仓库快照"升级为"可安装插件包"，技能改为自包含，规则层变为可选。
 
-- **新增 brownfield 增量**：`change` 技能（proposal → 单个任务包 → archive）+ standards 提取，不写 PRD 也能接小需求；
-- **新增规格收敛**：`QA_PASSED` 后 `converge` 把实现偏差 append-only 写回 `.specs/02-tech-spec.md`，规格变成活文档；
+- **插件分发**：`.claude-plugin/` 提供 Claude Code 插件与市场清单；Codex 插件市场、GitHub Copilot 插件、
+  Gemini CLI `--path skills/workflow|platform`、`npx skills`、`tools/install_skills.py` 与
+  `tools/quickstart.py` 覆盖其余宿主与采用路径；
+- **自包含技能**：每个 `SKILL.md` 只引用自身技能目录内的文件；插件安装只加载技能目录，跨目录引用已移除；
+- **规则层可选**：角色规则位于 `.agents/rules/*.md`（含 `enforcement.md`，替代旧的 `docs/agent-rules.md`），
+  技能按"存在则遵循"的方式引用，没有规则层也能独立工作；
+- **brownfield 增量**：`change` 技能（proposal → 单个任务包 → archive）+ standards 提取，不写 PRD 也能接小需求；
+- **规格收敛**：`QA_PASSED` 后 `converge` 把实现偏差 append-only 写回 `.specs/02-tech-spec.md`，规格变成活文档；
 - **Gate 2 启发式**：锚点覆盖率矩阵、真实路径拓扑、change proposal 一致性由 plan-linter 3.x 预先计算；
 - **分发与 CI**：`tools/quickstart.py` 一条命令采用，`templates/ci/` 两个可直接复制的 GitHub Actions。
 
 - **强项**：端到端流程完整（想法 → PRD → 规格 → 任务 → Gate 1/2 → Dev → QA → 收敛）；确定性
-  Gate 1 + CI RBAC 审计；四文档契约与角色隔离；brownfield 增量与活规格；prompt-first、可迁移、无引擎依赖；测试基线扎实。
-- **仍弱**：生态与公开采用接近零；没有插件市场 / `skills-ref validate` / 公开示例库；Gate 2 仍是
-  人工提示词；没有 per-task 子代理编排；没有真实仓库上的公开 A/B 数据。
+  Gate 1 + CI RBAC 审计；四文档契约与角色隔离；brownfield 增量与活规格；自包含技能与插件分发；
+  prompt-first、可迁移、无引擎依赖；发布包 231 个黑盒单元测试（1 skip）。
+- **仍弱**：生态与公开采用接近零；插件清单已就绪，但尚未进入公开市场，没有公开示例库 / 社区 /
+  `skills-ref validate`；Gate 2 仍是人工提示词；没有 per-task 子代理编排；没有真实仓库上的公开 A/B 数据。
 - **最接近的竞品**：GitHub Spec Kit（流程与生态）与 OpenSpec（brownfield 模型），cc-sdd（Agent Skills
-  形态）。v3 之后我们在**确定性门禁、角色隔离、QA 独立性、收敛闭环**上更强或持平，在**生态、社区、
-  分发市场、per-task 编排**上仍明显落后。
+  形态）。v3.1.0 之后我们在**确定性门禁、角色隔离、QA 独立性、收敛闭环**上更强或持平，在**生态、社区、
+  公开市场采用、per-task 编排**上仍明显落后。
 
 加权总分（同一口径，1–5）：
 
 ```text
-本套件 (v3.0.0)      4.12  ████████▎
+本套件 (v3.1.0)      4.16  ████████▍
 GitHub Spec Kit      4.05  ████████▏
 cc-sdd               3.85  ███████▋
 BMAD-METHOD          3.78  ███████▌
@@ -40,8 +53,9 @@ Agent OS             3.23  ██████▍
 Taskmaster           3.08  ██████▏
 ```
 
-> 与 v2 相比：D1 +0.3（brownfield + 收敛）、D2 +0.2（启发式）、D5 +0.3（CI/分发/测试）、D6 +0.7（一键采用）、
-> D7 +0.2（可被复制采用，但仍无公开社区）。这是自评，不是第三方基准；生态一项仍把上限压在 4.2 附近。
+> 与 v2 相比：D1 +0.3（brownfield + 收敛）、D2 +0.2（启发式）、D5 +0.3（CI/分发/测试）；
+> 与 v3.0 相比：D6 +0.2（插件安装与文档）、D7 +0.2（可安装、可被发现），加权分提升 0.04。
+> 这是自评，不是第三方基准；生态一项仍把上限压在 4.2 附近。
 
 > Anthropic `skills` 仓库（181k stars）不是流程框架，而是 Agent Skills 格式与生态的基准，
 > 不参与同一张流程榜；它在"格式兼容/发现机制"上是我们必须对齐的对象。
@@ -76,9 +90,12 @@ Taskmaster           3.08  ██████▏
 
 ### 2.3 数据与证据
 
-- 本套件：`.agents/skills` 九个技能、`tools/`、`templates/ci/`、`docs/`、`tests/`；实测 539 个单元测试
-  （1 skip）、109 个 E2E；新增专项 change 30、converge 27、distribution 28、plan-linter v3 26
-  （详见 [技能使用指南](skills-guide.zh-CN.md) 与 [v3 说明](brownfield-convergence.zh-CN.md)）。
+- 本套件（发布树）：`skills/` 可安装布局（九个 workflow 技能 + `diagnose-windows-sandbox-acl`）、
+  `.claude-plugin/` 插件与市场清单、`tools/`、`templates/ci/`、`docs/`、`tests/unit/`；发布包内实测
+  **231 个黑盒单元测试（1 skip）**，这是本文引用的发布基线。
+- 上游开发仓库另有完整测试套件（539 个单元测试 + 109 个 E2E），**不随发布包分发**，仅作上游证据，
+  不计入发布基线（详见 [技能使用指南](skills-guide.zh-CN.md)、[brownfield 与收敛](brownfield-convergence.zh-CN.md)、
+  [宿主兼容性](skills-compatibility.md) 与 [技能布局说明](../.agents/skills/README.md)）。
 - 竞品：GitHub README/官方文档（见文末"数据来源"）；星标/GitHub API 快照见 §6。
 - 所有竞品都只做文档级对照，未在相同仓库、相同任务上做 A/B。
 
@@ -88,7 +105,7 @@ Taskmaster           3.08  ██████▏
 
 | 项目 | D1 流程 20% | D2 可验证 15% | D3 隔离 15% | D4 可移植 10% | D5 工程化 10% | D6 上手 10% | D7 生态 10% | D8 扩展 5% | D9 中立 5% | **加权** |
 | :--- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| **本套件 v3.0.0** | 4.8 | 4.7 | 4.0 | 4.5 | 4.3 | 4.2 | 1.2 | 4.2 | 4.5 | **4.12** |
+| **本套件 v3.1.0** | 4.8 | 4.7 | 4.0 | 4.5 | 4.3 | 4.4 | 1.4 | 4.2 | 4.5 | **4.16** |
 | GitHub Spec Kit | 4.5 | 3.0 | 2.0 | 5.0 | 4.5 | 5.0 | 5.0 | 4.5 | 4.5 | **4.05** |
 | cc-sdd | 4.5 | 3.5 | 3.0 | 5.0 | 4.0 | 4.0 | 3.0 | 3.5 | 4.0 | **3.85** |
 | BMAD-METHOD | 4.5 | 2.5 | 3.5 | 4.0 | 4.0 | 3.0 | 4.5 | 4.5 | 4.0 | **3.78** |
@@ -102,7 +119,8 @@ Taskmaster           3.08  ██████▏
 
 ## 4. 本套件的组件评分
 
-组件分为定性 1–5，不与上表权重直接相加；用于回答"九个技能各自值多少"。
+组件分为定性 1–5，不与上表权重直接相加；用于回答"九个 workflow 技能各自值多少"
+（`diagnose-windows-sandbox-acl` 只做环境诊断，不参与流程评分）。
 
 | 组件 | 分数 | 理由 | 主要短板 |
 | :--- | ---: | :--- | :--- |
@@ -116,10 +134,10 @@ Taskmaster           3.08  ██████▏
 | `change` | 4.2 | brownfield proposal→apply→archive、standards 隐式约束、micro 预算 | delta 仍需 Planner 手写；standards 是启发式而非语义理解 |
 | `converge` | 4.1 | append-only 写回、幂等 marker、归档与指纹漂移检测 | 依赖 Dev 如实填偏差表；无自动语义冲突消解 |
 | 可选引擎 | 3.0 | 确定性生成/回放对回归有价值 | 领域启发式与预制内容可能污染输出；默认不应依赖 |
-| 工具/文档 | 4.5 | 兼容矩阵、中文指南、RBAC/安装工具、quickstart 分发 + CI 模板、539 测试 | 无 release/插件市场；已有单仓库试点，仍无公开 A/B |
+| 工具/文档 | 4.5 | 插件清单（Claude Code/Codex/Copilot）、自包含技能、兼容矩阵、中文指南、RBAC/安装工具、quickstart 分发 + CI 模板、231 单元测试 | 公开市场采用与社区仍为零；无公开 A/B；示例库待补 |
 
-**一句话**：最强的仍是 `plan-linter` 与 `task-decomposition`；v3 的 `change` / `converge` 把
-流程与活规格补到可用；最需要继续补的是生态/公开采用，而不是再加技能。
+**一句话**：最强的仍是 `plan-linter` 与 `task-decomposition`；v3.1.0 的插件分发与自包含技能
+把"装得上、可独立加载"补齐；最需要继续补的是生态/公开采用，而不是再加技能。
 
 ---
 
@@ -130,9 +148,9 @@ Taskmaster           3.08  ██████▏
 - **强项**：`constitution → specify → plan → tasks → implement → converge` 的完整 SDD 流程；
   bug fixing / idea assessment / 自定义 process 多入口；CLI、扩展与 workflow overlay；
   多 coding agent 集成；成熟文档与巨大生态。
-- **相对我们**：强在生态、分发、社区与多 agent 集成；v3 之后我们在 brownfield 与收敛上已基本对齐
-  （`change` + `converge`），并在确定性 Gate、角色隔离、CI 防作弊、QA 独立性上领先；仍弱在插件/扩展
-  生态与公开采用。
+- **相对我们**：强在生态、分发、社区与多 agent 集成；v3.1.0 之后我们在 brownfield 与收敛上已基本对齐
+  （`change` + `converge`），并在确定性 Gate、角色隔离、CI 防作弊、QA 独立性上领先；仍弱在公开市场、
+  插件/扩展生态与公开采用。
 - **可借鉴**：`converge` 回路、bug/idea 入口、扩展/插件模型、`specify init` 式一键初始化。
 
 ### 5.2 cc-sdd — 3.85（Agent Skills 形态最接近）
@@ -155,7 +173,7 @@ Taskmaster           3.08  ██████▏
 
 - **强项**：specs/changes/archive 的增量模型；`/opsx:propose → apply → archive`；
   对 brownfield 友好；stores 支持跨仓库规格共享；轻量、易上手；生态增长快。
-- **相对我们**：brownfield 模型与轻量体验仍更成熟（跨仓库 stores、大社区）；v3 的 `change` 已覆盖
+- **相对我们**：brownfield 模型与轻量体验仍更成熟（跨仓库 stores、大社区）；v3.1.0 的 `change` 已覆盖
   proposal → apply → archive 的核心，但生态与工具成熟度仍落后；角色隔离、确定性门禁、QA 独立性我们更强。
 - **可借鉴**：change proposal / archive 模型、brownfield 默认路径。
 
@@ -176,7 +194,7 @@ Taskmaster           3.08  ██████▏
 
 - 定义了 Agent Skills 的目录/发现/渐进披露标准；大量生产级技能示例（Apache 2.0）。
 - 我们与它在格式上对齐（SKILL.md frontmatter、references、assets、scripts），但没有配套的
-  `skills-ref validate`、插件市场与公开示例库——这是生态分低的重要原因。
+  `skills-ref validate`、公开插件市场与公开示例库——这是生态分低的重要原因。
 
 ---
 
@@ -191,7 +209,7 @@ Taskmaster           3.08  ██████▏
 | eyaltoledano/claude-task-master | 28,237 | MIT + Commons Clause | 任务管理 |
 | buildermethods/agent-os | 5,513 | MIT | standards + spec |
 | gotalab/cc-sdd | 3,720 | MIT | Agent Skills + 8 宿主 |
-| 本套件 | 本地项目，暂无公开 star 数据 | MIT（本仓库） | 未发布到公开市场 |
+| 本套件 | 本地项目，暂无公开 star 数据 | MIT（本仓库） | v3.1.0 插件清单就绪；未发布到公开市场 |
 
 > 星标来自 GitHub API 快照，会持续变化；它衡量关注度，不衡量工程质量或适用性。
 
@@ -203,63 +221,75 @@ Taskmaster           3.08  ██████▏
 
 1. **确定性门禁**：Gate 1 是可执行脚本（frontmatter 契约、DAG、blast radius、DoD、占位符），并新增
    锚点覆盖率矩阵与反向路径拓扑；有 JSON/配置/退出码，不依赖模型"自觉"。
-2. **角色隔离与防作弊**：四文档 + 写权限矩阵 + CI `rbac_audit.py`；Dev/QA 的"考生不能自己判分"
-   在结构上成立。
+2. **角色隔离与防作弊**：四文档 + 写权限矩阵 + CI `rbac_audit.py`；角色规则集中在 `.agents/rules/*.md`
+   （含 `enforcement.md`），作为可选套件层，技能自身不依赖它也能工作。
 3. **QA 独立性**：QA 技能强制黑盒矩阵、证据、唯一裁决与返工 trace；多数竞品没有同等的 QA 契约。
 4. **活规格与收敛**：`converge` 以 append-only 记录 + marker + 指纹漂移检测把实现结果写回规格，
    并归档任务包与 change；这不是文档承诺，是可执行脚本 + 幂等语义。
-5. **prompt-first 可迁移**：技能不 import 引擎、可复制到仓库外；引擎可选；无 Python 也有手工路径。
+5. **自包含技能 + 插件分发**：每个 `SKILL.md` 只引用自身目录内的文件，插件安装只加载技能目录；
+   发布包同时提供 `.claude-plugin/`（Claude Code 插件与市场清单）、Codex 插件市场、GitHub Copilot
+   插件、Gemini CLI `--path skills/workflow|platform`、`npx skills`、`tools/install_skills.py` 与
+   `tools/quickstart.py`。
+6. **prompt-first 可迁移**：技能不 import 引擎、可复制到仓库外；引擎可选；无 Python 也有手工路径。
 
 ### 7.2 明确落后
 
-1. **生态与公开采用**：没有公开示例库、release 节奏、插件市场、`skills-ref validate`；社区为 0。
-   v3 的 `quickstart` 只解决"能不能装"，不解决"有多少人在用"。
+1. **生态与公开采用**：插件清单已交付，但还没有发布到公共插件市场，没有公开示例库、社区与
+   `skills-ref validate`；`quickstart` / `install_skills.py` 只解决"能不能装"，不解决"有多少人在用"。
 2. **多 agent 编排**：没有 per-task implementer/reviewer 的独立子代理编排（cc-sdd/BMAD 更强）。
-3. **上手成本**：需要理解四文档、九个技能、两层门禁与配置阈值；仍比 OpenSpec/Taskmaster 重。
-4. **真实证据**：已有单仓库试点（[v3-pilot](v3-pilot.zh-CN.md)：2 文件 / +400 行、Gate 2 退回 1 次、69/69 测试），但仍没有公开任务集 A/B、跨项目返工率数据；当前评分仍以自评为主。
+3. **上手成本**：需要理解四文档、九个 workflow 技能（外加一个 platform 助手）、两层门禁与配置阈值；仍比 OpenSpec/Taskmaster 重。
+4. **真实证据**：上游开发仓库有内部单仓库试点记录（未随发布包分发），但仍没有公开任务集 A/B、
+   跨项目返工率数据；当前评分仍以自评为主。
 5. **brownfield 深度**：`change` 的 delta 仍需 Planner 手写，standards 提取是确定性启发式而非代码语义
    理解；OpenSpec 的跨仓库 stores 与迭代体验仍更成熟。
 
 ---
 
-## 8. v3 交付情况与剩余路线
+## 8. v3.1.0 交付情况与剩余路线
 
 > 下列"提分"是同一评分口径下的粗略估计，不是承诺。
 
 | 优先级 | 改进 | 状态 | 实际效果 |
 | :--- | :--- | :--- | :--- |
+| P0 | 插件分发 | **已交付 v3.1.0** | `.claude-plugin/` 清单 + Claude Code / Codex / GitHub Copilot 市场安装；D6 增益 |
+| P0 | 自包含技能 | **已交付 v3.1.0** | 每个 `SKILL.md` 只引用自身目录；插件安装不再依赖跨目录文件 |
 | P0 | brownfield / change 入口 | **已交付 v3** | `change` 技能 + standards 提取 + micro/standard 预算；D1 +0.3 |
 | P0 | 分发与安装 | **已交付 v3** | `tools/quickstart.py` 一条命令 + `templates/ci/` 两个 workflow；D6 +0.7 |
 | P1 | 收敛循环 | **已交付 v3** | `converge` append-only 写回 + 归档 + 指纹检测；D1/D2 增益 |
 | P1 | Gate 2 机器辅助 | **已交付 v3** | 覆盖率矩阵、反向拓扑、change 一致性；D2 +0.2 |
+| P1 | 规则层迁移 | **已交付 v3.1.0** | `.agents/rules/*.md`（含 `enforcement.md`）替代 `docs/agent-rules.md`，成为可选套件层 |
 | P2 | QA 自动化增强 | 未做 | 证据采集、覆盖率、scope diff、per-task reviewer 编排；约 +0.05 |
-| P2 | 生态/公开采用 | 未做（真正瓶颈） | 公开示例库、release tag、changelog、issue/PR 模板、社区；D7 需要 1.2 → 3+ |
+| P2 | 生态/公开采用 | 部分交付，公开采用未做（真正瓶颈） | 公开市场发布、示例库、社区、公开 A/B 仍未做；D7 需要 1.4 → 3+ |
 | P2 | 评测基线 | 未做 | 真实仓库任务集上的 pass/失败/返工率与 A/B |
 
-v3 的功能项已经做完：**3.90 → 4.12**。  
-继续加技能最多到约 4.15–4.2；要冲 **4.3+**，必须让 D7（生态与采用）从 1.2 升到 3 左右——这靠公开
-采用、示例库、release 与社区，不靠再写一个技能。这是评分结构决定的。
+v3.1.0 的交付项已经做完：**3.90 → 4.16**。  
+继续加技能最多到约 4.2；要冲 **4.3+**，必须让 D7（生态与采用）从 1.4 升到 3 左右——这靠公开
+市场发布、示例库、真实采用与社区，不靠再写一个技能。这是评分结构决定的。
 
 ---
 
 ## 9. 最终判断
 
-**v3 之后，本套件已经是一套完整的 SDD 工具链，而不是 demo 技能集**：契约优先、门禁可执行、
-角色可隔离、brownfield 可增量、实现结果可收敛、引擎可替换。它当前最像"Spec Kit 的确定性门禁版 +
-OpenSpec 的增量模型 + 更严格的 QA 契约"；与头部的差距已经从"功能缺失"收敛为"生态与采用"。
+**v3.1.0 之后，本套件已经是一套可安装、自包含的 SDD 工具链，而不是 demo 技能集**：契约优先、
+门禁可执行、角色可隔离、brownfield 可增量、实现结果可收敛、技能自包含且可插件安装、引擎可替换。
+它当前最像"Spec Kit 的确定性门禁版 + OpenSpec 的增量模型 + 更严格的 QA 契约"；与头部的差距
+已经从"功能缺失"收敛为"生态与采用"。
 
 - **今天适合谁**：重视契约、可追溯、CI 防作弊的团队/仓库；已有规格需要持续演进、又不想每次重写 PRD
-  的项目；愿意接受四文档与角色分工的成本。
-- **今天不适合谁**：只想要轻量 prompt、快速原型、或需要开箱即用插件市场的用户。
-- **下一步最值得做的一件事**：拿一个真实仓库跑完整 v3 流程并公开结果（通过/返工/收敛条目），
-  同时发首个 release 与示例库——这是 D7 从 1.2 往上走的唯一路径，也是 4.3+ 的门槛。
+  的项目；希望以插件方式安装、同时保留确定性门禁的团队。
+- **今天不适合谁**：需要成熟公共插件市场、大量现成示例与社区支持的团队；只想要轻量 prompt、快速
+  原型、或不愿接受四文档与角色分工成本的用户。
+- **下一步最值得做的一件事**：把 v3.1.0 发布到公共插件市场，配一个公开示例仓库，并持续公开真实
+  任务上的通过/返工/收敛数据——先让 D7 从 1.4 往上走，这是 4.3+ 的门槛。
 
 ---
 
 ## 10. 数据来源与免责声明
 
-- 本套件：仓库内 `.agents/skills`、`tools/`、`templates/ci/`、`tests/`、[技能使用指南](skills-guide.zh-CN.md)、
-  [v3 说明](brownfield-convergence.zh-CN.md)、[v2 设计契约](skills-v2-spec.md)、[审计归档](audit/README.md)。
+- 本套件（发布树）：`skills/`（九个 workflow + platform 可安装布局）、`.claude-plugin/`、`.agents/skills/`、
+  `.agents/rules/`、`tools/`、`templates/ci/`、`tests/unit/`；[技能使用指南](skills-guide.zh-CN.md)、
+  [brownfield 与收敛](brownfield-convergence.zh-CN.md)、[宿主兼容性](skills-compatibility.md)、
+  [技能布局说明](../.agents/skills/README.md)、[发布测试基线](../tests/unit/)。
 - GitHub Spec Kit：https://github.com/github/spec-kit
 - BMAD-METHOD：https://github.com/bmad-code-org/BMAD-METHOD
 - Agent OS：https://github.com/buildermethods/agent-os

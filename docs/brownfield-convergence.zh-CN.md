@@ -2,7 +2,7 @@
 
 > 适用对象：已有规格/代码库需要持续演进的团队与 Agent（Planner / Dev / QA / Reviewer / Orchestrator）。  
 > 对应版本：change 3.0.0、converge 1.0.0、plan-linter 3.0.0。  
-> 前置阅读：[技能使用指南（v2 基础流程）](skills-guide.zh-CN.md)、[v2 设计契约（含 v3 增补）](skills-v2-spec.md)。  
+> 前置阅读：[技能使用指南（v2 基础流程）](skills-guide.zh-CN.md)。  
 > 本文回答两个问题：**不改写 PRD 怎么接需求**（brownfield），以及**实现完怎么让规格保持真实**（收敛）。
 
 ---
@@ -278,7 +278,7 @@ Reviewer 的使用方式：把 uncovered 当作**正向完整性**的起点，�
 ### 5.1 一条命令采用到别的仓库
 
 ```bash
-# 默认安装：.agents/skills、.agents/rules、.agents/scripts、hooks.json、tools/rbac_audit.py
+# 默认安装：.agents/skills、.agents/rules、tools/rbac_audit.py
 python tools/quickstart.py --target ../another-repo --copy --with-ci
 
 # 有 uv 时可直接运行 PEP 723 脚本（无需安装本仓库）
@@ -296,12 +296,12 @@ python tools/quickstart.py --target ../r --json
 
 | 模板 | 触发 | 作用 |
 | :--- | :--- | :--- |
-| templates/ci/rbac-gate.yml | pull_request | 用 tools/rbac_audit.py 按事件 base/head 检查角色越权（L2 权威层） |
+| templates/ci/rbac-gate.yml | pull_request | 用 tools/rbac_audit.py 按事件 base/head 检查角色越权（L1 权威层） |
 | templates/ci/plan-gate.yml | pull_request（tasks/**、.specs/**） | 跑 Gate 1 + 覆盖率矩阵，JSON 写进 step summary |
 
 两者只需 permissions: contents: read；rbac-gate 还需要 fetch-depth: 0，角色取自仓库变量 RBAC_ROLE 或提交 trailer Agent-Role:。安装、权限、版本固定与排错见 [templates/ci/README.md](../templates/ci/README.md)。
 
-CI 是强制层；.agents/hooks.json 仍只是 Antigravity 的尽力而为适配器。采用时请固定到 tag/commit 并提交复制结果，让升级成为可审查的 diff。
+CI 是强制层；发布包不包含宿主 hook 适配器。采用时请固定到 tag/commit 并提交复制结果，让升级成为可审查的 diff。
 
 ---
 
@@ -363,10 +363,9 @@ python tools/quickstart.py --target ../another-repo --copy --with-ci
 
 - [技能索引（英文）](../.agents/skills/README.md)
 - [技能使用指南（v2 基础流程）](skills-guide.zh-CN.md)
-- [v2 设计契约（含 v3 增补）](skills-v2-spec.md)
 - [宿主兼容 / 安装 / 分发](skills-compatibility.md)
-- [真实仓库试点与证据](v3-pilot.zh-CN.md)
 - [评分与开源对标](skills-benchmark.zh-CN.md)
+- [角色规则与强制模型](../.agents/rules/enforcement.md)
 - [CI 模板说明](../templates/ci/README.md)
 
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)

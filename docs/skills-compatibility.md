@@ -17,14 +17,36 @@ honest about what is universal and what is host-specific.
 `.agents/skills/` is the single source of truth. There are no duplicate template or script
 copies at the repository root.
 
+## Self-containment and plugin packaging
+
+Every skill is self-contained: its `SKILL.md` references only files inside its own directory
+(`references/`, `assets/`, `scripts/`). Role boundaries are bundled per skill (for example
+`references/role-boundaries.md`), so a skill installed on its own still works.
+
+Repository role rules (`.agents/rules/*.md`, including `enforcement.md`), `AGENTS.md`, `tools/`,
+`templates/ci/` and the guides under `docs/` are an **optional suite layer**. Skills follow them
+when the adopting repository has them, but they are not runtime dependencies.
+
+| Install path | What is shipped | Why it works |
+| :--- | :--- | :--- |
+| Claude Code / Codex / Copilot plugin | the plugin tree; each listed skill directory is loaded with its bundled files | `SKILL.md` only reaches into its own directory |
+| `npx skills add` / Gemini `--path skills/<category>` | one skill directory | the same bundled files travel with it |
+| `tools/install_skills.py` | skill directories only | rules and docs are not required |
+| `tools/quickstart.py --with-rules --with-ci` | skills + rules + CI templates | adds the optional suite layer for adopters |
+
+Command examples inside a `SKILL.md` use the repository-adoption path
+(`.agents/skills/<name>/scripts/...`). When a skill is installed elsewhere, run the same script from
+that skill's own `scripts/` directory; the scripts resolve their resources relative to their
+location.
+
 ## Discovery matrix
 
-| Harness | Native location | Rules mechanism | Hooks / enforcement |
+| Harness | Native location | Rules mechanism | Enforcement |
 | :--- | :--- | :--- | :--- |
-| OpenAI Codex | `.agents/skills/` (scanned from CWD to repo root) and `~/.agents/skills/` | `AGENTS.md` | no hook contract used; rely on CI audit |
-| Google Antigravity | `.agents/skills/` (legacy `.agent/skills/`) and `~/.gemini/config/skills/` | `.agents/rules/*.md` with `trigger:` frontmatter, plus `AGENTS.md` | optional `.agents/hooks.json` adapter (best effort) |
-| Claude Code | `.claude/skills/<name>/` (personal `~/.claude/skills/`) | `CLAUDE.md` / rules | optional `.claude/settings.json` hooks; not installed by default |
-| DeepSeek Harness (DSH) | `.agents/skills/` | `AGENTS.md` | no hook contract used; rely on CI audit |
+| OpenAI Codex | `.agents/skills/` (scanned from CWD to repo root) and `~/.agents/skills/` | `AGENTS.md` | advisory prompt rules; CI audit |
+| Google Antigravity | `.agents/skills/` (legacy `.agent/skills/`) and `~/.gemini/config/skills/` | `.agents/rules/*.md` with `trigger:` frontmatter, plus `AGENTS.md` | advisory prompt rules; CI audit (no local hook adapter shipped) |
+| Claude Code | `.claude/skills/<name>/` (personal `~/.claude/skills/`) | `CLAUDE.md` / rules | advisory prompt rules; CI audit |
+| DeepSeek Harness (DSH) | `.agents/skills/` | `AGENTS.md` | advisory prompt rules; CI audit |
 | Generic agent | manual paste / skill directory | project prompt | none |
 
 ### After cloning: who sees what automatically
@@ -80,16 +102,16 @@ Exit codes: `0` success, `1` install failure, `2` usage error.
 uv run tools/quickstart.py --target ../adopting-repo --copy --with-ci
 ```
 
-It installs skills into `--dest` (default `.agents/skills/`), the rules, scripts and
-hooks, `tools/rbac_audit.py`, and, with `--with-ci`, the GitHub Actions workflows from
-`templates/ci/`: `rbac-gate.yml` (L2 RBAC audit on every pull request) and
+It installs skills into `--dest` (default `.agents/skills/`), the rules,
+`tools/rbac_audit.py`, and, with `--with-ci`, the GitHub Actions workflows from
+`templates/ci/`: `rbac-gate.yml` (L1 RBAC audit on every pull request) and
 `plan-gate.yml` (Gate 1 on `tasks/**` and `.specs/**` changes). Both need only
 `permissions: contents: read`; `rbac-gate.yml` also needs `fetch-depth: 0`. The audit
 workflow resolves the role from the repository variable `RBAC_ROLE` or from the
 `Agent-Role:` commit trailer. Installation, pinning and troubleshooting are documented
 in `templates/ci/README.md`.
 
-CI is the authoritative layer; `.agents/hooks.json` remains best-effort. Pin adoption to
+CI is the authoritative layer. Pin adoption to
 a tag or commit SHA and commit the copies, so upgrades stay reviewable diffs.
 
 ## Enforcement layers
@@ -100,12 +122,12 @@ layered, and only the lower layers are authoritative:
 | Layer | Mechanism | Scope | Guarantee |
 | :--- | :--- | :--- | :--- |
 | L0 | Prompt rules (`AGENTS.md`, role rules) and skill instructions | every harness | advisory |
-| L1 | `.agents/hooks.json` (Antigravity adapter) | Antigravity only | best effort; bypassable through shell commands or other tools |
-| L2 | `tools/rbac_audit.py` in CI (git diff + declared role) | any git repository | authoritative for committed changes |
-| L3 | Branch protection, required reviewers, CODEOWNERS | repository settings | authoritative |
+| L1 | `tools/rbac_audit.py` in CI (git diff + declared role) | any git repository | authoritative for committed changes |
+| L2 | Branch protection, required reviewers, CODEOWNERS | repository settings | authoritative |
 
-Do not describe L1 as physical enforcement. The authoritative protection is CI plus
-repository permissions. Removing `.agents/hooks.json` must not break any skill or workflow.
+Prompt rules are **not** physical enforcement. The authoritative protection is L1 plus repository
+permissions. This package ships no local hook adapter; adopters may add host-side hooks, but they
+remain best-effort and bypassable.
 
 ## Optional Python engine
 
@@ -148,6 +170,6 @@ where DSH sandbox ACL diagnosis is relevant.
 ## Versioning and change notes
 
 - Each skill declares `metadata.version` in `SKILL.md`.
-- Layout or behavior changes must update this document and
-  [`docs/skills-v2-spec.md`](./skills-v2-spec.md).
+- Layout or behavior changes must update this document and the affected `SKILL.md`
+  files, and must be recorded in `CHANGELOG.md`.
 - `.agents/skills/` remains the only place where templates and helper scripts live.

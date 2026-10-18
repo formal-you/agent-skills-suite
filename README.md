@@ -80,14 +80,16 @@ from one source).
 | :--- | :--- |
 | `skills/` | **installable layout**: `skills/<category>/<skill>/SKILL.md` (categories: `workflow`, `platform`). This is what skills.sh, Gemini and the plugin manifest read. |
 | `.agents/skills/` | The same skill files under the AGENTS discovery path, kept byte-identical by `tools/package_skills.py` (used by tests and local installers). |
-| `.agents/rules/` | Role rules (Planner, Dev, QA, Reviewer, Orchestrator, PM, Architect) |
-| `.agents/scripts/` | Optional local hook adapters (`rbac_guard.py`, `event_bus_logger.py`) |
-| `.agents/hooks.json` | Optional Antigravity hook wiring (best effort; CI is authoritative) |
+| `.agents/rules/` | Role rules (Planner, Dev, QA, Reviewer, Orchestrator, PM, Architect) plus the `enforcement.md` role matrix and honest enforcement model |
 | `tools/` | `quickstart.py`, `install_skills.py`, `rbac_audit.py`, `package_skills.py` |
 | `templates/ci/` | GitHub Actions: RBAC gate and Gate 1 plan gate |
-| `docs/` | Skills guide, brownfield/convergence guide, compatibility, design contract, benchmark, pilot report, audit |
+| `docs/` | User guides: skills guide, brownfield/convergence guide, harness compatibility, benchmark report |
 | `tests/unit/` | Black-box tests for the skills and helpers |
 | `.claude-plugin/` | Claude Code plugin and marketplace manifests (skills point at `skills/`) |
+
+Every skill directory is self-contained: `SKILL.md` only references files bundled inside that
+directory, so plugin and per-skill installs need no extra checkout. Repository rules (`AGENTS.md`,
+`.agents/rules/`) and the guides under `docs/` are optional context that skills follow when present.
 
 ## Pipeline
 
@@ -113,10 +115,8 @@ python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks   -
 - `docs/skills-guide.zh-CN.md` - how the nine skills work and how to use them
 - `docs/brownfield-convergence.zh-CN.md` - change proposals, convergence and Gate 2 heuristics
 - `docs/skills-compatibility.md` - harness discovery, installation, enforcement layers
-- `docs/skills-v2-spec.md` - design contract (with v3 addendum)
 - `docs/skills-benchmark.zh-CN.md` - scorecard versus open-source alternatives
-- `docs/v3-pilot.zh-CN.md` - a real repository pilot with evidence
-- `docs/audit/` - audit findings and evidence
+- `.agents/rules/enforcement.md` - role write scopes and the honest enforcement model
 
 ## Development
 
@@ -130,7 +130,8 @@ Python 3.9+ is optional: every skill has a manual fallback and no helper calls t
 ## Layout vs the upstream project
 
 This tree is the distributable package. It contains no demo projects, generated artifacts,
-optional spec engines or task workspaces; those stay in the upstream development repository.
+optional spec engines, task workspaces or internal development reports; those stay in the
+upstream development repository.
 
 ## License and contributions
 

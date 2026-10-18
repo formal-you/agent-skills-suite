@@ -16,11 +16,10 @@ skill package: nine skills, their rules, helper scripts, docs and tests.
 .agents/skills/<name>/references/
 .agents/skills/<name>/assets/templates/
 .agents/skills/<name>/scripts/   # optional, stdlib-only, --help/--version, exit 0/1/2/3
-.agents/rules/                   # role rules
-.agents/scripts/                 # optional hook adapters
+.agents/rules/                   # role rules + enforcement model
 tools/                           # install, adoption, audit, packaging helpers
 templates/ci/                    # copy-paste GitHub Actions
-docs/                            # guides, design contract, benchmark, audit, pilot report
+docs/                            # user guides, harness compatibility, benchmark report
 tests/unit/                      # black-box tests for the skills and tools
 ```
 
@@ -37,6 +36,10 @@ tests/unit/                      # black-box tests for the skills and tools
    Gate 1.
 5. Add or update a black-box test under `tests/unit/` that invokes the script via
    `subprocess` (see existing tests for the pattern).
+6. Keep the skill directory self-contained: `SKILL.md` and its `references/` may reference only
+   files inside that skill directory. Repository rules (`AGENTS.md`, `.agents/rules/`), `docs/` and
+   `tools/` are optional context, never required runtime files — plugin and per-skill installs only
+   ship the skill directory.
 
 ## Run the checks
 

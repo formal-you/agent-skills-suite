@@ -1,7 +1,7 @@
 # 技能使用指南（v2 基础 + v3 增量）：从想法到交付验收
 
 > 适用对象：使用 `.agents/skills/` 的开发者、Planner、Dev、QA 与 Reviewer Agent。  
-> 对应版本：技能 `metadata.version` 2.x（基础流程）与 3.x（brownfield/收敛/分发）；设计契约见 [`skills-v2-spec.md`](skills-v2-spec.md)，v3 用法见 [`brownfield-convergence.zh-CN.md`](brownfield-convergence.zh-CN.md)。  
+> 对应版本：技能 `metadata.version` 2.x（基础流程）与 3.x（brownfield/收敛/分发）；v3 用法见 [`brownfield-convergence.zh-CN.md`](brownfield-convergence.zh-CN.md)。  
 > 本文说明九个技能（规划五个 + 审查一个 + 执行两个 + 收敛一个）**如何工作、如何使用**，以及**为什么已经不再依赖 `prd_generator` / `spec_generator` 源码**。
 
 ---
@@ -95,7 +95,7 @@
 | **CI** | 真正强制的 RBAC 与质量门禁 | `tools/rbac_audit.py` + 分支保护 |
 
 - **Gate 1** 是确定性脚本，检查结构；**Gate 2** 是只读 Reviewer 的语义审查，不做自动化承诺。
-- `.agents/hooks.json` 只是 Antigravity 的**可选本地适配器**（L1），DSH/Claude Code 不加载它；**权威强制层是 CI**（`tools/rbac_audit.py`）。
+- 发布包不包含宿主 hook 适配器；本地提示词规则只是提示层，**权威强制层是 CI**（`tools/rbac_audit.py`）+ 分支保护。
 
 ---
 
@@ -400,7 +400,7 @@ last_heartbeat: ""
 
 补充角色规则：[`.agents/rules/reviewer.md`](../.agents/rules/reviewer.md)（Gate 2 只读审查）与
 [`.agents/rules/orchestrator.md`](../.agents/rules/orchestrator.md)（编排、门禁顺序与单一 owner）。规则总览见
-[`agent-rules.md`](agent-rules.md)。
+[`.agents/rules/enforcement.md`](../.agents/rules/enforcement.md)。
 
 ---
 
@@ -468,9 +468,8 @@ python tools/quickstart.py --target ../another-repo --copy --with-ci
 | 层 | 机制 | 适用 | 保证 |
 | :--- | :--- | :--- | :--- |
 | L0 | `AGENTS.md` / 角色规则 / SKILL.md | 所有宿主 | 提示性 |
-| L1 | `.agents/hooks.json`（Antigravity） | 仅 Antigravity | 尽力而为，可绕过 |
-| L2 | `tools/rbac_audit.py` + CI | 所有 git 仓库 | 对已提交变更强约束 |
-| L3 | 分支保护 / CODEOWNERS | 仓库设置 | 强约束 |
+| L1 | `tools/rbac_audit.py` + CI | 所有 git 仓库 | 对已提交变更强约束 |
+| L2 | 分支保护 / CODEOWNERS | 仓库设置 | 强约束 |
 
 ```bash
 # CI 示例：检查 base 之后的提交里，dev 是否碰了验收测试
@@ -480,8 +479,7 @@ python tools/rbac_audit.py --base origin/main --role dev
 python tools/rbac_audit.py --base HEAD~1 --json
 ```
 
-- `04-process.md` 是派生文件；不要把它当作手工台账；
-- 可选事件工具（`.agents/scripts/event_bus_logger.py`）只识别真正勾选的 `- [x]`，不会再把模板里的说明文字当成事件。
+- `04-process.md` 是派生文件；不要把它当作手工台账；未安装工具时保持初始化状态，以 git/CI 与勾选标记为权威。
 
 ---
 
@@ -494,7 +492,6 @@ python tools/rbac_audit.py --base HEAD~1 --json
 | Gate 1 报缺 02/03/04 | 用 `scaffold_task.py` 生成完整四文档，或补齐文件 |
 | Gate 1 报 `task_id` 与目录不一致 | 把契约 frontmatter 的 `task_id` 改成目录名 |
 | 事件总线不写 `04` | 04 是派生文件；优先用工具/CI，不要手改 |
-| hooks 在 DSH/Claude 下不生效 | 预期：hooks 是 Antigravity 适配器；用 CI 的 `rbac_audit.py` |
 | Windows 下安装技能失败 | 加 `--copy` 避免符号链接权限问题 |
 | `converge` 拒绝执行（exit 1） | 检查 `03` 是否勾选 `QA_PASSED`、`02` 偏差表是否有 DEV 行或 `None` 行、归档目录是否已存在（需 `--force`） |
 | `scaffold_change.py` 拒绝锚点 | 锚点必须已存在于基座规格；需要新章节请走 `spec-generator` |
@@ -518,7 +515,7 @@ python -m unittest discover -s tests/e2e -p "test_*.py"
 # 目录迁移自检：把技能拷到仓库外，确认仍可 --help / scaffold / lint
 ```
 
-当前基线：`539` 个单元测试（1 skip）、`109` 个 E2E 全部通过；新增专项：change 32、converge 27、distribution 28、plan-linter v3 26。
+当前基线：发布包内置 `231` 个单元测试（1 skip）；上游开发仓库另有完整套件（`539` 个单元测试 + `109` 个 E2E），不随发布包分发。新增专项：change 32、converge 27、distribution 28、plan-linter v3 26。
 
 ---
 
@@ -526,9 +523,8 @@ python -m unittest discover -s tests/e2e -p "test_*.py"
 
 - [技能索引（英文）](../.agents/skills/README.md)
 - [v3：brownfield 增量与规格收敛](brownfield-convergence.zh-CN.md)
-- [v2 设计契约（含 v3 增补）](skills-v2-spec.md)
 - [宿主兼容与安装](skills-compatibility.md)
-- [角色规则与强制模型](agent-rules.md)
-- [审计归档](audit/README.md)
+- [评分与开源对标](skills-benchmark.zh-CN.md)
+- [角色规则与强制模型](../.agents/rules/enforcement.md)
 
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
