@@ -178,7 +178,10 @@ where DSH sandbox ACL diagnosis is relevant.
 `assets/templates/`, but no `scripts/`, so it has no runtime dependency. It owns the repository-wide
 test strategy and design standards and can review a task's test design (`DESIGN_READY` /
 `DESIGN_GAPS`), but it never accepts a task, writes tests or `03`, or runs CI gates. Per-task
-acceptance stays with `qa`; CI gates stay with `quality-engineering`.
+acceptance stays with `qa`; CI gates stay with `quality-engineering`. The strategy's default location
+is fixed by the repository role rule ([`testing-strategy.md`](testing-strategy.md) in this suite) and
+adopters may point it at their own spec-chain path; QA reads it before test design and
+`quality-engineering` maps it to CI jobs and thresholds.
 
 ## Versioning and change notes
 

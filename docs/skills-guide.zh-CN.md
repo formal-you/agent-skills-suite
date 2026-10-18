@@ -5,6 +5,7 @@
 > v3 用法见 [`brownfield-convergence.zh-CN.md`](brownfield-convergence.zh-CN.md)；CI 门禁与工作流模板见 [`templates/ci/README.md`](../templates/ci/README.md)。  
 > **v3.2.0 加固**：Gate 3 与真实 AST artifact 交叉核验、变异测试 fail-closed、错误码注册表与 triage、证据 provenance 与 Appeal/仲裁；详见 [`skills-remediation.zh-CN.md`](skills-remediation.zh-CN.md)。
 > **v3.3.0 新增**：`test-engineering` 全局测试方法学技能（测试策略、测试设计方法、数据/环境与 flakiness 策略、测试指标与独立测试设计评审）；它不接收单任务、不写测试与 `03`、不运行 CI 门禁，详见 §7.8。
+> **v3.4.0 策略接线**：仓库测试策略落盘为 [`testing-strategy.md`](testing-strategy.md)（由角色规则固定默认路径），QA 在测试设计前只读读取并在 `03` 记录测试设计摘要，`quality-engineering` 负责把策略映射为 CI 画像/作业选择/阈值/环境服务。
 > 本文系统说明十一个技能如何协同工作、现代质量工程三支柱如何落地、四阶段测试流水线与 CI 权威门禁如何运转。
 
 ---
@@ -647,6 +648,7 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
   - **证据 provenance**：Section 5 记录真实 artifact 路径与 SHA-256；`Equivalent > 0` 时填写等价理由；`01-contract.md` 的 `risk_level: core` 任务使用 90% MSI 阈值；
   - 本地运行 Gate 3 静态审计（由 `quality-engineering` 提供的 `verification_linter.py`）确认合规后签署；收到 Appeal 时先等待仲裁，不要单方面再次 `REWORK_REQUIRED`。
   - **与 `test-engineering` 的边界**：跨任务的测试策略、测试设计方法与数据/环境/flakiness 策略由 `test-engineering` 维护；`qa` 只负责当前任务的验收测试执行、证据记录与唯一裁决。
+  - **读取仓库测试策略**：测试设计前先只读读取仓库测试策略（默认 [`testing-strategy.md`](testing-strategy.md)，由 `test-engineering` 维护），在 `03` 的测试设计摘要中记录 `strategy:` 引用；策略缺失时按 `baseline` 标注并沿用现有约定，不得凭空发明测试标准。
 
 ### 7.6 `quality-engineering`（CI 流水线构建与多阶段测试门禁）
 - **核心职责**：构建 CI 流水线，确保测试环境隔离与就绪，管理代码合并前测试与合并后测试，权威拥有并维护全套 CI 工作流模板与 CI 门禁脚本（`complexity_check.py`、`verification_linter.py`、`quality-gate.yml` 等）。
@@ -679,7 +681,7 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
   - 定义测试指标、测试证据口径并向 `qa` 与 `quality-engineering` 交接。
 - **不该使用的时机**：单任务验收、证据采集与唯一裁决（归 `qa`）；CI 流水线、门禁与运行环境（归 `quality-engineering`）；Gate 2 语义审查与代码审查（归 `review`）；实现与任务切片（归 `dev` 与规划技能）。
 - **产出**：
-  - 商定的测试策略文档：目标、质量属性、风险矩阵、测试层级与技术选型、数据/环境/替身/flakiness 策略、指标、RACI 与落地路线图；
+  - 商定的测试策略文档：目标、质量属性、风险矩阵、测试层级与技术选型、数据/环境/替身/flakiness 策略、指标、RACI 与落地路线图；默认落盘为 [`testing-strategy.md`](testing-strategy.md)（由 `.agents/rules/test-engineering.md` 固定默认路径，采用方可覆盖为规格链路径）；
   - 独立测试设计评审记录：分级发现 + 唯一标记 `DESIGN_READY`（无 blocker/major）或 `DESIGN_GAPS`（存在阻塞/重要缺口）。
 - **边界**：`test-engineering` 只写商定的测试策略文档与测试设计评审记录；不接收单任务、不写测试或 `03-qa-verification.md`、不改源码、不运行或替代 CI 门禁。`DESIGN_READY` / `DESIGN_GAPS` 是设计质量意见，**不是** `QA_PASSED` / `REWORK_REQUIRED`，也不是 CI 门禁结果。
 - **诚实边界**：该技能仅提示词驱动，无法强制实施标准或角色隔离；权威门禁仍来自 CI 与分支保护。

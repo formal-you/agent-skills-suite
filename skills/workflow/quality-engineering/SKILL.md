@@ -4,7 +4,7 @@ description: "Build CI pipelines and manage multi-stage testing gates: configure
 license: MIT
 compatibility: "Harness-agnostic. Core linters standard library only; multi-language complexity uses optional tree-sitter/lizard with a Python AST fallback. Python >= 3.9."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
   category: execution
 ---
 
@@ -46,6 +46,9 @@ Stage 1: Local Testing (Dev & QA)
    - Maintain production-ready CI workflows (`quality-gate.yml`, `plan-gate.yml`, `rbac-gate.yml`).
    - Maintain the Tree-sitter powered multi-language cyclomatic complexity checker (`complexity_check.py`).
    - Maintain the deterministic Gate 3 verification auditor (`verification_linter.py`).
+5. **Test-strategy mapping (implementation, not definition)**:
+   - Map the approved test strategy to CI profiles/job selection/thresholds/environment services; do not invent test standards.
+   - The `test-engineering` skill defines risk classes, levels, data/environment, flakiness and metric definitions; this skill implements them in CI.
 
 ## Use when
 
@@ -70,6 +73,8 @@ Stage 1: Local Testing (Dev & QA)
 - Git PR commit range (`--base`, `--head`) and role context (`Agent-Role` trailer).
 - `tasks/<task-id>/03-qa-verification.md` — QA-filled sections (Complexity, Mutation MSI, Evidence).
 - Test environment requirements, container configs, and environment dependency manifests.
+- Repository test strategy (read-only): risk classes, test levels, data/environment policy,
+  flakiness rules and metric definitions. When absent, keep the project's existing CI conventions.
 
 ## Outputs
 

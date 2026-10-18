@@ -74,7 +74,7 @@ class TestEngineeringStructureTests(unittest.TestCase):
             'compatibility: "Harness-agnostic prompt workflow. No scripts, no runtime dependency."',
             fm,
         )
-        self.assertRegex(fm, r'(?m)^\s+version: "1\.0\.0"$')
+        self.assertRegex(fm, r'(?m)^\s+version: "1\.1\.0"$')
         self.assertRegex(fm, r"(?m)^\s+category: execution$")
 
     def test_skill_stays_compact(self) -> None:
@@ -263,11 +263,21 @@ class TestEngineeringRuleTests(unittest.TestCase):
         self.assertIn("quality-engineering", text)
 
     def test_rule_no_forbidden_external_tokens(self) -> None:
-        # The self-containment scanner only covers skill files, but the rule should not
-        # accidentally reference suite internals either.
+        # The role rule intentionally names the repository-level default strategy artifact
+        # (docs/testing-strategy.md), so `docs/` is allowed here only for that documented path.
+        # Every other suite internal reference stays forbidden.
         text = read_text(RULE)
         for token in FORBIDDEN_TOKENS:
+            if token == "docs/":
+                continue
             self.assertNotIn(token, text, "role rule leaks suite internals: " + token)
+        for allowed in text.split("docs/")[1:]:
+            self.assertTrue(
+                allowed.startswith("testing-strategy.md"),
+                "the role rule may only name docs/testing-strategy.md, found docs/" + allowed[:40],
+            )
+        self.assertIn("docs/testing-strategy.md", text)
+        self.assertIn("override", text.lower())
 
 
 if __name__ == "__main__":

@@ -36,6 +36,20 @@ Orchestrates automated gates on every pull request:
 - Runs the fail-closed mutation gate (`mutation_gate.py`) against the project's `MUTATION_COMMAND`.
 - Spec convergence (`converge.py apply`) is manual/optional in the template; tracks mutation score baselines and benchmark metrics.
 
+### Strategy-to-CI mapping
+
+The repository test strategy is owned by the `test-engineering` skill; `quality-engineering` only
+implements it in CI and never invents or redefines test standards. When the strategy is absent, keep
+the project's existing CI conventions and record that baseline.
+
+| Strategy input (defined by `test-engineering`) | CI implementation (this skill) | Failure rule |
+| :--- | :--- | :--- |
+| **Risk class** (critical / high / medium / low) | Select required jobs and thresholds: critical runs the full gate plus mutation with the 90% core floor; high runs Gate 1, RBAC, complexity, acceptance and the 80% mutation floor; medium runs acceptance, integration and complexity; low runs smoke and plan-lint. | A missing required job for a declared risk class fails the PR; never lower a threshold to pass. |
+| **Test levels** (unit / integration / contract / acceptance / end-to-end) | Run the project's declared acceptance, integration and contract commands at the matching stage; JUnit XML for acceptance, contract checks before merge. | A failing selected level fails the build; do not silently drop a level from the matrix. |
+| **Data and environment policy** | Provide the declared services (containers/testcontainers or fakes), the stack profile and environment provenance; pin runtimes and dependencies from the lockfile; keep network off by default in automated runs. | Missing service or provenance fails the job; never fake a real-service result. |
+| **Flakiness policy** | Quarantine/rerun only per the declared policy: retries are diagnostic and reported explicitly; quarantined tests keep an owner and expiry. | Never hide a failure behind a retry or `continue-on-error`; a retried failure stays a failure until re-enabled by policy. |
+| **Metrics** (MSI, Gate 3 evidence, coverage, flake rate) | Enforce the MSI threshold, run the Gate 3 audit on the AST artifact, and upload reports/artifacts for every run. | Missing or inconsistent metric evidence is a failure (fail-closed), not a skip. |
+
 ---
 
 ## 3. Gate 3 Evidence-Audit Protocol

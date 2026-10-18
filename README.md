@@ -1,8 +1,8 @@
-# Agent Skills Suite v3.3.0
+# Agent Skills Suite v3.4.0
 
 [![CI](https://github.com/formal-you/agent-skills-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/formal-you/agent-skills-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.3.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.4.0-blue.svg)](CHANGELOG.md)
 
 Eleven prompt-first, harness-neutral skills that turn an idea or an existing codebase into
 planned, reviewed, implemented and spec-converged work - plus the rules, helper scripts and
@@ -103,6 +103,11 @@ repository-wide test strategy and design standards and can review a task's test 
 (`DESIGN_READY`/`DESIGN_GAPS`), but it never accepts a task. Per-task acceptance and the
 `QA_PASSED`/`REWORK_REQUIRED` verdict stay with `qa`; CI gates stay with `quality-engineering`.
 
+The agreed strategy (default `docs/testing-strategy.md`) is wired through the pipeline: QA reads it
+before test design and records a test-design summary in `03`, and `quality-engineering` maps its
+risk classes, test levels, environment policy, flakiness rules and metrics to CI profiles, job
+selection, thresholds and environment services without inventing new standards.
+
 ## Quality gates
 
 1. **Gate 1 (deterministic):** `plan-linter` checks contract fields, DAG, placeholders, the
@@ -122,6 +127,7 @@ python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks   -
 ## Docs
 
 - `docs/skills-guide.zh-CN.md` - how the eleven skills work and how to use them
+- `docs/testing-strategy.md` - the suite's own repository test strategy (risk matrix, levels, data/environment, flakiness, metrics, RACI)
 - `docs/brownfield-convergence.zh-CN.md` - change proposals, convergence and Gate 2 heuristics
 - `docs/skills-compatibility.md` - harness discovery, installation, enforcement layers
 - `docs/ci-stack-profiles.zh-CN.md` - Python/Node/Go/Java/Rust/.NET/C++ CI profile adoption

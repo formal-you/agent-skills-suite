@@ -5,6 +5,51 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-10-19
+
+### Added
+
+- **Repository test strategy**: `docs/testing-strategy.md` seeds the suite's own test strategy
+  (purpose/scope, quality attributes, risk matrix, test levels and responsibilities, design
+  techniques, data/environment, flakiness, contract/property/non-functional guidance, metrics,
+  RACI, review cadence). Adopters replace its content with their project's strategy.
+- **Strategy-to-CI mapping**: `quality-engineering/references/verification-protocol.md` gains a
+  `Strategy-to-CI mapping` table that turns risk classes, test levels, data/environment policy,
+  flakiness rules and metrics into required CI jobs, commands, environment services, rerun/quarantine
+  rules and evidence artifacts. `quality-engineering` implements the strategy; `test-engineering`
+  defines it.
+- **Test design summary**: `qa/references/qa-protocol.md` records strategy reference, risk level,
+  techniques, environment/data and out-of-scope, and the `03-qa-verification.md` template gains
+  `### 2.1 Test design summary` before the existing matrix.
+- **Wiring tests**: `tests/unit/test_test_strategy_wiring.py` asserts the strategy document, the
+  role-rule default path/override, the QA strategy consumption, the template summary, the
+  quality-engineering mapping table, the review boundary and skill self-containment.
+
+### Changed
+
+- `qa` (`2.1.0`) reads the repository test strategy before test design, records a test-design
+  summary and marks `strategy: baseline` when the project has no strategy yet.
+- `test-engineering` (`1.1.0`) names the strategy document's default location via the repository role
+  rule (which adopters may override) instead of leaving the output path undefined.
+- `quality-engineering` (`2.1.0`) declares the repository test strategy as a read-only input and
+  gains one responsibility: map the approved strategy to CI profiles, job selection, thresholds and
+  environment services; do not invent test standards.
+- `review` now explicitly defers test-design quality review to the independent `test-engineering`
+  review mode and stays semantic plan/change review.
+- `VERSION`, `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` are bumped to
+  `3.4.0`; the plugin and marketplace descriptions keep counting eleven skills. `README.md`,
+  `docs/skills-guide.zh-CN.md` and `docs/skills-compatibility.md` link the strategy artifact.
+
+### Fixed
+
+- The test-engineering role rule now names a concrete default strategy path
+  (`docs/testing-strategy.md`) plus the adopter override rule, so the strategy no longer depends on
+  an undefined "agreed path".
+- Test-design quality review no longer risks being absorbed into semantic Gate 2/change review; the
+  boundary is stated in the `review` skill.
+- CI configuration no longer lacks a documented translation from strategy to jobs/thresholds: the
+  mapping table makes the handoff explicit and forbids hiding failures behind reruns.
+
 ## [3.3.0] - 2026-10-19
 
 ### Added

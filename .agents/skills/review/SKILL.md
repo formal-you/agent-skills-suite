@@ -29,6 +29,8 @@ or QA verification.
 - You are asked to implement, plan or run acceptance verification — those belong to Dev, Planner
   and QA.
 - The review would require editing the artifact to make it pass. Report findings instead.
+- Test-design quality review belongs to the independent `test-engineering` review mode; this skill
+  stays semantic plan/change review.
 
 ## Review modes
 

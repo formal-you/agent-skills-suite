@@ -4,7 +4,7 @@ description: "Define and govern the repository-wide test system: test strategy, 
 license: MIT
 compatibility: "Harness-agnostic prompt workflow. No scripts, no runtime dependency."
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   category: execution
 ---
 
@@ -51,11 +51,14 @@ defers per-task acceptance to `qa` and CI pipeline/gate construction to `quality
   data.
 - A draft test strategy or a task's proposed test matrix / test-design note.
 - The adopting project's quality attributes, compliance constraints, and stated thresholds.
+- The repository role rule's default test-strategy location and any override it names (read-only).
 
 ## Outputs
 
 - A shared, versioned test-strategy document: goals, quality attributes, risk matrix, test-level and
   technique policy, data/environment policy, flakiness policy, metrics, RACI, and adoption roadmap.
+  Its default location is fixed by the repository role rule; adopters may override that default only
+  through the same rule.
 - Independent test-design review notes with severity-classified findings and exactly one design
   marker: `DESIGN_READY` or `DESIGN_GAPS`.
 - Reusable standards: technique-selection guidance, review checklists, metric definitions, and a

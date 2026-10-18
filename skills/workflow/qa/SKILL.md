@@ -4,7 +4,7 @@ description: "Local development stage testing: execute integration, BDD-driven E
 license: MIT
 compatibility: "Harness-agnostic prompt workflow. Uses the project's declared test command; no bundled runtime dependency."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
   category: execution
 ---
 
@@ -55,14 +55,18 @@ the skill never grants extra access.
   BDD behavioral scenarios (Given-When-Then invariants).
 - `tasks/<task-id>/02-dev-workspace.md` — Dev's handoff claim, declared commit, and complexity notes.
 - Project test layout and the declared `dod.test_file` command.
+- Repository test strategy document (read-only, if present): risk classes, test levels, design
+  techniques, data/environment and flakiness policy. The repository role rule fixes its default
+  location; when it is absent, record `strategy: baseline` and use the contract-derived minimum.
 - `tasks/<task-id>/03-qa-verification.md` — the blank form you fill.
 
 ## Outputs
 
 - Integration and acceptance tests under `tests/acceptance/` and `tests/integration/`.
-- A completed `03-qa-verification.md` with BDD test matrix (Section 2), complexity & basis path
-  coverage table (Section 3), mutation testing and MSI audit table (Section 4), execution evidence
-  (Section 5), boundary audit (Section 6), and verdict (Section 7).
+- A completed `03-qa-verification.md` with the test design summary (Section 2.1), BDD test matrix
+  (Section 2.2), complexity & basis path coverage table (Section 3), mutation testing and MSI audit
+  table (Section 4), execution evidence (Section 5), boundary audit (Section 6), and verdict
+  (Section 7).
 - Exactly one verdict marker: `- [x] QA_PASSED` or `- [x] REWORK_REQUIRED`.
 - No edits to source, `01-contract.md`, `02-dev-workspace.md` or `04-process.md`.
 
@@ -70,8 +74,10 @@ the skill never grants extra access.
 
 1. **Verify handoff.** Confirm `WAITING_FOR_QA` is checked in `02`, declared commit exists, and `01`
    is unchanged. If not, stop and report the gap.
-2. **Design BDD E2E & integration tests.** Extract Section 4 BDD scenarios, `dod.edge_cases`,
-   `touch_files`, and ADRs. Author black-box tests under `tests/acceptance/` before inspecting code.
+2. **Design BDD E2E & integration tests.** Read the repository test strategy first when present and
+   record its reference (or `strategy: baseline` when absent) in the test design summary (Section 2.1
+   of `03`). Then extract Section 4 BDD scenarios, `dod.edge_cases`, `touch_files`, and ADRs. Author
+   black-box tests under `tests/acceptance/` before inspecting code.
 3. **Static code analysis (lint & complexity).** Run stack linters (ruff, eslint, etc.) and calculate
    cyclomatic complexity $V(G)$ for modified functions in `touch_files` (lizard, radon, etc.). Enforce
    $V(G) \le 10$ and the Basis Path Baseline Rule ($\text{Test Cases} \ge V(G)$). Reject $V(G) > 15$.
@@ -94,6 +100,7 @@ the skill never grants extra access.
 
 - [ ] Handoff marker was checked and reviewed commit matches `02`.
 - [ ] Test matrix covers Given-When-Then BDD scenarios: normal, boundary, replay, and security cases.
+- [ ] Test design summary recorded and strategy reference (or baseline) stated.
 - [ ] Basis path baseline satisfied: black-box test cases $\ge V(G)$ for every modified function.
 - [ ] Every modified function satisfies $V(G) \le 10$ (or documented waiver for $11-15$; $>15$ rejected).
 - [ ] Static analysis & linting clean; `review` skill optionally consulted for readability.
@@ -122,9 +129,9 @@ and increments retry counter. Never hand-edit `04`; rely on git/CI and the check
 
 ## References
 
-- [`references/qa-protocol.md`](references/qa-protocol.md) — test matrix, integration testing, basis
-  path testing ($V(G)$ baseline), mutation testing (MSI formula and 6-step workflow), static analysis,
-  evidence format and verdict rules.
+- [`references/qa-protocol.md`](references/qa-protocol.md) — test design summary, test matrix,
+  integration testing, basis path testing ($V(G)$ baseline), mutation testing (MSI formula and 6-step
+  workflow), static analysis, evidence format and verdict rules.
 - Gate 3 linter: deterministic audit of Section 3 complexity and Section 4 mutation evidence
   upon signoff (maintained by the quality-engineering skill; no bundled script in prompt-only qa).
 - Role boundaries: [`references/role-boundaries.md`](references/role-boundaries.md) — write scope,

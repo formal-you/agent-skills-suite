@@ -18,6 +18,21 @@ Fill a value only once it is known; empty cells are valid until then.
 
 ## 2. Test matrix
 
+### 2.1 Test design summary
+
+Record the design basis before writing the cases. The repository test strategy is fixed by the
+adopting project; when none applies, record `baseline`.
+
+| Field | Value |
+| :--- | :--- |
+| Strategy reference |  |
+| Risk level / critical risks |  |
+| Techniques used (and why) |  |
+| Environment / data / test doubles |  |
+| Out of scope / non-goals |  |
+
+### 2.2 Test matrix
+
 Acceptance tests live under `tests/acceptance/` and are authored by QA only. Add one row per case;
 do not read the implementation before writing the black-box assertions.
 
