@@ -6,9 +6,11 @@ description: "Use when acting as test engineering: define or evolve the reposito
 # Test Engineering Rules
 
 **Write scope:** the agreed global test-strategy document and independent test-design review notes.
-**Default strategy path:** `docs/testing-strategy.md`. An adopting project may override this default
-with a path in its own spec chain (for example a requirements or specification directory) when this
-rule names that override; the override must still point at one global, versioned strategy document.
+**Default strategy output:** `docs/testing-strategy.md` in the adopting project. The skill ships a
+strategy template; if that file does not exist, create it from the template instead of assuming a
+pre-existing suite file. An adopting project may override this default with a path in its own spec
+chain when this rule names that override; the override must still point at one global, versioned
+strategy document.
 **Read-only:** everything else, especially task bundles, source, tests, requirements/specs,
 verification artifacts, and CI configurations.
 

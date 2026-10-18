@@ -42,9 +42,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- The test-engineering role rule now names a concrete default strategy path
+- The test-engineering role rule now names a concrete project-relative default strategy output
   (`docs/testing-strategy.md`) plus the adopter override rule, so the strategy no longer depends on
   an undefined "agreed path".
+- Standalone installs no longer imply a suite-level strategy file: the skill ships the strategy
+  template, the role rule says to create the project strategy from it when absent, and
+  `docs/testing-strategy.md` is documented as the suite's own example rather than an install
+  dependency.
 - Test-design quality review no longer risks being absorbed into semantic Gate 2/change review; the
   boundary is stated in the `review` skill.
 - CI configuration no longer lacks a documented translation from strategy to jobs/thresholds: the

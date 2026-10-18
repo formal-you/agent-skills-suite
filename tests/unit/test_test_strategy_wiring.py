@@ -25,6 +25,7 @@ QA_TEMPLATE = SKILLS / "task-decomposition" / "assets" / "templates" / "03-qa-ve
 QE_SKILL = SKILLS / "quality-engineering" / "SKILL.md"
 QE_PROTOCOL = SKILLS / "quality-engineering" / "references" / "verification-protocol.md"
 REVIEW_SKILL = SKILLS / "review" / "SKILL.md"
+TE_SKILL = SKILLS / "test-engineering" / "SKILL.md"
 SKILL_INDEX = SKILLS / "README.md"
 
 FORBIDDEN_TOKENS = ("docs/", "tools/", ".agents/rules", ".agents/scripts", "templates/ci")
@@ -108,6 +109,23 @@ class RoleRuleTests(unittest.TestCase):
         text = read_text(RULE).lower()
         self.assertIn("override", text, "the role rule must document the adopters' override")
         self.assertIn("default", text, "the role rule must name the default output location")
+        self.assertIn("template", text, "the role rule must create the strategy from the bundled template")
+        self.assertIn("create", text, "the role rule must not assume the strategy file already exists")
+
+    def test_skill_ships_template_and_is_standalone(self) -> None:
+        text = read_text(TE_SKILL)
+        lowered = text.lower()
+        self.assertIn("assets/templates/test-strategy.template.md", text)
+        self.assertIn("template", lowered)
+        self.assertIn("create", lowered, "the skill must say to create the strategy when absent")
+        self.assertIn("depends on a suite-level strategy file", lowered)
+        self.assertIn("never", lowered)
+        self.assertNotIn("docs/", text, "skill docs must not depend on a repository docs path")
+
+    def test_strategy_seed_is_not_an_install_dependency(self) -> None:
+        text = read_text(STRATEGY).lower()
+        self.assertIn("not an install dependency", text)
+        self.assertIn("template", text)
 
     def test_rule_keeps_global_only_and_no_task_verdict(self) -> None:
         text = read_text(RULE)

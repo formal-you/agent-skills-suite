@@ -51,14 +51,17 @@ defers per-task acceptance to `qa` and CI pipeline/gate construction to `quality
   data.
 - A draft test strategy or a task's proposed test matrix / test-design note.
 - The adopting project's quality attributes, compliance constraints, and stated thresholds.
-- The repository role rule's default test-strategy location and any override it names (read-only).
+- The project's agreed test-strategy location (a role rule may fix a default). The skill ships a
+  strategy template; if no strategy exists, create it from the template instead of assuming a file is
+  present.
 
 ## Outputs
 
 - A shared, versioned test-strategy document: goals, quality attributes, risk matrix, test-level and
   technique policy, data/environment policy, flakiness policy, metrics, RACI, and adoption roadmap.
   Its default location is fixed by the repository role rule; adopters may override that default only
-  through the same rule.
+  through the same rule. When no strategy exists, create it from the bundled template. The skill never
+  depends on a suite-level strategy file being installed; the template is the self-contained source.
 - Independent test-design review notes with severity-classified findings and exactly one design
   marker: `DESIGN_READY` or `DESIGN_GAPS`.
 - Reusable standards: technique-selection guidance, review checklists, metric definitions, and a

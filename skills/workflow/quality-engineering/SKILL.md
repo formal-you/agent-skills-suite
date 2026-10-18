@@ -73,8 +73,9 @@ Stage 1: Local Testing (Dev & QA)
 - Git PR commit range (`--base`, `--head`) and role context (`Agent-Role` trailer).
 - `tasks/<task-id>/03-qa-verification.md` — QA-filled sections (Complexity, Mutation MSI, Evidence).
 - Test environment requirements, container configs, and environment dependency manifests.
-- Repository test strategy (read-only): risk classes, test levels, data/environment policy,
-  flakiness rules and metric definitions. When absent, keep the project's existing CI conventions.
+- Project test strategy (read-only; created in the adopting project): risk classes, test levels,
+  data/environment policy, flakiness rules and metric definitions. When absent, keep the project's
+  existing CI conventions.
 
 ## Outputs
 

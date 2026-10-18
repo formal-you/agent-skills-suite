@@ -2,8 +2,9 @@
 
 > Status: seed strategy for this repository. It is written for the Agent Skills Suite itself and is
 > the default strategy document consumed by the `qa`, `quality-engineering`, and `test-engineering`
-> roles. Adopters replace this file with their own strategy; the role rule fixes the default location
-> and may name an override path.
+> roles. **This file is not an install dependency:** the installable `test-engineering` skill ships
+> `assets/templates/test-strategy.template.md`, and adopters generate their own strategy from that
+> template. The role rule fixes the project-relative default output path and may name an override.
 
 ## 1. Purpose and scope
 

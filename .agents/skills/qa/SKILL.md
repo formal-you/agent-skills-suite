@@ -55,9 +55,10 @@ the skill never grants extra access.
   BDD behavioral scenarios (Given-When-Then invariants).
 - `tasks/<task-id>/02-dev-workspace.md` — Dev's handoff claim, declared commit, and complexity notes.
 - Project test layout and the declared `dod.test_file` command.
-- Repository test strategy document (read-only, if present): risk classes, test levels, design
-  techniques, data/environment and flakiness policy. The repository role rule fixes its default
-  location; when it is absent, record `strategy: baseline` and use the contract-derived minimum.
+- Project test strategy document (read-only, if present; created in the adopting project): risk
+  classes, test levels, design techniques, data/environment and flakiness policy. The repository role
+  rule fixes its default location; when it is absent, record `strategy: baseline` and use the
+  contract-derived minimum.
 - `tasks/<task-id>/03-qa-verification.md` — the blank form you fill.
 
 ## Outputs

@@ -103,10 +103,13 @@ repository-wide test strategy and design standards and can review a task's test 
 (`DESIGN_READY`/`DESIGN_GAPS`), but it never accepts a task. Per-task acceptance and the
 `QA_PASSED`/`REWORK_REQUIRED` verdict stay with `qa`; CI gates stay with `quality-engineering`.
 
-The agreed strategy (default `docs/testing-strategy.md`) is wired through the pipeline: QA reads it
-before test design and records a test-design summary in `03`, and `quality-engineering` maps its
-risk classes, test levels, environment policy, flakiness rules and metrics to CI profiles, job
-selection, thresholds and environment services without inventing new standards.
+The project's strategy (default output `docs/testing-strategy.md`, created from the skill's bundled
+template when absent) is wired through the pipeline: QA reads it before test design and records a
+test-design summary in `03`, and `quality-engineering` maps its risk classes, test levels,
+environment policy, flakiness rules and metrics to CI profiles, job selection, thresholds and
+environment services without inventing new standards. `docs/testing-strategy.md` in this repository
+is the suite's own example; it is not part of the installable skill payload and is not required for a
+standalone `test-engineering` install.
 
 ## Quality gates
 
@@ -127,7 +130,7 @@ python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks   -
 ## Docs
 
 - `docs/skills-guide.zh-CN.md` - how the eleven skills work and how to use them
-- `docs/testing-strategy.md` - the suite's own repository test strategy (risk matrix, levels, data/environment, flakiness, metrics, RACI)
+- `docs/testing-strategy.md` - the suite's own seed test strategy (example; adopters generate their own from the skill template)
 - `docs/brownfield-convergence.zh-CN.md` - change proposals, convergence and Gate 2 heuristics
 - `docs/skills-compatibility.md` - harness discovery, installation, enforcement layers
 - `docs/ci-stack-profiles.zh-CN.md` - Python/Node/Go/Java/Rust/.NET/C++ CI profile adoption

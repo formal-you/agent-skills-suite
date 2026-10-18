@@ -54,7 +54,7 @@ the matrix.
 
 | Field | What to record |
 | :--- | :--- |
-| Strategy reference | Path and version of the repository test strategy document, or `baseline` when no strategy exists |
+| Strategy reference | Project-relative path and version of the repository test strategy document, or `baseline` when no strategy exists |
 | Risk level / critical risks | Contract risk class (`standard` or `core`) and the critical risks the matrix must cover |
 | Techniques used (and why) | Equivalence, boundary, decision table, state transition, pairwise, property-based, or mutation-aided design, with one line on why each applies |
 | Environment / data / test doubles | Environment topology, data class and seed, allowed test doubles, and substituted external dependencies |
