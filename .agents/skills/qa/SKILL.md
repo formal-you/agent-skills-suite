@@ -2,9 +2,9 @@
 name: qa
 description: "Local development stage testing: execute integration, BDD-driven E2E, mutation testing (MSI >= 80%), and static lint/complexity analysis; autonomously invoke review skill; introduce stack open-source tools; complete 03-qa-verification.md with local evidence and issue exactly one verdict (QA_PASSED or REWORK_REQUIRED). Use when a task is handed off with WAITING_FOR_QA. Do not use for implementation, planning, or contract authoring."
 license: MIT
-compatibility: "Harness-agnostic prompt workflow. Uses the project's declared test command; no bundled runtime dependency."
+compatibility: "Harness-agnostic prompt workflow plus an optional stdlib Python Gate 3 pre-check script; no external runtime dependency."
 metadata:
-  version: "2.1.0"
+  version: "2.2.0"
   category: execution
 ---
 
@@ -89,8 +89,11 @@ the skill never grants extra access.
    fallback). Eliminate weak assertions until $\text{MSI} \ge 80\%$ ($\ge 90\%$ core) and zero critical
    mutants survive. Record counts and MSI in Section 4 of `03-qa-verification.md`.
 6. **Audit boundaries & Gate 3 compliance.** Verify all changed paths are inside `touch_files`, Dev did
-   not edit `tests/acceptance/` or `01`, and run Gate 3 linter locally:
-   `python -m verification_linter --tasks-dir ./tasks --json` (or quality-engineering `verification_linter.py`).
+   not edit `tests/acceptance/` or `01`, then run the bundled Gate 3 pre-check:
+   `python .agents/skills/qa/scripts/verification_linter.py --tasks-dir ./tasks --json`.
+   When a real complexity artifact is available, add
+   `--actual-complexity <report> --require-actual-complexity` to cross-check Section 3 V(G).
+   This local check is advisory; CI Gate 3 remains authoritative.
 7. **Issue exactly one verdict.** Tick `QA_PASSED` only when tests pass, 100% basis path coverage is
    achieved ($\text{Test Cases} \ge V(G)$), complexity complies, mutation score meets threshold
    ($\text{MSI} \ge 80\%$), Gate 3 linter passes with zero errors, and audits pass; otherwise tick
@@ -107,7 +110,7 @@ the skill never grants extra access.
 - [ ] Static analysis & linting clean; `review` skill optionally consulted for readability.
 - [ ] Mutation testing audit complete: $\text{MSI} \ge 80\%$ ($\ge 90\%$ core) and zero critical mutants.
 - [ ] Section 3 (Complexity) and Section 4 (Mutation) of `03-qa-verification.md` are completely filled.
-- [ ] Gate 3 acceptance audit (`verification_linter.py`) passes with zero violations.
+- [ ] Gate 3 pre-check (bundled `verification_linter.py`) passes with zero violations; otherwise mark the evidence gaps and return for rework.
 - [ ] Execution evidence recorded with command, counts, and traces in Section 5.
 - [ ] Every changed path is inside `01` → `touch_files`. Dev did not modify acceptance tests or `01`.
 - [ ] Exactly one verdict is checked; `REWORK_REQUIRED` has actionable traces.
@@ -133,8 +136,9 @@ and increments retry counter. Never hand-edit `04`; rely on git/CI and the check
 - [`references/qa-protocol.md`](references/qa-protocol.md) — test design summary, test matrix,
   integration testing, basis path testing ($V(G)$ baseline), mutation testing (MSI formula and 6-step
   workflow), static analysis, evidence format and verdict rules.
-- Gate 3 linter: deterministic audit of Section 3 complexity and Section 4 mutation evidence
-  upon signoff (maintained by the quality-engineering skill; no bundled script in prompt-only qa).
+- Gate 3 pre-check: [`scripts/verification_linter.py`](scripts/verification_linter.py) — a bundled,
+  stdlib-only copy of the quality-engineering auditor for Section 3 complexity and Section 4 mutation
+  evidence. The copy is parity-tested against the canonical script; CI Gate 3 remains authoritative.
 - Role boundaries: [`references/role-boundaries.md`](references/role-boundaries.md) — write scope,
   read-only scope, invariants and the honest enforcement model (bundled; no external files needed).
 - Repository rules: read `AGENTS.md` and role-rules files when defined by adopting project.
@@ -143,8 +147,9 @@ and increments retry counter. Never hand-edit `04`; rely on git/CI and the check
 
 This skill does not grant write access and cannot enforce role isolation. Where the repository has
 CI (for example a git-based role audit) or branch protection, that is the authoritative layer.
-Gate 1/2 review is a separate planning concern; this skill verifies a task that already passed
-planning.
+The bundled Gate 3 pre-check is advisory: it audits the `03` evidence and can cross-check a supplied
+complexity artifact, but it does not execute tests or replace authoritative CI Gate 3. Gate 1/2 review
+is a separate planning concern; this skill verifies a task that already passed planning.
 
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
 

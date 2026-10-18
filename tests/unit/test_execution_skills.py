@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the dev/qa execution skills (prompt-only, no helpers)."""
+"""Tests for the dev/qa execution skills (dev prompt-only; qa ships a Gate 3 pre-check helper)."""
 from __future__ import annotations
 
 import re
@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SKILLS = ROOT / ".agents" / "skills"
 EXEC_SKILLS = ("dev", "qa")
-EXPECTED_VERSIONS = {"dev": "2.0.0", "qa": "2.1.0"}
+EXPECTED_VERSIONS = {"dev": "2.0.0", "qa": "2.2.0"}
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 ABS_PATH_MARKERS = ("D:\\", "C:\\", "/home/", "/Users/")
 
@@ -75,9 +75,16 @@ class ExecutionSkillStructureTests(unittest.TestCase):
                     path = (md.parent / target.split("#")[0]).resolve()
                     self.assertTrue(path.exists(), f"broken link in {md}: {target}")
 
-    def test_prompt_only_no_scripts(self) -> None:
-        for name in EXEC_SKILLS:
-            self.assertFalse((SKILLS / name / "scripts").exists(), f"{name} should not ship scripts")
+    def test_dev_stays_prompt_only(self) -> None:
+        self.assertFalse((SKILLS / "dev" / "scripts").exists(), "dev should not ship scripts")
+
+    def test_qa_ships_bundled_gate3_precheck(self) -> None:
+        script = SKILLS / "qa" / "scripts" / "verification_linter.py"
+        self.assertTrue(script.is_file(), "qa must ship scripts/verification_linter.py")
+        text = script.read_text(encoding="utf-8")
+        self.assertIn("verification_linter", text)
+        self.assertIn("--tasks-dir", text)
+        self.assertIn("--actual-complexity", text)
 
 
 class ExecutionSkillContentTests(unittest.TestCase):

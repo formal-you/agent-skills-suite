@@ -1,7 +1,7 @@
 {
   "name": "agent-skills-suite",
   "displayName": "Agent Skills Suite",
-  "version": "3.4.0",
+  "version": "3.4.1",
   "description": "Eleven prompt-first skills for spec-driven, role-isolated, verifiable agent development: PRD to spec to tasks, Gate 1/2 review, dev, QA, test strategy, CI quality engineering and convergence.",
   "author": {
     "name": "Agent Skills Suite contributors"

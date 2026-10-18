@@ -9,7 +9,7 @@
       "name": "agent-skills-suite",
       "source": "./",
       "description": "Eleven prompt-first skills with deterministic gates, fail-closed mutation testing, global test engineering and convergence.",
-      "version": "3.4.0"
+      "version": "3.4.1"
     }
   ]
 }

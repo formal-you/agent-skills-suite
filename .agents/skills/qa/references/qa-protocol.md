@@ -261,6 +261,29 @@ semantically identical; do not inflate the Equivalent count to raise MSI. Read `
 A verdict without a command and result is not evidence. If a test cannot run, say why and do not
 treat it as passed.
 
+### 5.1 Local Gate 3 pre-check
+
+The `qa` skill bundles `scripts/verification_linter.py` (a stdlib copy parity-tested against the
+quality-engineering auditor). Run it after filling `03` and before issuing a verdict:
+
+```bash
+python .agents/skills/qa/scripts/verification_linter.py \
+  --tasks-dir ./tasks --json
+```
+
+When a real complexity artifact is available, pass it for cross-validation:
+
+```bash
+python .agents/skills/qa/scripts/verification_linter.py \
+  --tasks-dir ./tasks \
+  --actual-complexity artifacts/complexity-report.json \
+  --require-actual-complexity --strict --json
+```
+
+The pre-check audits evidence; it does not execute tests or mutation. Treat the local result as
+advisory: CI Gate 3 remains authoritative. If it reports findings, fix the evidence or tests before
+the verdict; never lower a threshold or fabricate a report to pass it.
+
 ## 6. Anti-cheat / blast-radius audit
 
 - Every changed path is in `01` → `touch_files` (use `git diff --name-only <base>...HEAD`).

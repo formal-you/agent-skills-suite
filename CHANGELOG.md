@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.1] - 2026-10-19
+
+### Fixed
+
+- **QA self-contained Gate 3 pre-check**: `qa` now ships `scripts/verification_linter.py`, a
+  stdlib-only vendored copy of the quality-engineering auditor, so a standalone `qa` install can
+  audit `03` evidence without depending on another skill. The QA copy is byte-parity tested against
+  the canonical quality-engineering copies.
+- `qa/SKILL.md` no longer instructs `python -m verification_linter` (not an installed module).
+  It now runs the bundled script and supports optional `--actual-complexity` /
+  `--require-actual-complexity` cross-validation.
+
+### Changed
+
+- `qa` (`2.2.0`) compatibility notes an optional stdlib Python Gate 3 pre-check; the local check is
+  explicitly advisory and CI Gate 3 remains authoritative. `qa-protocol.md` adds the local
+  pre-check procedure.
+- `VERSION`, `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` are bumped to
+  `3.4.1`.
+
 ## [3.4.0] - 2026-10-19
 
 ### Added

@@ -14,8 +14,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 QE_AGENTS_LINTER = ROOT / ".agents" / "skills" / "quality-engineering" / "scripts" / "verification_linter.py"
 QE_SKILLS_LINTER = ROOT / "skills" / "workflow" / "quality-engineering" / "scripts" / "verification_linter.py"
+QA_AGENTS_LINTER = ROOT / ".agents" / "skills" / "qa" / "scripts" / "verification_linter.py"
+QA_SKILLS_LINTER = ROOT / "skills" / "workflow" / "qa" / "scripts" / "verification_linter.py"
 
-ALL_LINTER_PATHS = [QE_AGENTS_LINTER, QE_SKILLS_LINTER]
+ALL_LINTER_PATHS = [QE_AGENTS_LINTER, QE_SKILLS_LINTER, QA_AGENTS_LINTER, QA_SKILLS_LINTER]
 
 
 class VerificationLinterCliTests(unittest.TestCase):
@@ -36,7 +38,7 @@ class VerificationLinterCliTests(unittest.TestCase):
         return td
 
     def test_linter_files_exist_and_match(self) -> None:
-        self.assertEqual(len(ALL_LINTER_PATHS), 2)
+        self.assertEqual(len(ALL_LINTER_PATHS), 4)
         reference_bytes = None
         for p in ALL_LINTER_PATHS:
             self.assertTrue(p.is_file(), f"Missing {p}")
