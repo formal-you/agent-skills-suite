@@ -1,6 +1,6 @@
 # Agent Skills — Modern Quality Engineering & Execution Pipeline
 
-Ten reusable, harness-neutral workflow skills that turn a vague idea or an existing codebase into a reviewed,
+Eleven reusable, harness-neutral workflow skills that turn a vague idea or an existing codebase into a reviewed,
 implemented, independently verified and spec-converged change, underpinned by modern quality engineering:
 
 ```text
@@ -33,6 +33,7 @@ Chinese Guide: [docs/skills-guide.zh-CN.md](../../docs/skills-guide.zh-CN.md).
 | [`dev`](dev/SKILL.md) | Implement one task bundle within its blast radius, maintaining cyclomatic complexity V(G) <= 10, and hand off to QA | `tasks/<task-id>/01-contract.md` + project commands | Code changes, filled `02`, `WAITING_FOR_QA` | none (prompt workflow) |
 | [`qa`](qa/SKILL.md) | Local development stage testing: integration, BDD E2E, mutation testing (MSI >= 80%), static lint/complexity analysis, autonomous review | `01`, filled `02`, project test command | `tests/acceptance/**`, `tests/integration/**`, filled `03`, `QA_PASSED`/`REWORK_REQUIRED` | none (prompt workflow) |
 | [`quality-engineering`](quality-engineering/SKILL.md) | Build CI pipelines, validate test environments, enforce pre-merge PR checks and post-merge automated verification | CI workflow configs, PR diff, `03-qa-verification.md` | CI workflow statuses, Gate 3 audit report | `complexity_check.py`, `verification_linter.py` |
+| [`test-engineering`](test-engineering/SKILL.md) | Define the repository-wide test system: test strategy, risk-based test design methods, data/environment/flakiness policy, metrics and independent test-design review | Quality attributes, existing suites, defect history, task contracts (read-only) | Agreed test-strategy document, test-design review notes (`DESIGN_READY`/`DESIGN_GAPS`) | none (prompt workflow) |
 | [`converge`](converge/SKILL.md) | Fold QA-confirmed deviations back into the spec and archive the bundle | `01`, filled `02` deviation log, checked `03` | Updated `.specs/02-tech-spec.md`, `CONVERGED` status, archived bundle | `converge.py` |
 
 The first four skills produce the plan (`change` is the brownfield entry that reuses
@@ -40,9 +41,12 @@ The first four skills produce the plan (`change` is the brownfield entry that re
 `review` audits semantics and ADR compliance, `dev`/`qa` execute and verify locally under strict
 complexity and mutation testing thresholds, `quality-engineering` builds CI pipelines and validates
 signoff artifacts at Gate 3 (`verification_linter.py`), and `converge` closes the loop by writing confirmed behavior back into
-the spec. Skills are self-contained: each one bundles the role boundaries it needs in its own
-`references/` directory. Repository role rules (`.agents/rules/*.md`, including `enforcement.md`)
-are an optional suite layer that skills follow when present, not a runtime dependency.
+the spec. `test-engineering` is global-only: it sets the repository-wide test strategy and design
+standards and can review a task's test design (`DESIGN_READY`/`DESIGN_GAPS`), but it never accepts a
+task, writes tests or `03`, or runs CI gates. Skills are self-contained: each one bundles the role
+boundaries it needs in its own `references/` directory. Repository role rules (`.agents/rules/*.md`,
+including `enforcement.md`) are an optional suite layer that skills follow when present, not a runtime
+dependency.
 
 Platform-specific helpers may also live in this directory (for example a Windows sandbox
 diagnostic skill when installed). They are not part of the specification pipeline and must declare a

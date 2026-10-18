@@ -1,10 +1,10 @@
-# Agent Skills Suite v3.2.0
+# Agent Skills Suite v3.3.0
 
 [![CI](https://github.com/formal-you/agent-skills-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/formal-you/agent-skills-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.2.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-3.3.0-blue.svg)](CHANGELOG.md)
 
-Ten prompt-first, harness-neutral skills that turn an idea or an existing codebase into
+Eleven prompt-first, harness-neutral skills that turn an idea or an existing codebase into
 planned, reviewed, implemented and spec-converged work - plus the rules, helper scripts and
 CI templates that make the gates enforceable.
 
@@ -80,7 +80,7 @@ from one source).
 | :--- | :--- |
 | `skills/` | **installable layout**: `skills/<category>/<skill>/SKILL.md` (categories: `workflow`, `platform`). This is what skills.sh, Gemini and the plugin manifest read. |
 | `.agents/skills/` | The same skill files under the AGENTS discovery path, kept byte-identical by the upstream packaging build (used by tests and local installers) |
-| `.agents/rules/` | Role rules (Planner, Dev, QA, Reviewer, Orchestrator, PM, Architect) plus the `enforcement.md` role matrix and honest enforcement model |
+| `.agents/rules/` | Role rules (Planner, Dev, QA, Test Engineering, Reviewer, Orchestrator, PM, Architect) plus the `enforcement.md` role matrix and honest enforcement model |
 | `tools/` | `quickstart.py`, `install_skills.py`, `rbac_audit.py`, `mutation_gate.py` |
 | `templates/ci/` | GitHub Actions: full quality gate (Python reference), RBAC gate, Gate 1 plan gate, and per-stack profiles |
 | `docs/` | User guides: skills guide, brownfield/convergence guide, harness compatibility, benchmark report |
@@ -97,6 +97,11 @@ directory, so plugin and per-skill installs need no extra checkout. Repository r
 idea    -> prd-generator -> spec-generator -> task-decomposition -> plan-linter -> review -> dev <-> qa -> quality-engineering (Gate 3 + mutation) -> converge
 change  -> change (brownfield proposal + one task bundle) -> the same gates -> dev <-> qa -> quality-engineering -> converge
 ```
+
+`test-engineering` is a cross-cutting global layer rather than a pipeline step: it owns the
+repository-wide test strategy and design standards and can review a task's test design
+(`DESIGN_READY`/`DESIGN_GAPS`), but it never accepts a task. Per-task acceptance and the
+`QA_PASSED`/`REWORK_REQUIRED` verdict stay with `qa`; CI gates stay with `quality-engineering`.
 
 ## Quality gates
 
@@ -116,7 +121,7 @@ python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks   -
 
 ## Docs
 
-- `docs/skills-guide.zh-CN.md` - how the ten skills work and how to use them
+- `docs/skills-guide.zh-CN.md` - how the eleven skills work and how to use them
 - `docs/brownfield-convergence.zh-CN.md` - change proposals, convergence and Gate 2 heuristics
 - `docs/skills-compatibility.md` - harness discovery, installation, enforcement layers
 - `docs/ci-stack-profiles.zh-CN.md` - Python/Node/Go/Java/Rust/.NET/C++ CI profile adoption

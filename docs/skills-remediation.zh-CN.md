@@ -44,7 +44,7 @@
 - **canonical English**：`skills/**`、`.agents/skills/**`、`templates/**`、`AGENTS.md`、`tools/**` 的注释与文档。
 - **中文**：仅允许 `docs/*.zh-CN.md`、根目录中文说明文件。
 - **双树映射**：
-  - `skills/workflow/<name>/` ↔ `.agents/skills/<name>/`（10 个技能）
+  - `skills/workflow/<name>/` ↔ `.agents/skills/<name>/`（11 个技能）
   - `skills/platform/diagnose-windows-sandbox-acl/` ↔ `.agents/skills/diagnose-windows-sandbox-acl/`
   - 任一文件改动后，两边 SHA-256 必须相同（`tests/unit/test_modern_quality_engineering.py::test_f18_dual_tree_mirror_synchronization`）。
 - **脚本也在双树中**：`plan_linter.py`、`verification_linter.py`、`complexity_check.py` 改一份就要同步另一份。
@@ -648,7 +648,7 @@ python -m unittest discover -s tests/unit -p "test_*.py"
 
 **完成判据**：申诉有模板、有仲裁角色、有路由、有熔断；不新增运行时依赖。
 
-**禁止**：不要新建一个 `spec-judge` 技能目录（会破坏 "10 个技能" 的测试与分发契约）；仲裁作为 `review` 的一种模式实现。
+**禁止**：不要新建一个 `spec-judge` 技能目录（会破坏 "11 个技能" 的测试与分发契约）；仲裁作为 `review` 的一种模式实现。
 
 ---
 

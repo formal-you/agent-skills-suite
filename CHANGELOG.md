@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.3.0] - 2026-10-19
 
 ### Added
 
@@ -14,6 +14,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `quality-gate.config.example.json`. `docs/ci-stack-profiles.zh-CN.md` records adoption,
   mutation-report adapter expectations and real-middleware guidance. `quality-gate.yml` remains the
   Python reference implementation.
+- **New `test-engineering` skill** (`skills/workflow/test-engineering/`, AGENTS mirror in
+  `.agents/skills/test-engineering/`): prompt-only global test methodology covering test strategy,
+  risk-based test design methods (equivalence, boundary, decision table, state transition, pairwise),
+  test data/environment and test-double policy, flakiness policy, contract/property and
+  non-functional guidance, test metrics and independent test-design review. It writes only the agreed
+  test-strategy document and test-design review notes (`DESIGN_READY` / `DESIGN_GAPS`); it never
+  accepts or signs off an individual task, never issues `QA_PASSED` / `REWORK_REQUIRED`, never writes
+  tests or `03-qa-verification.md`, and never runs CI gates.
+- **`test-engineering` role rule and bundled references**: `.agents/rules/test-engineering.md` plus
+  `references/test-strategy.md`, `references/test-design-review.md`,
+  `references/role-boundaries.md` and `assets/templates/test-strategy.template.md`.
+
+### Changed
+
+- **Testing role boundaries aligned for eleven skills**: `qa` owns per-task acceptance testing,
+  evidence and the single `QA_PASSED` / `REWORK_REQUIRED` verdict; `quality-engineering` owns CI
+  pipelines, gates and the authoritative audit scripts; `test-engineering` owns the repository-wide
+  test system and an independent test-design opinion (a design marker, not a verdict). `AGENTS.md`,
+  `.agents/rules/enforcement.md`, the skill index, `README.md`, `docs/skills-guide.zh-CN.md`,
+  `docs/skills-compatibility.md` and the benchmark/remediation notes now describe eleven skills.
+- `VERSION`, `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` are bumped to
+  `3.3.0`; the plugin and marketplace descriptions count eleven skills.
 
 ## [3.2.0] - 2026-10-19
 

@@ -8,8 +8,8 @@
     {
       "name": "agent-skills-suite",
       "source": "./",
-      "description": "Ten prompt-first skills with deterministic gates, fail-closed mutation testing and convergence.",
-      "version": "3.2.0"
+      "description": "Eleven prompt-first skills with deterministic gates, fail-closed mutation testing, global test engineering and convergence.",
+      "version": "3.3.0"
     }
   ]
 }
