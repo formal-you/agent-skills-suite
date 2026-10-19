@@ -28,6 +28,7 @@
 | CI 流水线、门禁配置 | [`.agents/skills/quality-engineering/assets/templates/ci/README.md`](../.agents/skills/quality-engineering/assets/templates/ci/README.md) | 只链接 |
 | 技能变更 / Git Flow | `AGENTS.md` §4 + [`CONTRIBUTING.md`](../CONTRIBUTING.md) + PR 模板 | 保留可执行步骤 |
 | 用户文档入口 | [`docs/README.md`](README.md) | 只链接 |
+| 当前行为 / 现状缺口 | 当前工作树中的文件、测试与命令输出 | 现状陈述前先回读当前文件；归档不能证明当前缺口 |
 | 历史设计 | [`docs/archive/`](archive/README.md) | 明确标注历史，不作当前规范 |
 
 原则：**同一个事实只在一个地方定义；AGENTS.md 只保留“入口 + 约束 + 命令”，细节靠链接。**

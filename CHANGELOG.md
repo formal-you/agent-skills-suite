@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.1] - 2026-10-19
+
+### Changed
+
+- **AGENTS.md now separates current evidence from history.** §3 adds an "Evidence and freshness"
+  rule: current files, commands and tests are the evidence for current behavior, while archived notes
+  explain history only and never establish a current gap. This prevents an agent from reporting a
+  stale gap copied from `docs/archive/` without re-reading the working tree.
+- `docs/agents-maintenance.zh-CN.md` source-of-truth map records the same rule: current behavior and
+  gaps come from the working tree, not from archived reviews.
+- The AGENTS.md guard test now asserts the rule's presence, so it cannot be removed silently.
+
 ## [4.0.0] - 2026-10-19
 
 ### Changed

@@ -268,22 +268,21 @@ class DocsAndVersionTests(unittest.TestCase):
 
     def test_version_files_agree(self) -> None:
         version = read_text(ROOT / "VERSION").strip()
-        self.assertEqual(version, "4.0.0")
+        self.assertEqual(version, "4.0.1")
         plugin = json.loads(read_text(ROOT / ".claude-plugin" / "plugin.json"))
-        self.assertEqual(plugin["version"], "4.0.0")
+        self.assertEqual(plugin["version"], "4.0.1")
         self.assertIn("eleven", plugin["description"].lower())
         marketplace = json.loads(read_text(ROOT / ".claude-plugin" / "marketplace.json"))
         plugins = marketplace["plugins"]
         self.assertEqual(len(plugins), 1)
-        self.assertEqual(plugins[0]["version"], "4.0.0")
+        self.assertEqual(plugins[0]["version"], "4.0.1")
         self.assertIn("eleven", plugins[0]["description"].lower())
 
     def test_changelog_has_the_release_section(self) -> None:
         text = read_text(ROOT / "CHANGELOG.md")
-        self.assertIn("## [4.0.0] - 2026-10-19", text)
-        section = text.split("## [4.0.0] - 2026-10-19", 1)[1].split("\n## [", 1)[0]
-        for heading in ("### Changed", "### Removed"):
-            self.assertIn(heading, section, "4.0.0 changelog misses: " + heading)
+        self.assertIn("## [4.0.1] - 2026-10-19", text)
+        section = text.split("## [4.0.1] - 2026-10-19", 1)[1].split("\n## [", 1)[0]
+        self.assertIn("### Changed", section, "4.0.1 changelog misses: ### Changed")
 
 
 if __name__ == "__main__":
