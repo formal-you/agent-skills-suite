@@ -1097,7 +1097,9 @@ adherence_adrs: ["ADR-001"]
 dod:
   type_check: "python -m mypy src"
   lint: "python -m ruff check src"
-  test_file: "tests/acceptance/test_webhook.py"
+  test_file: "tests/acceptance/features"
+  feature_file: "tests/acceptance/features/webhook.feature"
+  step_definitions: "tests/acceptance/steps/webhook.steps.py"
   edge_cases:
     - "Given an empty payload, When webhook received, Then return 400 Bad Request"
     - "Given invalid signature, When webhook received, Then reject with 401 Unauthorized"
@@ -1116,17 +1118,19 @@ Only `src/webhook/handler.py` may be modified.
 
 ## 4. Behavioral contract and BDD scenarios
 
-### Feature: Payment Webhook Processing
+```gherkin
+Feature: Payment Webhook Processing
 
-#### Scenario: Invariant 1 - Input validation
-- **Given** an empty webhook request payload
-- **When** the webhook endpoint is invoked
-- **Then** the request is rejected with 400 Bad Request
+  Scenario: Input validation
+    Given an empty webhook request payload
+    When the webhook endpoint is invoked
+    Then the request is rejected with 400 Bad Request
 
-#### Scenario: Invariant 2 - Signature authorization
-- **Given** an invalid cryptographic signature
-- **When** webhook verification is attempted
-- **Then** the request is rejected with 401 Unauthorized
+  Scenario: Signature authorization
+    Given an invalid cryptographic signature
+    When webhook verification is attempted
+    Then the request is rejected with 401 Unauthorized
+```
 
 ## 5. Inherited architecture decisions
 - ADR-001 mandates webhook idempotency key verification.
@@ -1306,10 +1310,18 @@ None.
             (task_dir / "03-qa-verification.md").write_text("# QA Verification\n- [ ] QA_PASSED\n- [ ] REWORK_REQUIRED\n", encoding="utf-8")
             (task_dir / "04-process.md").write_text("# Process Audit\n", encoding="utf-8")
 
+            # The documented Gate 1 escape hatch restores the pre-v4 contract schema.
+            escape_hatch = work_root / "plan-linter.json"
+            escape_hatch.write_text(
+                json.dumps({"require_feature_file": False, "require_gherkin_block": False}),
+                encoding="utf-8",
+            )
+
             cmd = [
                 sys.executable,
                 str(PLAN_LINTER_PATH),
                 "--tasks-dir", str(tasks_dir),
+                "--config", str(escape_hatch),
                 "--json",
             ]
             res = subprocess.run(cmd, capture_output=True, text=True, cwd=str(work_root), timeout=60)

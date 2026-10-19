@@ -28,12 +28,13 @@ Orchestrates automated gates on every pull request:
 2. **RBAC Boundary Audit**: Analyzes PR diffs to enforce role write scopes (Dev cannot edit acceptance tests; QA cannot edit source; Planner owns contracts).
 3. **Static Complexity Gate**: Runs AST-level complexity analysis, fails closed when no source scope is given, and uploads `complexity-report.json` for Gate 3.
 4. **Acceptance Test Execution**: Installs dependencies, runs a collection probe, then executes the black-box acceptance suite (pytest with JUnit XML, or unittest fallback).
-5. **Gate 3 (Verification Linter Audit)**: Cross-validates signed-off `03-qa-verification.md` against the real AST artifact, then audits basis-path coverage and mutation testing MSI thresholds.
+5. **Real Mutation Gate (fail-closed)**: `mutation_gate.py run` executes the project's actual mutation tool on the PR, resolves the command from a committed `quality-gate.config.json` (`--config`) first and the `MUTATION_COMMAND` repository variable second, and fails the PR when no command is configured. It uploads `artifacts/mutation-report.json` for Gate 3.
+6. **Gate 3 (Verification Linter Audit)**: Cross-validates signed-off `03-qa-verification.md` against the real AST artifact and the real normalized mutation report, then audits basis-path coverage and mutation testing MSI thresholds.
 
 ### Stage 4: Post-Merge Automated Checks & Convergence
 - Triggered automatically on mainline merge (`push` to main/master).
 - Executes comprehensive regression suites across the entire codebase.
-- Runs the fail-closed mutation gate (`mutation_gate.py`) against the project's `MUTATION_COMMAND`.
+- Re-runs the fail-closed mutation gate (`mutation_gate.py`) on trunk to track the mutation-score baseline; the same gate already ran pre-merge on the pull request.
 - Spec convergence (`converge.py apply`) is manual/optional in the template; tracks mutation score baselines and benchmark metrics.
 
 ### Strategy-to-CI mapping
@@ -54,7 +55,7 @@ the project's existing CI conventions and record that baseline.
 
 ## 3. Gate 3 Evidence-Audit Protocol
 
-The deterministic Gate 3 auditor (`verification_linter.py`) evaluates every task bundle marked `QA_PASSED` in `03-qa-verification.md`. It enforces the required sections and, in CI, cross-validates Section 3 against the live AST artifact.
+The deterministic Gate 3 auditor (`verification_linter.py`) evaluates every task bundle marked `QA_PASSED` in `03-qa-verification.md`. It enforces the required sections and, in CI, cross-validates Section 3 against the live AST artifact and Section 4 against the live normalized mutation report.
 
 ### 3.1 Complexity & Basis-Path Coverage (Section 3)
 | Column | Required format | Meaning |
@@ -106,6 +107,8 @@ Evidence must provide the mutation kill ratio in one of two formats:
   `MUTATION_EQUIVALENT_JUSTIFICATION_MISSING`.
 - Zero *critical* business-logic mutants surviving remains the reviewer/QA policy; the deterministic
   Gate 3 check enforces the MSI threshold and table consistency.
+- In CI, `--actual-mutation` additionally cross-checks the Section 4 aggregates and per-target rows
+  against the real normalized report (see 3.5); self-reported numbers are not authoritative.
 
 ### 3.3 Execution Evidence and Provenance (Section 5)
 Provides execution proof in a markdown table:
@@ -125,7 +128,7 @@ Missing path/file -> `EVIDENCE_MISSING_ARTIFACT`; bad digest -> `EVIDENCE_HASH_I
 
 ### 3.4 Normalized Mutation Report for the Active Gate
 
-`mutation_gate.py run` executes the project's `MUTATION_COMMAND` and then requires this report
+`mutation_gate.py run` executes the project's mutation command and then requires this report
 at `--report` (adapt it from the stack tool's output):
 
 ```json
@@ -138,13 +141,44 @@ at `--report` (adapt it from the stack tool's output):
 }
 ```
 
-MSI is computed as `(killed + timed_out) / (total - equivalent)`. A missing command or report,
-a non-zero command exit, or MSI below `--min-msi` fails the gate. The gate is fail-closed by design;
-do not wrap it in `|| true` or `continue-on-error`.
+The command is resolved with precedence **explicit CLI flag > `--config` > default**: a committed
+`quality-gate.config.json` (`schema_version` 1) supplies `mutation.command`, `mutation.report` and
+`mutation.min_msi`; explicit `--command`/`--report`/`--min-msi` override those values. When neither
+`--command` nor `mutation.command` exists, `run` exits with usage code `2` and executes nothing. The
+gate runs on every pull request and trunk push. MSI is computed as
+`(killed + timed_out) / (total - equivalent)`. A missing command, a non-zero command exit, or MSI
+below `--min-msi` fails the gate; a missing/malformed report fails it too. The gate is fail-closed by
+design; do not wrap it in `|| true` or `continue-on-error`.
+
+### 3.5 Cross-validating Section 4 (`--actual-mutation`)
+
+CI passes `--actual-mutation artifacts/mutation-report.json --require-actual-mutation` to Gate 3
+after downloading the mutation artifact. The report schema is the same normalized object used by
+the active gate (`targets[]` with `killed`/`survived`/`timeout` (or `timed_out`)/`equivalent`/
+`total`/`msi`; `file`, `path` or `name` identifies a target, and counts may be omitted when an MSI is
+present). The linter then enforces:
+
+- `03` Section 4 aggregate `total`/`killed`/`survived`/`timed_out`/`equivalent` must equal the
+  report's aggregates, and aggregate MSI must agree within 0.1 -> otherwise
+  `MUTATION_MISMATCH_WITH_REPORT`.
+- Every per-target row must match a report target by normalized name/path and agree on available
+  counts and MSI -> disagreements yield `MUTATION_MISMATCH_WITH_REPORT`; a row with no report
+  target yields `MUTATION_PHANTOM_TARGET`.
+- Every report target must appear in Section 4 -> otherwise `MUTATION_TARGET_MISSING_IN_03`.
+- A missing, unreadable, empty or schema-invalid report, or `--require-actual-mutation` without
+  `--actual-mutation`, fails closed with `MUTATION_REPORT_MISSING` (never skipped).
+
+Cross-validation only runs when `--actual-mutation` is supplied (and the mutation section is not
+disabled with `--no-mutation`), so local audits without an artifact keep their legacy behavior.
+A fabricated `MSI: 92%` therefore can no longer pass CI when the real report says otherwise.
 
 ---
 
 ## 4. Maintenance
 - Update thresholds in `verification_linter.py` if project policies evolve.
-- Keep `references/triage-routing.md` aligned with the emitted error codes.
+- Keep `references/triage-routing.md` aligned with the emitted error codes of both the Gate 3
+  auditor and `mutation_gate.py`.
+- Keep the Gate 3 mutation cross-validator (`--actual-mutation`) aligned with the normalized report
+  schema in 3.4; changing the schema requires updating `mutation_gate.py`, Gate 3 and the profile
+  adapters together.
 - The protocol file lives in `/.agents/skills/quality-engineering/references/`. Keep it in sync with script updates.

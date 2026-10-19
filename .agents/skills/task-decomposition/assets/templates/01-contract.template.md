@@ -18,7 +18,9 @@ adherence_adrs: ["{{ADR_ID_1}}"]  # at least one ADR; add more list items if nee
 dod:
   type_check: "{{TYPE_CHECK_COMMAND}}"
   lint: "{{LINT_COMMAND}}"
-  test_file: "{{TEST_FILE_PATH}}"
+  test_file: "{{TEST_FILE_PATH}}"  # BDD runner/test target executed for acceptance; never a .feature file
+  feature_file: "{{FEATURE_FILE_PATH}}"  # required: Gherkin .feature file under tests/acceptance/
+  step_definitions: "{{STEP_DEFINITIONS_PATH}}"  # optional: glue code for the BDD runner; omit the line when the project has no glue layer
   edge_cases:
     # Format: "Given [precondition], When [action], Then [outcome]"
     - "{{EDGE_CASE_1}}"
@@ -45,22 +47,28 @@ scope violation: stop and escalate instead of editing outside the contract.
 
 ## 4. Behavioral contract and invariants
 
-### Feature: {{TASK_TITLE}}
+The fenced `gherkin` block below is extracted verbatim into `dod.feature_file`. It must contain one
+`Feature:` line and at least two `Scenario:` blocks, each with `Given`, `When` and `Then` clauses.
+QA owns the feature file and its step definitions under `tests/acceptance/`; Dev only reads them.
 
-#### Scenario 1: Input validation
-- **Given** {{INVARIANT_INPUT_VALIDATION_GIVEN}}
-- **When** {{INVARIANT_INPUT_VALIDATION_WHEN}}
-- **Then** {{INVARIANT_INPUT_VALIDATION_THEN}}
+```gherkin
+Feature: {{FEATURE_NAME}}
 
-#### Scenario 2: State transitions
-- **Given** {{INVARIANT_STATE_TRANSITIONS_GIVEN}}
-- **When** {{INVARIANT_STATE_TRANSITIONS_WHEN}}
-- **Then** {{INVARIANT_STATE_TRANSITIONS_THEN}}
+  Scenario: {{SCENARIO_1_TITLE}}
+    Given {{SCENARIO_1_GIVEN}}
+    When {{SCENARIO_1_WHEN}}
+    Then {{SCENARIO_1_THEN}}
 
-#### Scenario 3: Idempotency and data consistency
-- **Given** {{INVARIANT_IDEMPOTENCY_GIVEN}}
-- **When** {{INVARIANT_IDEMPOTENCY_WHEN}}
-- **Then** {{INVARIANT_IDEMPOTENCY_THEN}}
+  Scenario: {{SCENARIO_2_TITLE}}
+    Given {{SCENARIO_2_GIVEN}}
+    When {{SCENARIO_2_WHEN}}
+    Then {{SCENARIO_2_THEN}}
+
+  Scenario: {{SCENARIO_3_TITLE}}
+    Given {{SCENARIO_3_GIVEN}}
+    When {{SCENARIO_3_WHEN}}
+    Then {{SCENARIO_3_THEN}}
+```
 
 ## 5. Inherited architecture decisions
 
@@ -71,7 +79,9 @@ The frontmatter `adherence_adrs` list is authoritative. Summarize the inherited 
 
 - Type check: `{{TYPE_CHECK_COMMAND}}` (must exit 0)
 - Lint: `{{LINT_COMMAND}}` (must exit 0)
-- Acceptance tests: `{{TEST_FILE_PATH}}`
+- Gherkin feature file: `{{FEATURE_FILE_PATH}}` (scenarios in Section 4; QA-owned)
+- BDD runner/test target: `{{TEST_FILE_PATH}}` (entrypoint executed for acceptance; never the `.feature` file)
+- Step definitions (when present): `{{STEP_DEFINITIONS_PATH}}`
 - Edge cases in `dod.edge_cases` (the list below must match it):
   - {{EDGE_CASE_1}}
   - {{EDGE_CASE_2}}

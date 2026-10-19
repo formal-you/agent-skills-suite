@@ -4,7 +4,7 @@ description: "Local development stage testing: execute integration, BDD-driven E
 license: MIT
 compatibility: "Harness-agnostic prompt workflow plus an optional stdlib Python Gate 3 pre-check script; no external runtime dependency."
 metadata:
-  version: "2.2.0"
+  version: "3.0.0"
   category: execution
 ---
 
@@ -19,9 +19,10 @@ the skill never grants extra access.
 ## Core Responsibilities (Local Development Stage Testing)
 
 - **Integration testing**: Author and run tests verifying cross-module, API, and multi-component behavior.
-- **BDD-driven E2E testing**: Extract Given-When-Then scenarios from `01-contract.md` Section 4 and
-  `dod.edge_cases` to construct black-box acceptance and end-to-end tests under `tests/acceptance/`
-  using well-known open-source BDD tools (e.g. pytest-bdd, Cucumber.js, Godog, Cucumber-JVM).
+- **BDD-driven E2E testing**: Author the Gherkin feature declared in `dod.feature_file` plus its step
+  definitions under `tests/acceptance/`, then execute it with a well-known open-source BDD runner
+  (pytest-bdd/behave, Cucumber.js, Godog, Cucumber-JVM). A unit-test file using `describe`/`it` or
+  plain test functions is never acceptance evidence; the runner must consume the `.feature` file.
 - **Mutation testing**: Execute mutation analysis across `touch_files` using authoritative open-source
   tools (e.g. mutmut, Stryker, go-mutesting, PITest, cargo-mutants, Mull), eliminating weak assertions
   until $\text{MSI} \ge 80\%$ ($\ge 90\%$ core) and zero critical mutants survive.
@@ -51,10 +52,11 @@ the skill never grants extra access.
 
 ## Inputs
 
-- `tasks/<task-id>/01-contract.md` — DoD, `touch_files`, traceability, inherited ADRs, and Section 4
-  BDD behavioral scenarios (Given-When-Then invariants).
-- `tasks/<task-id>/02-dev-workspace.md` — Dev's handoff claim, declared commit, and complexity notes.
-- Project test layout and the declared `dod.test_file` command.
+- `tasks/<task-id>/01-contract.md` — DoD, `touch_files`, traceability, inherited ADRs, Section 4
+  Gherkin scenarios, and `dod.feature_file` / `dod.step_definitions`.
+- `tasks/<task-id>/02-dev-workspace.md` — Dev's handoff claim, recorded `Branch`, declared commit, and
+  complexity notes.
+- Project test layout and the declared `dod.test_file` BDD runner/test target.
 - Project test strategy document (read-only, if present; created in the adopting project): risk
   classes, test levels, design techniques, data/environment and flakiness policy. The repository role
   rule fixes its default location; when it is absent, record `strategy: baseline` and use the
@@ -63,7 +65,9 @@ the skill never grants extra access.
 
 ## Outputs
 
-- Integration and acceptance tests under `tests/acceptance/` and `tests/integration/`.
+- Integration and acceptance tests under `tests/acceptance/` and `tests/integration/`, including the
+  `dod.feature_file` Gherkin specification, its step definitions and the BDD runner's machine-readable
+  report artifact.
 - A completed `03-qa-verification.md` with the test design summary (Section 2.1), BDD test matrix
   (Section 2.2), complexity & basis path coverage table (Section 3), mutation testing and MSI audit
   table (Section 4), execution evidence (Section 5), boundary audit (Section 6), and verdict
@@ -73,26 +77,35 @@ the skill never grants extra access.
 
 ## Workflow
 
-1. **Verify handoff.** Confirm `WAITING_FOR_QA` is checked in `02`, declared commit exists, and `01`
-   is unchanged. If not, stop and report the gap.
+1. **Verify handoff and branch.** Confirm `WAITING_FOR_QA` is checked in `02`, the declared commit
+   exists, and `01` is unchanged. Confirm the working tree is on the branch recorded in the `Branch`
+   row of `02` (`git rev-parse --abbrev-ref HEAD`) and that the handoff commit is in its history;
+   check the branch out if needed. Never verify on `main`/`master`. If anything is inconsistent, stop
+   and report the gap.
 2. **Design BDD E2E & integration tests.** Read the repository test strategy first when present and
    record its reference (or `strategy: baseline` when absent) in the test design summary (Section 2.1
-   of `03`). Then extract Section 4 BDD scenarios, `dod.edge_cases`, `touch_files`, and ADRs. Author
-   black-box tests under `tests/acceptance/` before inspecting code.
+   of `03`). Then extract Section 4 Gherkin scenarios, `dod.edge_cases`, `touch_files`, and ADRs.
+   Author the `.feature` file at `dod.feature_file` plus step definitions under `tests/acceptance/`
+   before inspecting implementation code; the feature must remain a black-box business specification.
 3. **Static code analysis (lint & complexity).** Run stack linters (ruff, eslint, etc.) and calculate
    cyclomatic complexity $V(G)$ for modified functions in `touch_files` (lizard, radon, etc.). Enforce
    $V(G) \le 10$ and the Basis Path Baseline Rule ($\text{Test Cases} \ge V(G)$). Reject $V(G) > 15$.
 4. **Autonomous code review.** Autonomously invoke the `review` skill to assess code readability,
    formatting, naming clarity, and maintainability.
-5. **Execute tests & mutation analysis.** Run integration and acceptance suites; record totals, passes,
-   and traces. Run mutation testing (mutmut, Stryker, go-mutesting, PITest, cargo-mutants, or synthetic
+5. **Execute tests & mutation analysis.** Run integration and acceptance suites. Execute the
+   `dod.feature_file` Gherkin specification through a real BDD runner with a machine-readable report
+   (for example `npx cucumber-js ... --format junit:artifacts/acceptance-junit.xml` or
+   `pytest --junitxml=artifacts/acceptance-junit.xml` for pytest-bdd); record the runner command, the
+   report path and its SHA-256 as provenance in Section 5. Record totals, passes, and traces.
+   Run mutation testing (mutmut, Stryker, go-mutesting, PITest, cargo-mutants, or synthetic
    fallback). Eliminate weak assertions until $\text{MSI} \ge 80\%$ ($\ge 90\%$ core) and zero critical
    mutants survive. Record counts and MSI in Section 4 of `03-qa-verification.md`.
 6. **Audit boundaries & Gate 3 compliance.** Verify all changed paths are inside `touch_files`, Dev did
    not edit `tests/acceptance/` or `01`, then run the bundled Gate 3 pre-check:
    `python .agents/skills/qa/scripts/verification_linter.py --tasks-dir ./tasks --json`.
-   When a real complexity artifact is available, add
-   `--actual-complexity <report> --require-actual-complexity` to cross-check Section 3 V(G).
+   When real artifacts are available, add `--actual-complexity <report> --require-actual-complexity`
+   and/or `--actual-mutation <normalized-report> --require-actual-mutation` so Section 3 V(G) and
+   Section 4 MSI are cross-checked against the machine records instead of trusting the Markdown.
    This local check is advisory; CI Gate 3 remains authoritative.
 7. **Issue exactly one verdict.** Tick `QA_PASSED` only when tests pass, 100% basis path coverage is
    achieved ($\text{Test Cases} \ge V(G)$), complexity complies, mutation score meets threshold
@@ -102,7 +115,10 @@ the skill never grants extra access.
 
 ## Quality gate (before signing off)
 
-- [ ] Handoff marker was checked and reviewed commit matches `02`.
+- [ ] Handoff marker was checked, reviewed commit matches `02`, and the working tree is on the
+      branch recorded in `02` (never `main`/`master`).
+- [ ] `dod.feature_file` exists as a Gherkin `.feature` under `tests/acceptance/` and is executed by a
+      real BDD runner; the runner command and report artifact are recorded as provenance in Section 5.
 - [ ] Test matrix covers Given-When-Then BDD scenarios: normal, boundary, replay, and security cases.
 - [ ] Test design summary recorded and strategy reference (or baseline) stated.
 - [ ] Basis path baseline satisfied: black-box test cases $\ge V(G)$ for every modified function.
@@ -147,9 +163,10 @@ and increments retry counter. Never hand-edit `04`; rely on git/CI and the check
 
 This skill does not grant write access and cannot enforce role isolation. Where the repository has
 CI (for example a git-based role audit) or branch protection, that is the authoritative layer.
-The bundled Gate 3 pre-check is advisory: it audits the `03` evidence and can cross-check a supplied
-complexity artifact, but it does not execute tests or replace authoritative CI Gate 3. Gate 1/2 review
-is a separate planning concern; this skill verifies a task that already passed planning.
+The bundled Gate 3 pre-check is advisory: it audits the `03` evidence and can cross-check supplied
+complexity and mutation artifacts (`--actual-complexity`, `--actual-mutation`), but it does not
+execute tests or replace authoritative CI Gate 3. Gate 1/2 review is a separate planning concern;
+this skill verifies a task that already passed planning.
 
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)
 

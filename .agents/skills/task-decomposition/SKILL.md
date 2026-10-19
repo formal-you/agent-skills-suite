@@ -4,7 +4,7 @@ description: "Slice a PRD, ADRs and tech spec into small, independently verifiab
 license: MIT
 compatibility: "Harness-agnostic. Python >=3.9 optional for scaffolding and linting; a manual fallback exists."
 metadata:
-  version: "2.0.0"
+  version: "3.0.0"
   category: spec-pipeline
 ---
 
@@ -41,7 +41,7 @@ For each slice, one directory with four documents:
 
 | File | Owner | Purpose |
 | :--- | :--- | :--- |
-| `tasks/<task-id>/01-contract.md` | Planner | Authoritative YAML frontmatter + BDD executable contract |
+| `tasks/<task-id>/01-contract.md` | Planner | Authoritative YAML frontmatter + extractable Gherkin acceptance contract |
 | `tasks/<task-id>/02-dev-workspace.md` | Dev | Implementation notes, changes, self-verification, handoff |
 | `tasks/<task-id>/03-qa-verification.md` | QA | Independent test matrix, evidence, verdict |
 | `tasks/<task-id>/04-process.md` | Tooling | Initialized status card + append-only event log (derived) |
@@ -53,16 +53,19 @@ and use forward slashes.
 
 The bundle format is shared; the work is not. A short contract for the three roles:
 
-- **Planner** fills `01-contract.md` with structured Given-When-Then BDD edge cases and invariants.
-  `02` and `03` stay blank token-free role forms. `04` starts at `macro_status: TODO`,
-  `micro_phase: UNASSIGNED`, `current_lock_holder: None`, `retry_count: 0` with an empty event table.
+- **Planner** fills `01-contract.md` with structured Given-When-Then BDD edge cases, and writes
+  Section 4 as a fenced `gherkin` block (`Feature:` + at least two `Scenario:` blocks) extractable
+  into `dod.feature_file`, with optional `dod.step_definitions` glue. `02` and `03` stay blank
+  token-free role forms. `04` starts at `macro_status: TODO`, `micro_phase: UNASSIGNED`,
+  `current_lock_holder: None`, `retry_count: 0` with an empty event table.
   No initialization event is fabricated.
-- **Dev** implements only paths in `touch_files`, records design/changes/self-verification in `02`, runs
-  the three DoD checks plus BDD edge cases, and checks `- [x] WAITING_FOR_QA` only when all pass. Dev
-  never edits `01`, `03`, `04`, or `tests/acceptance/`.
-- **QA** designs black-box acceptance tests under `tests/acceptance/` matching contract BDD scenarios,
-  records the matrix, evidence, blast-radius audit and exactly one verdict in `03` (`QA_PASSED` or
-  `REWORK_REQUIRED`). QA never edits source, `01`, `02` or `04`.
+- **Dev** implements only paths in `touch_files`, reads `dod.feature_file` for acceptance semantics,
+  records design/changes/self-verification in `02`, runs the three DoD checks plus BDD edge cases, and
+  checks `- [x] WAITING_FOR_QA` only when all pass. Dev never edits `01`, `03`, `04`, or
+  `tests/acceptance/` (including `*.feature` and step definitions).
+- **QA** authors `dod.feature_file` and its step glue under `tests/acceptance/` from the contract BDD
+  scenarios, executes a real BDD runner, records the matrix, evidence, blast-radius audit and exactly
+  one verdict in `03` (`QA_PASSED` or `REWORK_REQUIRED`). QA never edits source, `01`, `02` or `04`.
 
 `04` event/status mapping (marker → event code → status/lock/retry) and the full rework loop are in
 [`references/role-lifecycle.md`](references/role-lifecycle.md). When no tooling is available, leave
@@ -75,7 +78,9 @@ The bundle format is shared; the work is not. A short contract for the three rol
   a repository may change them in the linter config.
 - **Traceability**: `origin_spec_anchor` must match `#sec-[a-z0-9-]+` and `adherence_adrs` must name
   at least one inherited ADR.
-- **BDD acceptance criteria**: `dod.edge_cases` requires >=2 structured Given-When-Then entries.
+- **BDD acceptance criteria**: `dod.feature_file` names the `.feature` file under `tests/acceptance/`;
+  Section 4 is a fenced `gherkin` block with a `Feature:` line and at least two `Scenario:` blocks
+  (Given/When/Then each); `dod.edge_cases` still requires >=2 structured Given-When-Then entries.
 - **Forbidden touch prefix** by default: `tests/acceptance/` (QA-owned).
 - **Dependency graph** must be acyclic (DAG); duplicate `task_id` values are forbidden.
 - **No unresolved placeholders** in `01`/`02`/`03` after instantiation.
@@ -105,22 +110,20 @@ The bundle format is shared; the work is not. A short contract for the three rol
    rename the file suffix `.template` away.
 
    **Brownfield change mode:** the `change` skill scaffolds one bundle per change. Pass
-   `--change-id <change-id> --size-class standard|micro` and the scaffolder adds those two keys to the
-   contract frontmatter (without the flags the output is unchanged); the Planner then validates the
+   `--change-id <change-id> --size-class standard|micro`; the scaffolder adds those two keys to the
+   contract frontmatter (without the flags the output is unchanged) and the Planner then validates the
    proposal and contract against the existing spec anchor.
 
-   ```bash
-   python .agents/skills/task-decomposition/scripts/scaffold_task.py \
-     --task-id CHG-001-rate-limit --title "Rate limit login attempts" \
-     --tasks-dir ./tasks --change-id CHG-001-rate-limit --size-class micro
-   ```
 4. **Write the contract.** Fill every placeholder in `01-contract.md`. Derive executable BDD scenarios
    and Given-When-Then edge cases directly from PRD requirements and Tech Spec invariants (see
-   `references/decomposition-rules.md`). The YAML frontmatter is authoritative; human sections below
-   explain decisions for readers. Do not invent entities or fields absent from the spec. If the spec
-   is silent, record an open question instead of guessing. `02` and `03` are blank role forms with no
-   template tokens: leave them untouched so a freshly planned bundle can pass Gate 1 before Dev/QA start.
-   Leave `04` initialized (`TODO`/`UNASSIGNED`/`None`/retry 0) with an empty event table.
+   `references/decomposition-rules.md`). Section 4 must be a fenced `gherkin` block with one
+   `Feature:` line and at least two `Scenario:` blocks; `dod.feature_file` must point at the matching
+   `.feature` file under `tests/acceptance/`, and `dod.step_definitions` may name its glue code. The
+   YAML frontmatter is authoritative; human sections below explain decisions for readers. Do not
+   invent entities or fields absent from the spec. If the spec is silent, record an open question
+   instead of guessing. `02` and `03` are blank role forms with no template tokens: leave them
+   untouched so a freshly planned bundle can pass Gate 1 before Dev/QA start. Leave `04` initialized
+   (`TODO`/`UNASSIGNED`/`None`/retry 0) with an empty event table.
 5. **Validate (optional but recommended).** If the `plan-linter` skill is installed, run its helper
    from the repository root (project-relative path, not the skill directory):
 
@@ -137,7 +140,8 @@ The bundle format is shared; the work is not. A short contract for the three rol
    - `touch_files` has 1–3 entries and does not touch `tests/acceptance/`;
    - `estimated_lines` is inside the configured range;
    - `origin_spec_anchor` matches `#sec-[a-z0-9-]+`; `adherence_adrs` has at least one entry;
-   - `dod` has type-check, lint, test-file and at least two Given-When-Then edge cases;
+   - `dod` has type-check, lint, test-file, feature-file, at least two Given-When-Then edge cases
+     and a valid fenced `gherkin` Section 4 block;
    - `02`/`03`/`04` exist; the dependency graph has no cycles and no missing task IDs.
 
 6. **Optional semantic review.** Gate 2 is a prompt-only, read-only review by a reviewer agent. It is
@@ -159,7 +163,7 @@ The bundle format is shared; the work is not. A short contract for the three rol
 | `touch_files` | list of `{action, path}` | 1–3 entries; `action` is `create` or `modify`. |
 | `origin_spec_anchor` | string | Required; `#sec-[a-z0-9-]+`. |
 | `adherence_adrs` | list of strings | Required; at least one ADR. |
-| `dod` | object | `type_check`, `lint`, `test_file`, and `edge_cases` with at least two Given-When-Then strings. |
+| `dod` | object | `type_check`, `lint`, `test_file` (BDD runner target, never a `.feature` file), `feature_file` (required `.feature` under `tests/acceptance/`), optional `step_definitions`, and `edge_cases` with at least two Given-When-Then strings. |
 
 The human sections below the frontmatter are for readers; they must not contradict it. An
 instantiated `01-contract.md` must contain no unresolved placeholder tokens.

@@ -78,7 +78,9 @@ mutant may not be excluded from the MSI denominator.
 
 Bind the evidence to real artifacts: record the artifact path (relative to the repository root), its
 SHA-256 digest, the producing tool version and the UTC timestamp. Leave the provenance rows empty
-only while the evidence is not collected yet.
+only while the evidence is not collected yet. BDD acceptance evidence is mandatory: record the
+executed feature file, the real BDD runner command and the machine-readable report artifact with its
+SHA-256; a plain unit-test file is never acceptance evidence.
 
 | Field | Value |
 | :--- | :--- |
@@ -86,6 +88,10 @@ only while the evidence is not collected yet.
 | Result |  |
 | Tests (total / passed / failed) |  |
 | Coverage |  |
+| Feature file |  |
+| BDD runner command |  |
+| BDD report artifact path |  |
+| BDD report SHA-256 |  |
 | Artifact path |  |
 | Artifact SHA-256 |  |
 | Tool version |  |

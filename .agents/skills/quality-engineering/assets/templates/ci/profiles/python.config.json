@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "mode": "spec-driven",
+  "stack": "python",
+  "display_name": "Python reference",
+  "source": {
+    "dirs": ["src"],
+    "languages": ["python"]
+  },
+  "install": [
+    "python -m pip install --upgrade pip",
+    "if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi",
+    "if [ -f pyproject.toml ]; then python -m pip install -e .; fi"
+  ],
+  "acceptance": {
+    "command": "python -m pytest tests/acceptance -q --junitxml=artifacts/acceptance-junit.xml",
+    "junit": "artifacts/acceptance-junit.xml",
+    "alternatives": [
+      "python -m pytest tests/acceptance -q -p pytest_bdd --junitxml=artifacts/acceptance-junit.xml",
+      "behave tests/acceptance/features --junit --junit-directory artifacts",
+      "python -m unittest discover -s tests/acceptance -v"
+    ]
+  },
+  "mutation": {
+    "tool": "mutmut",
+    "command": "mutmut run --paths-to-mutate src",
+    "raw_report": "mutmut results (text) or .mutmut-cache",
+    "report": "artifacts/mutation-report.json",
+    "adapter": "Parse mutmut results text or .mutmut-cache into targets[]: one target per source file with total/killed/timed_out/equivalent/survived counts.",
+    "min_msi": 80,
+    "core_min_msi": 90
+  },
+  "complexity": {
+    "command": "python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src --json",
+    "engines": ["ast", "lizard"],
+    "standard": 10,
+    "warning": 15
+  },
+  "services": [],
+  "notes": [
+    "Copy this file to quality-gate.config.json in the adopting repository root and keep mutation.report at artifacts/mutation-report.json.",
+    "The shipped quality-gate.yml passes this file to mutation_gate.py run --config on every pull request and trunk push; MUTATION_COMMAND is only a fallback.",
+    "pytest-bdd (or behave) is the industry-standard BDD runner for Python; pytest --junitxml produces the acceptance artifact.",
+    "mutmut is the standard open-source mutation testing tool for Python; the text results are normalized by the adapter.",
+    "radon cc src/ -s -n B is a second complexity opinion alongside the stdlib AST and Lizard engines.",
+    "Add services: or testcontainers when acceptance tests require real middleware.",
+    "Never mark a gate command non-blocking or ignore its exit code."
+  ]
+}

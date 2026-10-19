@@ -5,6 +5,58 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [5.0.0] - 2026-10-19
+
+### Changed (breaking)
+
+- **BDD is now machine-enforced end to end, not a wording convention.** `01-contract.md` gained
+  `dod.feature_file` (a Gherkin `.feature` under `tests/acceptance/`, required unless disabled) and
+  optional `dod.step_definitions`; Section 4 must contain a fenced ```gherkin block with one
+  `Feature:` and at least two `Scenario:` blocks, each with `Given`/`When`/`Then`. `plan-linter`
+  v4.0.0 adds `MISSING_FEATURE_FILE`, `BDD_FEATURE_FILE_EXTENSION`, `FEATURE_FILE_OUTSIDE_ACCEPTANCE`,
+  `BDD_GHERKIN_BLOCK_MISSING` and `BDD_GHERKIN_INVALID`, rejects a `.feature` path as `dod.test_file`,
+  and keeps legacy Markdown-table contracts at warning severity. The QA skill now requires a real BDD
+  runner (Cucumber.js/pytest-bdd/Godog/Cucumber-JVM) with a recorded report artifact; a unit-test file
+  is no longer acceptance evidence.
+- **Gate 3 cross-validates machine artifacts instead of trusting `03`.** `verification_linter.py`
+  v1.1.0 adds `--actual-mutation` / `--require-actual-mutation` and `MUTATION_REPORT_MISSING`,
+  `MUTATION_MISMATCH_WITH_REPORT`, `MUTATION_PHANTOM_TARGET`, `MUTATION_TARGET_MISSING_IN_03`.
+  `mutation_gate.py` v1.1.0 adds `--config` (a committed `quality-gate.config.json`) and validates
+  `mutation.core_min_msi`, removing the unset-`MUTATION_COMMAND` placeholder hole. The shipped
+  `quality-gate.yml` runs real mutation on every pull request and trunk push (pre-merge, fail-closed)
+  and Gate 3 downloads the report artifact for cross-validation.
+- **Per-stack tool matrix is explicit and copy-ready.** Profiles gained `node|python|go|java.config.json`
+  with real commands: Cucumber.js + Stryker (Node), pytest-bdd/behave + mutmut (Python), Godog +
+  go-mutesting (Go), Cucumber-JVM + PITest (Java), Tree-sitter/Lizard complexity, normalized report
+  `artifacts/mutation-report.json`, `min_msi: 80` and `core_min_msi: 90`.
+- **Branch isolation is now a hard workflow rule.** Dev/QA/orchestrator rules and `enforcement.md`
+  require one dedicated `feat/<task-id>`/`task/<task-id>` branch recorded in `02-dev-workspace.md`,
+  forbid commits and verdicts on `main`/`master`, and wire the new stdlib `branch_guard.py` helper
+  (`BRANCH_PROTECTED`, `BRANCH_PATTERN_INVALID`, `BRANCH_DETACHED`, `BRANCH_DECLARED_MISSING`,
+  `BRANCH_MISMATCH`, `TASK_DOC_MISSING`) into `rbac-gate.yml` and local handoff checks.
+- Skill metadata: `plan-linter` 4.0.0, `task-decomposition` 3.0.0, `qa` 3.0.0, `dev` 2.1.0,
+  `quality-engineering` 3.0.0, `change` 3.2.0. `AGENTS.md`, the role rules, the task templates and
+  the user guides were updated to match.
+
+### Added
+
+- `quality-engineering/scripts/branch_guard.py` and `references/branch-isolation.md`.
+- `quality-engineering/assets/templates/ci/profiles/*.config.json` plus the per-stack selection matrix
+  and rationale in the CI guide.
+
+### Migration
+
+- Existing contracts: add `dod.feature_file` and move Section 4 to a fenced ```gherkin block, or pass
+  plan-linter config `{"require_feature_file": false, "require_gherkin_block": false}` to keep the
+  pre-v4 schema temporarily (this disables the new BDD gate).
+- CI adopters: copy the stack profile config to `quality-gate.config.json` and merge the profile
+  commands into the workflow; set `--actual-mutation artifacts/mutation-report.json
+  --require-actual-mutation` on Gate 3; keep mutation a required pull-request check.
+- Dev/QA orchestrations: derive `feat/<task-id>`, record it in `02-dev-workspace.md`, and run
+  `branch_guard.py check --task-dir tasks/<task-id> --require-declared` before handoff/verdict;
+  migrate any task already committed on trunk per
+  `quality-engineering/references/branch-isolation.md`.
+
 ## [4.0.1] - 2026-10-19
 
 ### Changed

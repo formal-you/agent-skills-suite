@@ -11,6 +11,14 @@ description: "Use when acting as Lead/orchestrator: route work through the skill
 ## Must
 
 - Route work in order: PRD → spec → task bundles → Gate 1 → Gate 2 → Dev → QA. Do not skip a gate.
+- Never dispatch Dev or QA work onto a protected branch (`main`/`master`); the dedicated task
+  branch (`feat/<task-id>` or `task/<task-id>`) is created first, and a prompt that names a
+  protected trunk is a routing error.
+- Put the task branch in every Dev/QA dispatch prompt, and require Dev to record it in the
+  `Branch` row of `02-dev-workspace.md` before handoff. Reject a handoff whose recorded branch is
+  blank or does not match the dispatch.
+- Treat a `branch_guard.py` failure as a gate failure and route it back to the owning role instead
+  of allowing work to continue on the wrong branch.
 - Track exactly one owner per task; use dependencies for ordering; avoid duplicate work.
 - Verify a role's prerequisite before starting it:
   - Dev starts only after Gate 1 + Gate 2 pass and the contract is complete.
@@ -23,6 +31,8 @@ description: "Use when acting as Lead/orchestrator: route work through the skill
 ## Must not
 
 - Implement code, write tests, author specs, fill role documents or edit `04-process.md`.
+- Dispatch Dev/QA work to a protected trunk, or accept a handoff or verdict produced on a branch
+  other than the one recorded in `02-dev-workspace.md`.
 - Bypass or weaken Gate 1/Gate 2, or allow Dev/QA to edit each other's artifacts.
 - Create duplicate tasks for the same work or assign the same task to multiple owners.
 

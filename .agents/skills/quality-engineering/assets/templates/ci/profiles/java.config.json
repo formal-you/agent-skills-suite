@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "mode": "spec-driven",
+  "stack": "java",
+  "display_name": "Java / Kotlin reference",
+  "source": {
+    "dirs": ["src/main/java"],
+    "languages": ["java", "kotlin"]
+  },
+  "install": [
+    "mvn -B -DskipTests dependency:resolve"
+  ],
+  "acceptance": {
+    "command": "mvn -B test -Dcucumber.filter.tags=@acceptance -Dcucumber.plugin=junit:artifacts/acceptance-junit.xml",
+    "junit": "artifacts/acceptance-junit.xml",
+    "alternatives": [
+      "mvn -B test",
+      "./gradlew test"
+    ]
+  },
+  "mutation": {
+    "tool": "PITest",
+    "command": "mvn -B org.pitest:pitest-maven:mutationCoverage",
+    "raw_report": "target/pit-reports/mutations.xml",
+    "report": "artifacts/mutation-report.json",
+    "adapter": "Map PIT mutations.xml into targets[]: one target per class/source file, treat NO_COVERAGE separately from SURVIVED.",
+    "min_msi": 80,
+    "core_min_msi": 90
+  },
+  "complexity": {
+    "command": "python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src/main/java --json",
+    "engines": ["tree-sitter", "lizard"],
+    "standard": 10,
+    "warning": 15
+  },
+  "services": [],
+  "notes": [
+    "Copy this file to quality-gate.config.json in the adopting repository root and keep mutation.report at artifacts/mutation-report.json.",
+    "The shipped quality-gate.yml passes this file to mutation_gate.py run --config on every pull request and trunk push; MUTATION_COMMAND is only a fallback.",
+    "Cucumber-JVM is the industry-standard BDD runner for the JVM; -Dcucumber.plugin=junit:<path> writes the acceptance artifact.",
+    "PITest is the industry-standard mutation testing system for Java and Kotlin (via the PITest Kotlin plugin).",
+    "PMD CyclomaticComplexity rules are a second complexity opinion for JVM sources.",
+    "Add services: or testcontainers when acceptance tests require real middleware.",
+    "Never mark a gate command non-blocking or ignore its exit code."
+  ]
+}

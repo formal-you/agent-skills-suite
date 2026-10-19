@@ -9,7 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SKILLS = ROOT / ".agents" / "skills"
 EXEC_SKILLS = ("dev", "qa")
-EXPECTED_VERSIONS = {"dev": "2.0.0", "qa": "2.2.0"}
+EXPECTED_VERSIONS = {"dev": "2.1.0", "qa": "3.0.0"}
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 ABS_PATH_MARKERS = ("D:\\", "C:\\", "/home/", "/Users/")
 

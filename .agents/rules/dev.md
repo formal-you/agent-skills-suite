@@ -16,6 +16,14 @@ this file defines permissions and invariants only.
 ## Must
 
 - Read `01-contract.md` first and implement only what it declares.
+- Work only on a dedicated task branch: derive `feat/<task-id>` (or `task/<task-id>`) from an
+  up-to-date base before editing. Check the current branch with `git rev-parse --abbrev-ref HEAD`;
+  if it is wrong or protected, switch to the task branch first and never use a trunk branch.
+- Record the branch in the `Branch` row of `02-dev-workspace.md` before the first commit and keep
+  it accurate through handoff.
+- Run the branch guard before handoff:
+  `python .agents/skills/quality-engineering/scripts/branch_guard.py check --task-dir tasks/<task-id> --require-declared --json`;
+  a failing guard is a blocker, not a warning.
 - Adhere strictly to the BDD behavioral scenarios in `01-contract.md` Section 4 and `dod.edge_cases`
   (Given-When-Then invariants).
 - Stay inside the contract's `touch_files`; if a change outside them is required, stop and escalate.
@@ -37,6 +45,10 @@ this file defines permissions and invariants only.
 
 - Edit `tests/acceptance/**` or any other role's document.
 - Hand-edit `04-process.md`; it is derived output.
+- Commit, push or hand off on a protected trunk (`main`/`master`); if a dispatch prompt names one,
+  stop and escalate instead of committing there.
+- Switch branches in the middle of a task or rewrite the recorded `Branch` value to match a
+  different working tree instead of recreating the work on the correct branch.
 - Hand off code exceeding cyclomatic complexity limits (V(G) > 15) or with unverified BDD invariants.
 
 ## Handoff

@@ -49,6 +49,21 @@ FILL_MAP = {
     "TYPE_CHECK_COMMAND": "python -m mypy src",
     "LINT_COMMAND": "python -m ruff check src",
     "TEST_FILE_PATH": "tests/acceptance/test_auth.py",
+    "FEATURE_FILE_PATH": "tests/acceptance/auth.feature",
+    "STEP_DEFINITIONS_PATH": "tests/acceptance/steps/auth_steps.py",
+    "FEATURE_NAME": "Authentication",
+    "SCENARIO_1_TITLE": "Input validation rejects malformed credentials",
+    "SCENARIO_1_GIVEN": "an unauthenticated request with malformed credentials",
+    "SCENARIO_1_WHEN": "credentials validation is executed",
+    "SCENARIO_1_THEN": "the request is rejected with 400 before database lookup",
+    "SCENARIO_2_TITLE": "Pending session becomes active",
+    "SCENARIO_2_GIVEN": "a user session in pending state",
+    "SCENARIO_2_WHEN": "successful verification occurs",
+    "SCENARIO_2_THEN": "the session transitions to active",
+    "SCENARIO_3_TITLE": "Duplicate creation is idempotent",
+    "SCENARIO_3_GIVEN": "an existing active token",
+    "SCENARIO_3_WHEN": "a duplicate creation request with the same idempotency key is received",
+    "SCENARIO_3_THEN": "the original token is returned without duplicate state",
     "EDGE_CASE_1": "Given empty credentials, When login is attempted, Then return 400 Bad Request",
     "EDGE_CASE_2": "Given expired token, When authentication is checked, Then return 401 Unauthorized",
     "GOAL_AND_SCOPE": "Implement authentication for the existing service.",
@@ -276,13 +291,33 @@ class ContractFrontmatterTests(unittest.TestCase):
             "origin_spec_anchor", "adherence_adrs", "dod",
         ):
             self.assertRegex(frontmatter, r"(?m)^" + key + r":", "missing frontmatter key: " + key)
-        for nested in ("type_check", "lint", "test_file", "edge_cases"):
+        for nested in ("type_check", "lint", "test_file", "feature_file", "step_definitions", "edge_cases"):
             self.assertRegex(frontmatter, r"(?m)^\s+" + nested + r":", "missing dod key: " + nested)
         self.assertRegex(frontmatter, r"(?m)^\s+- action: (?:create|modify)\s*(?:#.*)?$")
         self.assertRegex(frontmatter, r"(?m)^\s+path:")
 
+    def test_contract_template_declares_executable_gherkin_block(self) -> None:
+        """Section 4 must hold a fillable fenced Gherkin block, not invariant prose only."""
+        text = template_text("01-contract.template.md")
+        self.assertIn("## 4. Behavioral contract and invariants", text)
+        filled = fill_contract(text)
+        match = re.search(r"```gherkin\n(.*?)\n```", filled, re.DOTALL)
+        self.assertIsNotNone(match, "01-contract template must fence its Gherkin Section 4")
+        gherkin = match.group(1)
+        self.assertRegex(gherkin, r"(?m)^Feature: \S.*$")
+        scenario_blocks = re.split(r"(?m)^\s*Scenario: ", gherkin)[1:]
+        self.assertGreaterEqual(len(scenario_blocks), 2, "at least two Gherkin scenarios are required")
+        for index, block in enumerate(scenario_blocks, 1):
+            for clause in ("Given", "When", "Then"):
+                self.assertRegex(
+                    block,
+                    r"(?m)^\s+" + clause + r" \S",
+                    "scenario %d misses a %s clause" % (index, clause),
+                )
+
     def test_filled_frontmatter_matches_linter_schema(self) -> None:
-        frontmatter = extract_frontmatter(fill_contract(template_text("01-contract.template.md")))
+        filled = fill_contract(template_text("01-contract.template.md"))
+        frontmatter = extract_frontmatter(filled)
         self.assertRegex(frontmatter, r'(?m)^task_id: "task-001-auth"$')
         self.assertRegex(frontmatter, r'(?m)^estimated_lines: 120$')
         self.assertRegex(frontmatter, r'(?m)^origin_spec_anchor: "#sec-auth"$')
@@ -295,6 +330,20 @@ class ContractFrontmatterTests(unittest.TestCase):
         self.assertGreaterEqual(len(edge_cases), 2)
         for command_key in ("type_check", "lint", "test_file"):
             self.assertRegex(frontmatter, r"(?m)^\s+" + command_key + r': "\S')
+        # v4 BDD schema: a required acceptance feature file and optional glue code.
+        self.assertIn('feature_file: "tests/acceptance/auth.feature"', frontmatter)
+        self.assertIn('step_definitions: "tests/acceptance/steps/auth_steps.py"', frontmatter)
+        self.assertNotRegex(frontmatter, r'(?m)^\s+test_file: "[^"]*\.feature"')
+        # The filled Gherkin block is extracted verbatim into dod.feature_file.
+        gherkin_match = re.search(r"```gherkin\n(.*?)\n```", filled, re.DOTALL)
+        self.assertIsNotNone(gherkin_match)
+        gherkin = gherkin_match.group(1)
+        self.assertIn("Feature: Authentication", gherkin)
+        self.assertIn("Scenario: Input validation rejects malformed credentials", gherkin)
+        self.assertIn("Given an unauthenticated request with malformed credentials", gherkin)
+        self.assertIn("When credentials validation is executed", gherkin)
+        self.assertIn("Then the request is rejected with 400 before database lookup", gherkin)
+        self.assertNotIn("{{", filled, "the filled contract must have no unresolved tokens")
 
     def test_every_template_placeholder_is_documented(self) -> None:
         tokens: set[str] = set()
@@ -378,6 +427,10 @@ class ScaffoldTaskTests(unittest.TestCase):
         self.assertNotIn("{{TASK_ID}}", contract)
         self.assertNotIn("{{TASK_TITLE}}", contract)
         self.assertIn("{{MODULE_NAME}}", contract, "non-scaffold placeholders must be preserved")
+        self.assertIn("{{FEATURE_FILE_PATH}}", contract, "new BDD feature placeholder must be preserved")
+        self.assertIn("{{STEP_DEFINITIONS_PATH}}", contract, "new BDD glue placeholder must be preserved")
+        self.assertIn("```gherkin", contract, "scaffolded contract must keep the fenced Gherkin block")
+        self.assertIn("{{SCENARIO_1_TITLE}}", contract, "scaffolded contract must keep scenario placeholders")
         dev_text = read_text(target / "02-dev-workspace.md")
         qa_text = read_text(target / "03-qa-verification.md")
         for doc_text in (dev_text, qa_text):
@@ -433,7 +486,7 @@ class SkillAndRulesTests(unittest.TestCase):
         self.assertRegex(frontmatter, r"(?m)^name: task-decomposition$")
         self.assertIn("Use when", frontmatter)
         self.assertIn("Do not use when", frontmatter)
-        self.assertRegex(frontmatter, r'(?m)^\s+version: "2\.0\.0"$')
+        self.assertRegex(frontmatter, r'(?m)^\s+version: "3\.0\.0"$')
         self.assertRegex(frontmatter, r"(?m)^\s+category: spec-pipeline$")
         self.assertLess(len(text.splitlines()), 200, "SKILL.md must stay below 200 lines")
 

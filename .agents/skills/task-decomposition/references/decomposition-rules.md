@@ -49,6 +49,8 @@ Instantiation rules:
 4. `touch_files` paths are repo-relative, forward slashes, 1–3 entries.
 5. `dod` commands must be executable as written and must be the same commands recorded in `02`.
 6. `dod.edge_cases` entries must be structured Given-When-Then strings: `"Given [precondition], When [action], Then [outcome]"`.
+7. `dod.feature_file` must name the `.feature` file QA will author under `tests/acceptance/`; `dod.step_definitions` is optional glue code and must never be the `.feature` file itself.
+8. `dod.test_file` is the BDD runner/test target executed for acceptance, never the `.feature` file.
 
 ## 5. BDD executable specifications and Given-When-Then derivation
 
@@ -94,13 +96,27 @@ Reject vague, unstructured assertions such as `"handles errors"`, `"invalid inpu
 
 ### Authoring Section 4: Behavioral Contract and Invariants
 
-Section 4 of `01-contract.md` formalizes the contract into executable Gherkin feature scenarios:
+Section 4 of `01-contract.md` must contain a fenced `gherkin` block that can be extracted verbatim
+into `dod.feature_file`. It needs exactly one `Feature:` line and at least two `Scenario:` blocks,
+each with its own `Given`, `When` and `Then` clause; Gate 1 rejects a missing block, a missing
+feature line, fewer than two scenarios, or a scenario with an empty clause.
+
+```gherkin
+Feature: <feature name>
+
+  Scenario: <scenario title>
+    Given <precondition or initial state>
+    When <trigger, action or input stimulus>
+    Then <expected observable outcome>
+```
+
 - **Scenario 1 (Input validation)**: Given-When-Then specifying boundary limits and payload rejection.
 - **Scenario 2 (State transitions)**: Given-When-Then defining valid transitions and terminal state locks.
 - **Scenario 3 (Idempotency and consistency)**: Given-When-Then defining concurrency and replay protection.
 
-These scenarios define the exact contract implemented by Dev and asserted independently by QA in
-`03-qa-verification.md` and `tests/acceptance/`.
+These scenarios define the exact contract implemented by Dev and asserted independently by QA, who
+authors `dod.feature_file`, its step glue and the BDD runner report under `tests/acceptance/`.
+Dev reads the feature file and must never edit it or the step definitions.
 
 ## 6. Anti-hallucination and template neutrality
 
@@ -128,7 +144,9 @@ Run this when the optional `plan-linter` Gate 1 is unavailable:
 4. Each `touch_files` list has 1–3 entries and avoids the configured forbidden prefixes.
 5. `estimated_lines` is inside the configured range.
 6. `origin_spec_anchor` is a real `#sec-*` anchor; `adherence_adrs` is non-empty.
-7. `dod` has type-check, lint, test-file and at least two concrete edge cases in Given-When-Then format.
+7. `dod` has type-check, lint, test-file, feature-file and at least two concrete edge cases in
+   Given-When-Then format; Section 4 has a valid fenced `gherkin` block with `Feature:` and >=2
+   `Scenario:` blocks.
 8. The dependency graph is acyclic: no cycles and no dependency on a missing task ID.
 9. No unresolved placeholder tokens remain in `01`/`02`/`03`.
 

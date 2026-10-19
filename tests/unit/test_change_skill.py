@@ -51,6 +51,21 @@ REMAINING_CONTRACT_TOKENS = {
     "TYPE_CHECK_COMMAND": "python -m mypy src",
     "LINT_COMMAND": "python -m ruff check src",
     "TEST_FILE_PATH": "tests/acceptance/test_rate_limit.py",
+    "FEATURE_FILE_PATH": "tests/acceptance/rate_limit.feature",
+    "STEP_DEFINITIONS_PATH": "tests/acceptance/steps/rate_limit.steps.py",
+    "FEATURE_NAME": "Rate limit login attempts",
+    "SCENARIO_1_TITLE": "Input validation",
+    "SCENARIO_1_GIVEN": "an unauthenticated request with malformed identity",
+    "SCENARIO_1_WHEN": "identity validation is executed",
+    "SCENARIO_1_THEN": "the request is rejected before any token lookup",
+    "SCENARIO_2_TITLE": "State transitions",
+    "SCENARIO_2_GIVEN": "a token in active state",
+    "SCENARIO_2_WHEN": "expiry duration elapses",
+    "SCENARIO_2_THEN": "the token transitions to expired and is never valid again",
+    "SCENARIO_3_TITLE": "Idempotency and data consistency",
+    "SCENARIO_3_GIVEN": "an existing valid token",
+    "SCENARIO_3_WHEN": "repeated requests with the same token are received",
+    "SCENARIO_3_THEN": "the requests do not extend the window",
     "EDGE_CASE_1": "Given a sixth request within the window, When rate limit checked, Then return 429",
     "EDGE_CASE_2": "Given a request for an unknown user, When profile requested, Then return 404",
     "INVARIANT_INPUT_VALIDATION_GIVEN": "an unauthenticated request with malformed identity",
@@ -217,13 +232,15 @@ class ScaffoldChangeTests(TempRepoTestCase):
         self.assertNotIn("{{NOTES}}", contract)
         self.assertIn("{{MODULE_NAME}}", contract, "Planner-only placeholders must stay")
         self.assert_token_free_role_forms(bundle)
-        self.assertIn("### Feature: Rate limit login attempts", contract)
-        self.assertIn("#### Scenario 1: Input validation", contract)
-        self.assertIn("- **Given** {{INVARIANT_INPUT_VALIDATION_GIVEN}}", contract)
-        self.assertIn("- **When** {{INVARIANT_INPUT_VALIDATION_WHEN}}", contract)
-        self.assertIn("- **Then** {{INVARIANT_INPUT_VALIDATION_THEN}}", contract)
-        self.assertIn("#### Scenario 2: State transitions", contract)
-        self.assertIn("#### Scenario 3: Idempotency and data consistency", contract)
+        self.assertIn("```gherkin", contract)
+        self.assertIn('feature_file: "{{FEATURE_FILE_PATH}}"', contract)
+        self.assertIn("Feature: {{FEATURE_NAME}}", contract)
+        self.assertIn("Scenario: {{SCENARIO_1_TITLE}}", contract)
+        self.assertIn("    Given {{SCENARIO_1_GIVEN}}", contract)
+        self.assertIn("    When {{SCENARIO_1_WHEN}}", contract)
+        self.assertIn("    Then {{SCENARIO_1_THEN}}", contract)
+        self.assertIn("Scenario: {{SCENARIO_2_TITLE}}", contract)
+        self.assertIn("Scenario: {{SCENARIO_3_TITLE}}", contract)
 
     def test_missing_base_spec_exits_2(self):
         repo = self.temp / "repo"
@@ -325,13 +342,15 @@ class ScaffoldChangeTests(TempRepoTestCase):
         self.assertIn('size_class: "standard"', contract)
         self.assertIn('origin_spec_anchor: "' + ANCHOR + '"', contract)
         self.assert_token_free_role_forms(bundle)
-        self.assertIn("### Feature: Rate limit login attempts", contract)
-        self.assertIn("#### Scenario 1: Input validation", contract)
-        self.assertIn("- **Given** {{INVARIANT_INPUT_VALIDATION_GIVEN}}", contract)
-        self.assertIn("- **When** {{INVARIANT_INPUT_VALIDATION_WHEN}}", contract)
-        self.assertIn("- **Then** {{INVARIANT_INPUT_VALIDATION_THEN}}", contract)
-        self.assertIn("#### Scenario 2: State transitions", contract)
-        self.assertIn("#### Scenario 3: Idempotency and data consistency", contract)
+        self.assertIn("```gherkin", contract)
+        self.assertIn('feature_file: "{{FEATURE_FILE_PATH}}"', contract)
+        self.assertIn("Feature: {{FEATURE_NAME}}", contract)
+        self.assertIn("Scenario: {{SCENARIO_1_TITLE}}", contract)
+        self.assertIn("    Given {{SCENARIO_1_GIVEN}}", contract)
+        self.assertIn("    When {{SCENARIO_1_WHEN}}", contract)
+        self.assertIn("    Then {{SCENARIO_1_THEN}}", contract)
+        self.assertIn("Scenario: {{SCENARIO_2_TITLE}}", contract)
+        self.assertIn("Scenario: {{SCENARIO_3_TITLE}}", contract)
         lint = run(
             relocated / "scripts" / "lint_change.py",
             "--change-id",

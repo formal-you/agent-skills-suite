@@ -13,6 +13,7 @@
 > **v3.4.5 发现阶段**：`AGENTS.md` 补充 PRD/Spec 发现阶段：PM + `prd-generator` 产出 PRD，Architect + `spec-generator` 产出 ADR/技术规格，Planner + `task-decomposition` 再拆分任务；并明确 `task-decomposition` 是作者、`plan-linter` 是 Gate 1 校验者，`change`/`converge` 处理偏差写回。
 > **v3.4.6 AGENTS 加固**：补充 secrets/破坏性命令/路径核验/写作用域安全默认值；区分 greenfield 的 PRD 路径与 bounded brownfield `change` 路径；恢复可读排版，线数预算改为 175；测试增加“角色规则与流水线技能必须真实存在”的一致性检查。
 > **v3.4.7 单一事实源**：AGENTS.md 不再复制角色矩阵与门禁表，改为链接 `enforcement.md#role-matrix` 与 CI/技能文档；新增[维护说明](agents-maintenance.zh-CN.md)，并明确暂不拆嵌套 AGENTS.md 的理由；文件收敛到 153 行。
+> **BDD/CI/分支隔离强化（当前分支）**：契约 frontmatter 新增 `dod.feature_file`（可选 `step_definitions`），Section 4 必须是围栏 `gherkin` 块；Gate 1 v4 新增 feature/Gherkin 错误码；Gate 3 v1.1 用 `--actual-mutation` 把 `03` 的变异证据与真实归一化报告交叉核验；CI 在 PR 与主干 push 都执行真实变异（`quality-gate.config.json` 驱动，`MUTATION_COMMAND` 仅作回退）；新增 `branch_guard.py` 与“一任务一分支”规则。
 > 本文系统说明十一个技能如何协同工作、现代质量工程三支柱如何落地、四阶段测试流水线与 CI 权威门禁如何运转。
 
 ---
@@ -25,15 +26,15 @@
 
 - **自包含与免安装**：脚手架、占位符校验、Gate 1 规划门禁（`plan_linter.py`）与 Gate 3 验收门禁（`verification_linter.py`）均为 **Python 标准库** 脚本；多语言复杂度检查（`complexity_check.py`）的 tree-sitter/lizard 是**可选依赖**，Python AST 是其标准库 fallback；
 - **现代质量工程三支柱**：
-  1. **BDD 行为驱动规格**：任务契约 `01-contract.md` 采用结构化 Given-When-Then 定义验收场景，QA 验收测试严格对齐；
+  1. **BDD 行为驱动规格**：任务契约 `01-contract.md` 用围栏 `gherkin` 块（Feature + $\ge 2$ 个 Scenario）与 `dod.feature_file` 定义可执行验收规格，QA 用真实 BDD runner 执行 feature 文件并严格对齐；
   2. **圈复杂度控制流分析**：Dev 编码严格遵循单函数 McCabe $V(G) \le 10$；QA 遵循基本路径测试基线规则（用例数 $\ge V(G)$），数学上覆盖所有线性独立路径；
-  3. **变异测试与 MSI 审计**：QA 必须对变更代码执行变异测试，变异得分 $\text{MSI} \ge 80\%$，彻底消除无断言与弱断言假阳性；
+  3. **变异测试与 MSI 审计**：QA 必须对变更代码执行变异测试，变异得分 $\text{MSI} \ge 80\%$（core 模块 $\ge 90\%$），彻底消除无断言与弱断言假阳性；CI 在 PR 阶段就执行真实变异并与 `03` 证据交叉核验；
 - **门禁职责解耦**：
-  - **Gate 1（规划期门禁）**：`plan_linter.py` 专职审计任务切片、DAG 拓扑、规格锚点与 BDD 契约格式；
+  - **Gate 1（规划期门禁）**：`plan_linter.py` 专职审计任务切片、DAG 拓扑、规格锚点、`dod.feature_file` 声明与 Gherkin/BDD 契约格式；
   - **Gate 2（语义审查门禁）**：只读 Reviewer Agent 审查正向覆盖率、反幻觉与 ADR 架构合规性；
-  - **Gate 3（验收期门禁）**：`verification_linter.py` 专职审计 `03-qa-verification.md` 中的圈复杂度覆盖与变异测试杀伤力证据；
+  - **Gate 3（验收期门禁）**：`verification_linter.py` 专职审计 `03-qa-verification.md` 中的圈复杂度覆盖与变异测试杀伤力证据；提供 artifact 时与真实 AST/归一化变异报告交叉核验（`--actual-complexity` / `--actual-mutation`）；
 - **全局测试方法学（跨任务）**：`test-engineering` 负责仓库级测试策略、测试设计方法（等价类/边界值/判定表/状态迁移/成对组合等）与独立测试设计评审；其 `DESIGN_READY` / `DESIGN_GAPS` 仅是设计质量标记，不是任务裁决，单任务验收仍归 `qa`，CI 门禁仍归 `quality-engineering`；
-- **四阶段分层测试流水线**：涵盖本地测试、测试环境、合并前 PR 权威门禁与合并后主干回归/规格收敛，提供开箱即用的 GitHub Actions 工作流模板（`.agents/skills/quality-engineering/assets/templates/ci/quality-gate.yml`）。
+- **四阶段分层测试流水线**：涵盖本地测试、测试环境、合并前 PR 权威门禁（含分支隔离、真实变异门禁）与合并后主干回归/规格收敛，提供开箱即用的 GitHub Actions 工作流模板（`.agents/skills/quality-engineering/assets/templates/ci/quality-gate.yml`）。
 
 ---
 
@@ -78,8 +79,9 @@
 ├── quality-engineering/    # CI 质量工程：构建 CI 流水线、测试环境准备、代码合并前/后门禁与测试
 │   ├── SKILL.md
 │   ├── references/verification-protocol.md
+│   ├── references/branch-isolation.md # 任务分支生命周期、branch_guard.py 与迁移手册
 │   ├── assets/templates/ci/ # 三个工作流模板 + 多语言 profiles + config 示例（自包含）
-│   └── scripts/            # complexity_check.py / verification_linter.py / rbac_audit.py / mutation_gate.py
+│   └── scripts/            # complexity_check.py / verification_linter.py / rbac_audit.py / mutation_gate.py / branch_guard.py
 ├── test-engineering/       # 全局测试体系：测试策略、测试设计方法、数据/环境/flakiness 策略、独立测试设计评审
 │   ├── SKILL.md
 │   ├── assets/templates/test-strategy.template.md
@@ -102,7 +104,7 @@
 | `review` | 计划/任务包，或 diff + 证据 | 发现清单 + PASS/REQUEST CHANGES/BLOCKED | Agent（只读语义审查，防幻觉/违规） |
 | `dev` | `01-contract.md` + 项目命令 | 代码变更（$V(G) \le 10$）、填好的 `02`、`WAITING_FOR_QA` | Agent（业务实现、重构自测、自证） |
 | `qa` | `01`、填好的 `02`、测试命令 | `tests/acceptance/**`、`tests/integration/**`、填好的 `03`（本地测试与审计证据）、唯一裁决 | Agent（本地集成、BDD E2E、变异杀伤、静态 Lint/复杂度、自主 review） |
-| `quality-engineering` | CI 触发事件、PR diff、`tasks/` 交付包、CI 模板 | CI 流水线状态、门禁报告（Gate 1、RBAC、圈复杂度、验收测试、Gate 3）、合并前/合并后测试结果 | CI / 脚本（`quality-gate.yml`、`complexity_check.py`、`verification_linter.py`） |
+| `quality-engineering` | CI 触发事件、PR diff、`tasks/` 交付包、CI 模板 | CI 流水线状态、门禁报告（Gate 1、RBAC、分支隔离、圈复杂度、验收测试、真实变异、Gate 3）、合并前/合并后测试结果 | CI / 脚本（`quality-gate.yml`、`complexity_check.py`、`verification_linter.py`、`mutation_gate.py`、`branch_guard.py`） |
 | `test-engineering` | 质量属性、现有测试套件、缺陷/事故历史、任务契约（只读） | 商定的测试策略文档、测试设计评审记录（`DESIGN_READY` / `DESIGN_GAPS`） | Agent（跨任务测试策略与设计标准；不参与单任务裁决） |
 | `converge` | `01`、带偏差表的 `02`、勾选 `QA_PASSED` 的 `03` | 写回 `.specs/02-tech-spec.md`、`CONVERGED` 状态、归档任务包 | 脚本（`converge.py`，append-only 写回） |
 
@@ -116,12 +118,12 @@
 | :--- | :--- | :--- | :--- |
 | **智能协商层 (Skill)** | 需求理解、架构权衡、BDD 设计、编码实现、黑盒设计 | `SKILL.md` + `references/` | Agent 提示词推理 |
 | **数据契约层 (Template)** | 结构化、机器可解析的角色契约与证据表单 | `assets/templates/` | 标准 Markdown/YAML |
-| **规划门禁 (Gate 1)** | 契约合法性、BDD 三段式格式、切片爆炸半径、DAG 无环 | `plan_linter.py` | 确定性脚本（exit 0/1） |
+| **规划门禁 (Gate 1)** | 契约合法性、Gherkin 可执行规格（`dod.feature_file`）、切片爆炸半径、DAG 无环 | `plan_linter.py` | 确定性脚本（exit 0/1） |
 | **语义门禁 (Gate 2)** | 正向覆盖、反幻觉审查、ADR 架构红线对齐 | `review` 技能 | 只读 Reviewer Agent |
-| **验收门禁 (Gate 3)** | 圈复杂度用例覆盖 $V(G) \le \text{用例数}$、变异测试得分 $\text{MSI} \ge 80\%$ | `verification_linter.py` | 确定性脚本（exit 0/1） |
-| **权威强制层 (CI / L2)** | 角色 RBAC 边界审计、全量门禁串联、分支合并保护 | `.agents/skills/quality-engineering/scripts/rbac_audit.py` + `quality-gate.yml` | GitHub Actions / 平台 CI |
+| **验收门禁 (Gate 3)** | 圈复杂度用例覆盖 $V(G) \le \text{用例数}$、变异测试得分 $\text{MSI} \ge 80\%$，并与真实 AST / 变异报告交叉核验 | `verification_linter.py` | 确定性脚本（exit 0/1） |
+| **权威强制层 (CI / L2)** | 角色 RBAC 边界审计、分支隔离、全量门禁串联、分支合并保护 | `rbac_audit.py` + `branch_guard.py` + `quality-gate.yml` | GitHub Actions / 平台 CI |
 
-> **关键原则**：本地提示词规则与 Agent 自律仅为辅助（L0），**权威强制层是 CI 与分支保护（L2）**。任何任务必须在 CI 中通过 RBAC 审计、Gate 1、Gate 3 及验收测试，才允许合入主干。
+> **关键原则**：本地提示词规则与 Agent 自律仅为辅助（L0），**权威强制层是 CI 与分支保护（L2）**。任何任务必须在 CI 中通过 RBAC 审计、分支隔离（`branch_guard.py`）、Gate 1、Gate 3、验收测试与真实变异门禁，才允许合入主干。
 
 ---
 
@@ -183,7 +185,9 @@ adherence_adrs: [ADR-001]
 dod:
   type_check: "npm run type-check"
   lint: "npm run lint"
-  test_file: "tests/acceptance/test_auth.py"
+  test_file: "tests/acceptance/test_auth.py"       # BDD runner 入口/测试目标，绝不能是 .feature 文件
+  feature_file: "tests/acceptance/auth.feature"    # 必填：tests/acceptance/ 下的 Gherkin 规格
+  step_definitions: "tests/acceptance/steps/test_auth_steps.py"  # 可选：粘合代码；无 glue 层时省略该行
   edge_cases:
     - "Given empty credentials, When login requested, Then return 400 with invalid parameters error"
     - "Given expired session token, When profile requested, Then return 401 unauthorized"
@@ -191,7 +195,10 @@ dod:
 ---
 ```
 
-同时在 `01-contract.md` 第 4 节定义详细的 Gherkin Feature 行为不变量。
+同时在 `01-contract.md` 第 4 节写入**围栏 `gherkin` 块**：恰好一条 `Feature:` 行、至少两个 `Scenario:` 块，每个场景都包含
+`Given` / `When` / `Then`。该块会被逐字抽取为 `dod.feature_file`；QA 负责在 `tests/acceptance/` 下创建 feature 文件与
+step definitions，Dev 只读取、不得编写或修改它们。`dod.feature_file` 必须位于允许的验收前缀（默认
+`tests/acceptance/`）之下并以 `.feature` 结尾；`dod.test_file` 是真正被执行的 BDD runner/测试入口。
 
 ### 4.4 运行 Gate 1（规划门禁）
 
@@ -210,24 +217,32 @@ python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks --jso
 ### 4.6 开发、自测与独立验收（Dev & QA）
 
 1. **Dev 实现与复杂度控制**：
+   - 在**专属任务分支**（`feat/<task-id>` 或 `task/<task-id>`）上工作：先 `git rev-parse --abbrev-ref HEAD` 确认，禁止在 `main`/`master` 上编辑或提交，并把分支记录到 `02-dev-workspace.md` 的 `Branch` 行；
    - 严格在 `touch_files` 白名单内编码；
    - 保持单函数圈复杂度 McCabe $V(G) \le 10$；若分支过深，应用提炼函数或策略模式重构；
    - 运行本地 `dod.type_check`、`dod.lint` 与单元自测；
+   - 交接前运行 `python .agents/skills/quality-engineering/scripts/branch_guard.py check --task-dir tasks/<task-id> --require-declared --json`，guard 失败视为阻塞；
    - 填写 `02-dev-workspace.md`，确认无误后勾选 `- [x] WAITING_FOR_QA` 交接。
 
 2. **QA 本地开发阶段测试（集成测试、BDD E2E、变异测试、静态分析、自主 Review）**：
+   - **确认分支**：在 `02` 记录的同一分支上验收（`git rev-parse --abbrev-ref HEAD`，并用 `git merge-base --is-ancestor <handoff-commit> HEAD` 确认交接提交在历史中），不得在 `main`/`master` 上签署；
    - **集成测试**：在 `tests/integration/` 编写跨模块协作与接口集成用例；
-   - **基于 BDD 模式的端到端测试**：基于 `01-contract.md` 的 Given-When-Then 场景，自主引入各技术栈知名开源 BDD 工具（Python `pytest-bdd`/`behave`、JS/TS `Cucumber.js`、Go `Godog`、Java `Cucumber-JVM` 等）在 `tests/acceptance/` 编写黑盒验收与 E2E 测试；
+   - **基于 BDD 模式的端到端测试**：QA 依据 `01-contract.md` Section 4 的 Gherkin 场景，创建 `dod.feature_file` 指定的 `.feature` 文件与 step definitions，并用真实 BDD runner（Python `pytest-bdd`/`behave`、JS/TS `Cucumber.js`、Go `Godog`、Java `Cucumber-JVM` 等）执行；`describe`/`it` 或普通测试函数写的单元测试**不是**验收证据，runner 必须消费 `.feature` 文件；
    - **代码静态分析**：使用跨语言 AST 引擎 **Tree-sitter** 与开源分析工具（`tree-sitter`、`lizard`、`radon`、`eslint` 等），审查变更函数的独立路径，确保用例数 $\ge V(G)$，严禁 $V(G) > 15$；
    - **自主调用 review 技能**：自行决定调用 `review` skill 评审变更代码规范（可读性、命名与可维护性）；
    - **引入知名开源工具与变异测试**：针对不同项目类型**必须优先引入知名开源变异测试工具**（`mutmut`、`Stryker`、`go-mutesting`、`PITest`、`cargo-mutants`、`Mull` 等），击杀存活弱断言，确保 $\text{MSI} \ge 80\%$；合成变异仅作为无开源工具环境的灾备后备方案；
-   - 填写 `03-qa-verification.md` 中的复杂度表、变异审计表与执行证据，勾选 `- [x] QA_PASSED` 或 `REWORK_REQUIRED`。
+   - 填写 `03-qa-verification.md` 中的复杂度表、变异审计表与执行证据：Section 5 必须记录真实的 BDD runner 命令、机器可读报告 artifact 路径与 SHA-256，以及 Section 4 的聚合与逐目标变异证据；勾选 `- [x] QA_PASSED` 或 `REWORK_REQUIRED`。
 
 3. **运行 Gate 3（验收门禁本地预检）**：
 
 ```bash
 # 校验 03 文档中的圈复杂度与变异测试杀伤力证据（由 quality-engineering 提供并维护）
-python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir tasks --strict --json
+# 有真实 artifact 时追加交叉核验，避免只信 03 的自报值：
+python .agents/skills/quality-engineering/scripts/verification_linter.py \
+  --tasks-dir tasks \
+  --actual-complexity artifacts/complexity-report.json --require-actual-complexity \
+  --actual-mutation artifacts/mutation-report.json --require-actual-mutation \
+  --strict --json
 ```
 
 ### 4.7 规格收敛与归档（converge）
@@ -283,23 +298,34 @@ python .agents/skills/converge/scripts/converge.py apply --task tasks/task-001-a
    - `"Given user with insufficient balance, When transfer initiated, Then return 402 and keep balance unchanged"`
    - `"Scenario: Rate limit exceeded | Given 100 requests in 1 minute, When 101st request sent, Then return 429 Too Many Requests"`
 
-2. **Section 4 行为不变量（Behavioral Invariants）**：
-   在 `01-contract.md` 正文中使用 Gherkin 语法详细定义主要场景（Happy Path）与异常场景（Corner Cases）：
+2. **Section 4 行为不变量（Behavioral Invariants，围栏 `gherkin` 块）**：
+   `01-contract.md` 正文第 4 节必须包含一个围栏 ```` ```gherkin ```` 块，块内恰好一条 `Feature:` 行、至少两个
+   `Scenario:` 块，且每个场景都有 `Given` / `When` / `Then`；该块会被逐字抽取为 `dod.feature_file`：
    ```gherkin
    Feature: User Token Authentication
+
      Scenario: Successful token validation
        Given a valid and unexpired JWT token for user "alice"
        When the client requests protected resource "/api/v1/profile"
        Then response status is 200
-       And response body contains user profile data
+
+     Scenario: Expired token is rejected
+       Given an expired JWT token for user "alice"
+       When the client requests protected resource "/api/v1/profile"
+       Then response status is 401
    ```
 
-3. **Gate 1 静态校验**：
-   `plan_linter.py` 内置 BDD 场景解析引擎，严格拦截：
-   - `BDD_MISSING_PRECONDITION`：缺少 Given 前置条件声明；
-   - `BDD_MISSING_ACTION`：缺少 When 动作声明；
-   - `BDD_MISSING_OUTCOME`：缺少 Then 结果断言；
-   - `BDD_EMPTY_SCENARIO`：场景包含未替换的 `[TBD]` 或空白字符串。
+3. **Gate 1 静态校验（plan-linter v4）**：
+   `plan_linter.py` 解析 Section 4 的第一个围栏 Gherkin 块并校验 `dod` 声明，严格拦截：
+   - `BDD_GHERKIN_BLOCK_MISSING`：默认 `require_gherkin_block: true` 时缺少围栏 `gherkin` 块（只报该条，不再逐场景报错）；
+   - `BDD_GHERKIN_INVALID`：块内缺 `Feature:` 行、缺少收尾围栏，或 `Scenario:` 少于 2 个；
+   - `BDD_MISSING_PRECONDITION` / `BDD_MISSING_ACTION` / `BDD_MISSING_OUTCOME`：某个场景缺少 Given / When / Then 子句；
+   - `MISSING_FEATURE_FILE`：缺少 `dod.feature_file`（默认 `require_feature_file: true`）；
+   - `BDD_FEATURE_FILE_EXTENSION`：`dod.feature_file` 不以 `.feature` 结尾，或 `dod.test_file` 指向了 feature 文件而非 runner；
+   - `FEATURE_FILE_OUTSIDE_ACCEPTANCE`：`dod.feature_file` 不在允许前缀（默认 `tests/acceptance/`，可配 `feature_allowed_prefixes`）下；
+   - `BDD_STEP_DEFINITIONS_INVALID`：`dod.step_definitions` 为空串或指向 `.feature` 文件（没有 glue 层时省略该键）。
+   `dod.edge_cases` 的 Given-When-Then 结构仍逐条校验；旧式 Markdown 表格契约的 BDD/feature 问题降级为 warning，
+   迁移期可用 `require_feature_file: false` / `require_gherkin_block: false` 临时放行。
 
 4. **各技术栈知名开源 BDD 工具推荐与运行范式**：
    QA 编写验收测试时，应将契约中的 Gherkin 场景映射为对应技术栈成熟的开源 BDD 框架测试：
@@ -358,7 +384,7 @@ $$V(G) = E - N + 2P$$
 #### 核心指标与计算公式
 变异得分指示器（Mutation Score Indicator, MSI）定义为被杀伤或超时的变异体占有效变异体总数的百分比：
 $$\text{MSI} = \frac{\text{Killed} + \text{TimedOut}}{\text{Total} - \text{Equivalent}} \times 100\%$$
-- **门禁红线**：标准交付任务必须达到 **$\text{MSI} \ge 80\%$**；核心安全与高危模块推荐 **$\text{MSI} \ge 90\%$**。
+- **门禁红线**：标准交付任务必须达到 **$\text{MSI} \ge 80\%$**；`risk_level: core` 的核心安全与高危模块强制 **$\text{MSI} \ge 90\%$**（Gate 3 按 `risk_level` 提升阈值，CI 的变异门禁默认 80%，core 任务由 Gate 3 交叉核验 90%）。
 
 #### 6 步变异测试标准工作流
 ```text
@@ -434,30 +460,32 @@ $$\text{MSI} = \frac{\text{Killed} + \text{TimedOut}}{\text{Total} - \text{Equiv
    │    └─ 契约验证：验证真实拓扑连通性与 ADR 架构契约兼容性
    │
    ├─► 阶段 3：合并前测试（Pre-merge / PR Gate — quality-engineering 自动化门禁）
-   │    ├─ 1. RBAC 越权审计：.agents/skills/quality-engineering/scripts/rbac_audit.py (Dev 禁碰测试，QA 禁改源码)
-   │    ├─ 2. Gate 1 静态门禁：plan_linter.py --json (BDD 格式、切片、DAG)
-   │    ├─ 3. 圈复杂度门禁：检查增量函数 V(G) <= 10
-   │    ├─ 4. 验收测试执行：运行全量 tests/acceptance/ 与 tests/integration/ 用例
-   │    ├─ 5. 变异测试杀伤力审计：验证 MSI >= 80%
-   │    ├─ 6. Gate 3 验证门禁：verification_linter.py --strict --json
-   │    └─ 7. Gate 2 Reviewer 语义签署：人工或只读 Reviewer 签署 PASS
+   │    ├─ 1. 分支隔离：branch_guard.py (拒绝 main/master、非法命名与未声明分支)
+   │    ├─ 2. RBAC 越权审计：.agents/skills/quality-engineering/scripts/rbac_audit.py (Dev 禁碰测试，QA 禁改源码)
+   │    ├─ 3. Gate 1 静态门禁：plan_linter.py --json (Gherkin/feature、切片、DAG)
+   │    ├─ 4. 圈复杂度门禁：检查增量函数 V(G) <= 10
+   │    ├─ 5. 验收测试执行：用真实 BDD runner 运行全量 tests/acceptance/ 与 tests/integration/ 用例
+   │    ├─ 6. 真实变异门禁：mutation_gate.py run --config quality-gate.config.json (PR + push，fail-closed)
+   │    ├─ 7. Gate 3 验证门禁：verification_linter.py --actual-complexity ... --actual-mutation ... --strict --json
+   │    └─ 8. Gate 2 Reviewer 语义签署：人工或只读 Reviewer 签署 PASS
    │
    └─► 阶段 4：代码合并后测试（Post-merge & Staging/Release — quality-engineering 流水线）
         ├─ 主干全量回归：执行主干全套端到端回归用例，拦截并发冲突
         ├─ 自动化规格收敛：converge.py apply 回写 02-tech-spec.md 并归档
-        └─ 基线更新：更新全仓变异测试基线与 Benchmark 性能指标
+        └─ 基线更新：主干重新运行变异门禁以跟踪 MSI 基线与 Benchmark 性能指标
 ```
 
 ### 6.1 阶段一：本地测试（Local Testing）
 - **目标**：在代码提交到远端分支前，完成开发者的局部自闭环与 QA 的本地端到端与集成验证。
 - **Dev 自测**：
+  - 在专属任务分支上工作（禁止 `main`/`master` 编辑或提交），把分支写入 `02` 并保持 `Branch` 行准确；
   - 运行 `01-contract.md` 中声明的 `dod.type_check`、`dod.lint`；
   - 检查自己编写的每个函数，通过 AST 分析或静态工具确认 $V(G) \le 10$；
   - 逐项自测 BDD `dod.edge_cases` 中的所有场景；
-  - 填写 `02-dev-workspace.md`。
+  - 填写 `02-dev-workspace.md`，交接前运行 `branch_guard.py check --task-dir tasks/<task-id> --require-declared --json`。
 - **QA 本地开发阶段测试**：
   - **集成测试**：在 `tests/integration/**` 编写跨模块与服务边界集成用例；
-  - **BDD 端到端测试**：依据 `01-contract.md` Section 4 BDD 场景在 `tests/acceptance/**` 编写黑盒验收测试；
+  - **BDD 端到端测试**：依据 `01-contract.md` Section 4 Gherkin 场景创建 `dod.feature_file` 与其 step definitions，在 `tests/acceptance/**` 用真实 BDD runner 执行，并在 `03` Section 5 记录 runner 命令与机器可读报告 provenance；
   - **静态代码分析**：引入栈相关知名 Lint 工具与圈复杂度分析工具，确保用例数 $\ge V(G)$，拒绝 $V(G) > 15$；
   - **变异测试**：执行变异测试（`mutmut`、`Stryker` 等），确保 $\text{MSI} \ge 80\%$；
   - **自主代码评审**：自主调用 `review` skill 评估代码可读性与可维护性；
@@ -466,6 +494,7 @@ $$\text{MSI} = \frac{\text{Killed} + \text{TimedOut}}{\text{Total} - \text{Equiv
   ```bash
   python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks
   python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir tasks
+  python .agents/skills/quality-engineering/scripts/branch_guard.py check --task-dir tasks/<task-id> --require-declared --json
   ```
 
 ### 6.2 阶段二：测试环境（Test Environment — quality-engineering 负责）
@@ -479,32 +508,40 @@ $$\text{MSI} = \frac{\text{Killed} + \text{TimedOut}}{\text{Total} - \text{Equiv
 ### 6.3 阶段三：合并前测试（Pre-merge / PR Gate — quality-engineering 自动化门禁）
 - **目标**：由 `quality-engineering` 构建的 CI 流水线作为拉取请求（PR）合入主干的绝对权威守门人，执行不可绕过的确定性门禁。
 - **门禁清单**：
-  1. **RBAC 角色越权审计**：
+  1. **分支隔离**：
+     ```bash
+     python .agents/skills/quality-engineering/scripts/branch_guard.py check \
+       --branch "${HEAD_BRANCH}" --protected main master --json
+     ```
+     拒绝受保护主干、非法命名、detached HEAD，以及与 `02` 声明不一致的分支；该 job 在 `rbac-gate.yml` 中先于 RBAC diff 审计运行，异常退出即失败。
+  2. **RBAC 角色越权审计**：
      ```bash
      python .agents/skills/quality-engineering/scripts/rbac_audit.py --base origin/main --head HEAD --tasks-dir tasks --json
      ```
      严格拦截跨权限提交（如 Dev 修改了 `tests/acceptance/`，或 QA 修改了 `src/**`）。
-  2. **Gate 1 规划与 BDD 契约检查**：
+  3. **Gate 1 规划与 Gherkin 契约检查**：
      ```bash
      python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks --spec .specs/02-tech-spec.md --json
      ```
-     验证切片大小（$\le 3$ 文件、50–250 行）、DAG 无环、Given-When-Then BDD 结构无缺失。
-  3. **圈复杂度门禁**：
+     验证切片大小（$\le 3$ 文件、50–250 行）、DAG 无环、`dod.feature_file`/`step_definitions` 声明与围栏 Gherkin 块（`Feature:` + $\ge 2$ 个 `Scenario:`）。
+  4. **圈复杂度门禁**：
      ```bash
      python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src --json
      ```
      由 `quality-engineering` 提供的静态分析脚本对源码执行控制流复杂度计算，若存在 $V(G) > 10$ 则告警，存在 $V(G) > 15$ 则直接构建失败。没有 `src/` 且未显式传 `--src-dir` 时退出码为 2（fail-closed），不会静默扫描 `.`。
-  4. **验收与集成测试套件全量跑通**：模板先安装项目依赖并做 collection 探针，再执行 `tests/acceptance/**`；pytest 可用时产出 JUnit XML，否则回退 unittest。
-  5. **变异测试硬门禁（MSI $\ge 80\%$）**：主干 push 时由 `.agents/skills/quality-engineering/scripts/mutation_gate.py` 执行项目 `MUTATION_COMMAND` 并校验归一化报告；命令/报告缺失或 MSI 不足均 fail-closed。PR 阶段 Gate 3 仍审计 QA 记录的证据。
-  6. **Gate 3 验收证据交叉核验**：
+  5. **验收与集成测试套件全量跑通**：模板先安装项目依赖并做 collection 探针，再用项目真实的 BDD runner 执行 `tests/acceptance/**`；pytest 可用时产出 JUnit XML，否则回退 unittest。普通单元测试不能替代 feature 文件的执行。
+  6. **真实变异硬门禁（MSI $\ge 80\%$，核心模块 $\ge 90\%$）**：`.agents/skills/quality-engineering/scripts/mutation_gate.py` 在 **PR 与主干 push 都执行**项目真实的变异工具并校验归一化报告。命令来源优先提交到仓库的 `quality-gate.config.json`（`--config`，含 `mutation.command` / `mutation.report` / `mutation.min_msi`），其次才是 `MUTATION_COMMAND` repository variable；两者都没有时 job 直接失败，绝不跳过。命令非零退出、报告缺失/格式错误或 MSI 不足均 fail-closed。
+  7. **Gate 3 验收证据交叉核验**：
      ```bash
      python .agents/skills/quality-engineering/scripts/verification_linter.py \
        --tasks-dir tasks \
        --actual-complexity artifacts/complexity-report.json \
-       --require-actual-complexity --strict --json
+       --require-actual-complexity \
+       --actual-mutation artifacts/mutation-report.json \
+       --require-actual-mutation --strict --json
      ```
-     将 `03` Section 3 的 V(G) 与真实 AST artifact 逐函数核对；缺失函数、伪造函数、V(G) 不一致都会失败。任一变异表不合规也会失败。
-  7. **Gate 2 Reviewer 语义签署**：由具有审查权限的只读 Agent 或人工 Reviewer 审查后签署 PASS；这是人工/分支保护步骤，不是模板里的 CI job。
+     将 `03` Section 3 的 V(G) 与真实 AST artifact 逐函数核对；缺失函数、伪造函数、V(G) 不一致都会失败。同时把 Section 4 的聚合 totals/MSI 与逐目标行同真实归一化变异报告交叉核验：`MUTATION_MISMATCH_WITH_REPORT`（数值不符）、`MUTATION_PHANTOM_TARGET`（报告里没有的目标）、`MUTATION_TARGET_MISSING_IN_03`（报告有但 `03` 漏写）与 `MUTATION_REPORT_MISSING`（缺报告或未传 `--actual-mutation`）都会失败，因此伪造的 `MSI: 92%` 不再能通过。
+  8. **Gate 2 Reviewer 语义签署**：由具有审查权限的只读 Agent 或人工 Reviewer 审查后签署 PASS；这是人工/分支保护步骤，不是模板里的 CI job。
 
 ### 6.4 阶段四：代码合并后测试（Post-merge & Staging / Release — quality-engineering 流水线）
 - **目标**：合并入主干后的全局完整性维护与技术规格闭环。
@@ -515,7 +552,7 @@ $$\text{MSI} = \frac{\text{Killed} + \text{TimedOut}}{\text{Total} - \text{Equiv
      python .agents/skills/converge/scripts/converge.py apply --task tasks/<task-id>
      ```
      将 Dev 记录在 `02` 中的偏差表以追加模式写回 `.specs/02-tech-spec.md`，更新状态至 `CONVERGED`，并将任务包归档至 `tasks/archive/`。当前 `quality-gate.yml` **没有**自动 converge job，需要显式触发；
-  3. **基线更新与性能跟踪**：全量更新仓库变异测试基线与 Benchmark 性能指标。
+  3. **基线更新与性能跟踪**：主干重新运行真实变异门禁以跟踪 MSI 基线（同一门禁已在 PR 阶段执行），并更新 Benchmark 性能指标。
 
 ### 6.5 CI 权威强制门禁实战指南
 
@@ -568,25 +605,44 @@ jobs:
       - run: python -m pytest --collect-only -q tests/acceptance
       - run: python -m pytest tests/acceptance -q --junitxml=artifacts/acceptance-junit.xml
 
+  mutation-active-check:
+    runs-on: ubuntu-latest        # pre-merge: pull_request + push to main/master
+    needs: [acceptance-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python .agents/skills/quality-engineering/scripts/mutation_gate.py run \
+            --config quality-gate.config.json --min-msi 80
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: {name: mutation-report, path: artifacts/mutation-report.json}
+
   gate3-verification:
     runs-on: ubuntu-latest
-    needs: [gate1-plan-linter, rbac-audit, complexity-gate, acceptance-tests]
+    needs: [gate1-plan-linter, rbac-audit, complexity-gate, acceptance-tests, mutation-active-check]
     if: |
       always() &&
       needs.gate1-plan-linter.result == 'success' &&
       needs.complexity-gate.result == 'success' &&
       needs.acceptance-tests.result == 'success' &&
+      needs.mutation-active-check.result == 'success' &&
       (needs.rbac-audit.result == 'success' || needs.rbac-audit.result == 'skipped')
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: {name: complexity-report, path: artifacts}
+      - uses: actions/download-artifact@v4
+        with: {name: mutation-report, path: artifacts}
       - run: |
           python .agents/skills/quality-engineering/scripts/verification_linter.py \
             --tasks-dir tasks \
             --actual-complexity artifacts/complexity-report.json \
-            --require-actual-complexity --strict --json
+            --require-actual-complexity \
+            --actual-mutation artifacts/mutation-report.json \
+            --require-actual-mutation --strict --json
 ```
+
+> 上面是简化示意；完整步骤（安装、就绪探针、artifact、step summary）以 `.agents/skills/quality-engineering/assets/templates/ci/quality-gate.yml` 为准。分支隔离步骤随独立的 `rbac-gate.yml` 模板一起交付，在 RBAC diff 审计之前运行。注意 `mutation-active-check` 没有 `push` 限定，PR 与主干 push 都会执行；`gate3-verification` 依赖它并下载 `mutation-report` artifact，缺少配置时整个 PR 失败而不是跳过。
 
 #### 一键集成到新仓库
 ```bash
@@ -597,8 +653,12 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
 #### 多语言项目：使用 Stack Profiles
 
 `quality-gate.yml` 是 **Python 参考实现**，不是跨栈通用 YAML。其他技术栈从 `.agents/skills/quality-engineering/assets/templates/ci/profiles/`
-选择参考片段（Python、Node/TS、Go、Java、Rust、.NET、C/C++），只替换工具链、安装、验收/JUnit、
-变异工具和 adapter，保留 Gate 1/3、RBAC、artifact、fail-closed 不变量。
+选择参考片段（Python、Node/TS、Go、Java、Rust、.NET、C/C++），把该栈**真实**的 BDD 验收工具与变异工具合并进工作流：
+Node 用 Cucumber.js + Stryker，Python 用 pytest-bdd/behave + mutmut，Go 用 Godog + go-mutesting，Java 用
+Cucumber-JVM + PITest，Rust 用 cucumber-rs + cargo-mutants，.NET 用 Reqnroll/SpecFlow + Stryker.NET，C/C++ 用
+CTest/Cucumber-Cpp + Mull；圈复杂度统一由 Tree-sitter / Lizard 引擎计算。保留 Gate 1/3、RBAC、分支隔离、artifact 与
+fail-closed 不变量。变异命令必须写进提交到仓库的 `quality-gate.config.json`（`mutation.command`、`mutation.report`、
+`mutation.min_msi`；MSI $\ge 80\%$，core 任务 $\ge 90\%$），`MUTATION_COMMAND` 只作回退。
 配置形状见 `.agents/skills/quality-engineering/assets/templates/ci/quality-gate.config.example.json`；完整采纳说明见
 [多语言 CI 参考模板](ci-stack-profiles.zh-CN.md)。
 
@@ -610,22 +670,26 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
 - **输入**：PRD、ADR 与技术规格。
 - **职责**：将架构规格拆解为小步可控的任务包（1–3 个 touch_files，50–250 行变更）。
 - **现代质量工程升级**：
-  - 从 PRD 业务需求与 ADR 架构契约推导出结构化的 Given-When-Then BDD 场景，写入 `01-contract.md` 的 `dod.edge_cases` 与 Section 4 行为不变量；
+  - 从 PRD 业务需求与 ADR 架构契约推导出结构化的 Given-When-Then BDD 场景，写入 `01-contract.md` 的 `dod.edge_cases`；
+  - Section 4 写成围栏 `gherkin` 块（`Feature:` + 至少 2 个 `Scenario:`，每场景 Given/When/Then），并在 `dod.feature_file` 声明 `tests/acceptance/` 下的 `.feature` 文件、可选声明 `dod.step_definitions`；feature 与 step glue 由 QA 创建，Dev 只读；
   - 自动脚手架生成规范四文档，02 与 03 保持标准空白表单，04 保持派生状态。
 
 ### 7.2 `plan-linter`（Gate 1 规划期静态门禁）
-- **核心定位**：专职单一职责的规划期确定性静态门禁。在代码开发开始前，核查任务契约是否结构完整、尺寸合规、DAG 无环、Given-When-Then BDD 格式有效。
+- **核心定位**：专职单一职责的规划期确定性静态门禁。在代码开发开始前，核查任务契约是否结构完整、尺寸合规、DAG 无环、Gherkin/BDD 可执行规格有效。
 - **职责边界与非目标**：
   - **单一职责**：只负责 Gate 1 静态任务包契约验证；
   - **明确不负责**：不执行业务代码或测试命令；不构建或维护 CI 流水线；不进行 AST/代码圈复杂度分析（非源码复杂度分析工具）；不审计测试执行证据与变异测试杀伤力。所有 CI 流水线编排、环境配置与门禁脚本资产均归属 `quality-engineering`，本地测试由 `qa` 负责。
-- **检查项**：
+- **检查项**（plan-linter v4）：
   1. `touch_files` 数量与目录白名单（默认 $\le 3$，严禁包含 `tests/acceptance/`）；
   2. `estimated_lines` 切片尺寸（50–250 行，micro 模式 10–50 行）；
   3. `origin_spec_anchor`（合法 `#sec-*`）与 `adherence_adrs`（非空）；
-  4. `dod` 中 `type_check`、`lint`、`test_file` 齐全且无占位符；
-  5. `dod.edge_cases` 至少 2 个，且全部符合 Given-When-Then 结构；
-  6. 四文档齐全性、`task_id` 目录名一致性、依赖图无环；
-  7. 真实拓扑检查（`modify` 路径必须存在，`create` 路径不能已存在）。
+  4. `dod` 中 `type_check`、`lint`、`test_file` 齐全且无占位符；`dod.test_file` 不能是 `.feature` 文件（`BDD_FEATURE_FILE_EXTENSION`）；
+  5. `dod.feature_file` 必填，须以 `.feature` 结尾并位于允许前缀（默认 `tests/acceptance/`）下（`MISSING_FEATURE_FILE` / `FEATURE_FILE_OUTSIDE_ACCEPTANCE`）；`dod.step_definitions` 可选，但不得为空或指向 feature 文件（`BDD_STEP_DEFINITIONS_INVALID`）；
+  6. Section 4 必须有围栏 `gherkin` 块：一条 `Feature:` 行、至少两个 `Scenario:` 块，每场景含 Given/When/Then（`BDD_GHERKIN_BLOCK_MISSING` / `BDD_GHERKIN_INVALID` / `BDD_MISSING_*`）；
+  7. `dod.edge_cases` 至少 2 个，且全部符合 Given-When-Then 结构；
+  8. 四文档齐全性、`task_id` 目录名一致性、依赖图无环；
+  9. 真实拓扑检查（`modify` 路径必须存在，`create` 路径不能已存在）。
+- **迁移与例外**：旧式 Markdown 表格契约的 feature/Gherkin 问题只降级为 warning；迁移期可用 `require_feature_file: false` / `require_gherkin_block: false` 放行旧任务包，但新上下文不应关闭默认强制。
 
 ### 7.3 `review`（Gate 2 语义审查门禁）
 - **核心定位**：只读 Reviewer 独立执行防幻觉、正向覆盖率与 ADR 红线审查。
@@ -638,7 +702,8 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
 ### 7.4 `dev`（开发角色）
 - **核心职责**：在契约白名单内高质量实现业务，控制复杂度。
 - **核心铁律**：
-  - 严禁越界修改 `touch_files` 之外的文件；严禁修改 `tests/acceptance/**`；
+  - 在**专属任务分支**上工作：`feat/<task-id>` 或 `task/<task-id>`，禁止在 `main`/`master` 上编辑或提交；把分支记录到 `02-dev-workspace.md` 的 `Branch` 行，交接前运行 `branch_guard.py check --task-dir tasks/<task-id> --require-declared --json`；
+  - 严禁越界修改 `touch_files` 之外的文件；`tests/acceptance/**`（含 `*.feature` 与 step definitions）归 QA，Dev 只读；
   - **单函数圈复杂度必须控制在 $V(G) \le 10$ 以内**；超标必须运用重构模式拆分；
   - 跑通 `dod` 自测命令，填写 `02-dev-workspace.md`；
   - 全部自测通过后，勾选 `- [x] WAITING_FOR_QA` 触发交接。
@@ -646,9 +711,10 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
 ### 7.5 `qa`（本地开发阶段测试）
 - **核心职责**：专注本地开发阶段测试，涵盖集成测试、基于 BDD 模式的端到端测试、变异测试（MSI $\ge 80\%$）、代码静态分析（本地 Lint 与圈复杂度分析）、自主决定调用 `review` skill 评审代码规范（可读性与可维护性）、针对不同项目类型自主引入知名开源工具，并在 `03-qa-verification.md` 记录本地测试证据与裁决。
 - **核心铁律**：
+  - 在 `02` 记录的同一任务分支上验收（`git rev-parse --abbrev-ref HEAD` + `git merge-base --is-ancestor <handoff-commit> HEAD`），不得在 `main`/`master` 上验证、签署或提交；下裁决前运行 `branch_guard.py check --task-dir tasks/<task-id> --require-declared --json`；
   - 严禁修改业务源码 `src/**`；可写范围为 `tests/acceptance/**`、`tests/integration/**` 与 `tasks/<task-id>/03-qa-verification.md`；
   - **集成测试**：在 `tests/integration/` 编写验证跨模块接口契约与协作行为的集成用例；
-  - **BDD 端到端测试**：依据 `01-contract.md` Section 4 BDD 场景与 `dod.edge_cases` 在 `tests/acceptance/` 编写黑盒验收与 E2E 测试；
+  - **BDD 端到端测试**：创建 `dod.feature_file` 指定的 Gherkin `.feature` 文件及其 step definitions，用真实 BDD runner 执行（`pytest-bdd`/`behave`、`Cucumber.js`、`Godog`、`Cucumber-JVM` 等）；`describe`/`it` 或普通测试函数编写的单元测试不是验收证据；Section 5 记录 runner 命令、机器可读报告 artifact 路径与 SHA-256；
   - **静态分析与圈复杂度**：本地引入代码检查工具（flake8、ruff、eslint 等）与复杂度分析工具（lizard、radon 等），确保修改函数单函数 $V(G) \le 10$，严禁 $V(G) > 15$，且严格执行基本路径测试基线（$\text{Test Cases} \ge V(G)$）；
   - **自主调用 review 技能**：自行决定调用 `review` skill 评估代码可读性、代码规范与可维护性；
   - **变异测试杀伤力基线**：针对不同项目栈自主引入知名工具（`mutmut`、`Stryker`、`go-mutesting`、`PITest`、`cargo-mutants`），击杀存活弱断言，确保 $\text{MSI} \ge 80\%$（核心模块 $\ge 90\%$）且无关键逻辑变异体存活；
@@ -658,7 +724,7 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
     ```bash
     python .agents/skills/qa/scripts/verification_linter.py --tasks-dir ./tasks --json
     ```
-    有真实复杂度 artifact 时可加 `--actual-complexity <report> --require-actual-complexity` 做交叉核验；本地预检是 advisory，CI Gate 3 仍是权威。收到 Appeal 时先等待仲裁，不要单方面再次 `REWORK_REQUIRED`。
+    有真实复杂度/变异 artifact 时可加 `--actual-complexity <report> --require-actual-complexity` 与 `--actual-mutation <report> --require-actual-mutation`，把 Section 3 的 V(G) 与 Section 4 的 MSI/计数同机器报告交叉核验；本地预检是 advisory，CI Gate 3 仍是权威。收到 Appeal 时先等待仲裁，不要单方面再次 `REWORK_REQUIRED`。
   - **与 `test-engineering` 的边界**：跨任务的测试策略、测试设计方法与数据/环境/flakiness 策略由 `test-engineering` 维护；`qa` 只负责当前任务的验收测试执行、证据记录与唯一裁决。
   - **读取项目测试策略**：测试设计前先只读读取项目测试策略（默认路径由角色规则固定；文件不存在时从 `test-engineering` 技能内置模板创建，不能假设仓库已带该文件），在 `03` 的测试设计摘要中记录 `strategy:` 引用；策略缺失时按 `baseline` 标注并沿用现有约定，不得凭空发明测试标准。
 
@@ -667,13 +733,15 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
 - **核心任务**：
   - **测试环境就绪**：搭建与验证隔离、可复现的测试容器/沙箱环境，验证外部依赖、运行时版本、服务 Mock 与网络拓扑；
   - **代码合并前测试（Pre-merge PR 自动化门禁）**：在拉取请求阶段编排执行权威流水线：
-    1. Gate 1 Plan Linter 任务契约与 BDD 规范检查；
-    2. RBAC 角色越权审计（拦截 Dev 改测试、QA 改源码）；
-    3. 圈复杂度静态门禁（调用基于 Tree-sitter / Lizard 多语言解析的 `complexity_check.py` 严格校验 $V(G) \le 10$，拦截 $V(G) > 15$）；
-    4. 验收与集成测试套件执行（100% 通过要求）；
-    5. Gate 3 验收交叉审查（调用 `verification_linter.py --actual-complexity ... --require-actual-complexity`，将 `03` 的 V(G) 与真实 AST artifact 核对，并核查基本路径覆盖与 MSI $\ge 80\%$，core 为 90%）。
-  - **代码合并后测试（Post-merge 流水线）**：主干合入后执行全量主干回归测试、按需手动触发规格收敛（Converge）、持续追踪变异基线与性能 Benchmark；
-  - **CI 资产与工具唯一归属（自包含）**：权威维护 CI 工作流模板（`quality-gate.yml`、`plan-gate.yml`、`rbac-gate.yml`）、多语言 profiles 与确定性门禁工具（`complexity_check.py`、`verification_linter.py`、`rbac_audit.py`、`mutation_gate.py`）；模板在技能的 `assets/templates/ci/`，脚本在其 `scripts/`，随技能一起安装，不依赖仓库根目录。
+    1. 分支隔离门禁（`branch_guard.py`：拒绝 `main`/`master`、非法命名与 `02` 未声明的分支）；
+    2. Gate 1 Plan Linter 任务契约与 Gherkin/feature 规范检查；
+    3. RBAC 角色越权审计（拦截 Dev 改测试、QA 改源码）；
+    4. 圈复杂度静态门禁（调用基于 Tree-sitter / Lizard 多语言解析的 `complexity_check.py` 严格校验 $V(G) \le 10$，拦截 $V(G) > 15$）；
+    5. 验收与集成测试套件执行（真实 BDD runner，100% 通过要求）；
+    6. 真实变异门禁（`mutation_gate.py run --config quality-gate.config.json`，PR + 主干 push 都执行，缺配置/命令失败/报告缺失/MSI 不足均 fail-closed）；
+    7. Gate 3 验收交叉审查（`verification_linter.py --actual-complexity ... --require-actual-complexity --actual-mutation ... --require-actual-mutation`，把 `03` 的 V(G) 与真实 AST artifact、Section 4 的 MSI/计数与真实归一化变异报告分别核对，并核查基本路径覆盖与 MSI $\ge 80\%$，core 为 90%）。
+  - **代码合并后测试（Post-merge 流水线）**：主干合入后执行全量主干回归测试、按需手动触发规格收敛（Converge）、在主干重新运行变异门禁跟踪基线，并持续追踪性能 Benchmark；
+  - **CI 资产与工具唯一归属（自包含）**：权威维护 CI 工作流模板（`quality-gate.yml`、`plan-gate.yml`、`rbac-gate.yml`）、多语言 profiles 与确定性门禁工具（`complexity_check.py`、`verification_linter.py`、`rbac_audit.py`、`mutation_gate.py`、`branch_guard.py`）及分支隔离参考（`references/branch-isolation.md`）；模板在技能的 `assets/templates/ci/`，脚本在其 `scripts/`，随技能一起安装，不依赖仓库根目录。
 - **与 `test-engineering` 的边界**：仓库级测试策略、测试设计方法与测试数据/环境/flakiness 策略由 `test-engineering` 维护；`quality-engineering` 负责把这些标准落成 CI 流水线、环境与门禁，不改写测试方法学本身。
 
 ### 7.7 `converge`（规格收敛）
@@ -721,6 +789,9 @@ tasks/<task-id>/
 | **Test Engineering** | 商定的测试策略文档、测试设计评审记录 | `tasks/`, `src/`, `tests/`, CI 产物（只读） | 测试策略覆盖、设计方法与风险匹配、`DESIGN_READY`/`DESIGN_GAPS` |
 | **Reviewer** | 只读（输出 Review 报告至独立终端/文件） | 任何工程与任务产物 | 反幻觉、正向覆盖率、ADR 架构红线 |
 
+> **一任务一分支**：Dev 在 `feat/<task-id>`（或 `task/<task-id>`）分支上实现并把分支记录到 `02-dev-workspace.md` 的 `Branch` 行，QA 在同一分支验收并签署，之后才推送、走 CI 门禁与合并；`main`/`master` 只是集成分支，永远不是工作分支。生命周期、`branch_guard.py` CLI 与“已直接提交到主干”的迁移手册见
+> [分支隔离参考](../.agents/skills/quality-engineering/references/branch-isolation.md)。提示词里的分支规则只是 advisory，权威层是 CI 的 `branch_guard.py` 加分支保护/CODEOWNERS。
+
 ---
 
 ## 9. 强制与安全（诚实模型）
@@ -729,12 +800,12 @@ tasks/<task-id>/
 
 | 级别 | 机制 | 适用环境 | 防护力度与保证 |
 | :--- | :--- | :--- | :--- |
-| **L0** | 提示词规则（`AGENTS.md`、角色 rules、SKILL.md） | 所有 AI Agent / 宿主 | 建议性引导；Agent 易产生幻觉或越界 |
-| **L1** | 本地静态预检脚本（`plan_linter.py`、`verification_linter.py`） | 本地开发环境 | 快速排错；可被开发者手动跳过 |
-| **L2** | CI 自动化门禁流水线（`.agents/skills/quality-engineering/scripts/rbac_audit.py` + `quality-gate.yml`） | Git 托管平台（GitHub/GitLab） | **绝对权威强制**；基于 commit diff，不可篡改 |
+| **L0** | 提示词规则（`AGENTS.md`、角色 rules、SKILL.md，含“一任务一分支”与 `Branch` 记录要求） | 所有 AI Agent / 宿主 | 建议性引导；Agent 易产生幻觉或越界，分支规则本身无法阻止在 `main` 上提交 |
+| **L1** | 本地静态预检脚本（`plan_linter.py`、`verification_linter.py`、`branch_guard.py`） | 本地开发环境 | 快速排错；可被开发者手动跳过 |
+| **L2** | CI 自动化门禁流水线（`rbac_audit.py`、`branch_guard.py` + `quality-gate.yml`） | Git 托管平台（GitHub/GitLab） | **绝对权威强制**；基于 commit diff 与 PR head 分支，不可篡改 |
 | **L3** | 分支保护规则（Protected Branches & Required Checks） | 代码仓库设置 | 最终安全屏障；无绿标禁止 Merge |
 
-> **严禁声称**：切勿宣称本地提示词能实现“物理强制隔离”。团队的绝对安全必须建立在 L2 CI RBAC 审计与 L3 分支保护之上。
+> **严禁声称**：切勿宣称本地提示词能实现“物理强制隔离”。团队的绝对安全必须建立在 L2 CI RBAC 审计、分支隔离与 L3 分支保护之上。分支隔离同样按 L0→L2 递进：rules 只是提示，`branch_guard.py` 在 CI 中拒绝受保护分支与未声明分支，分支保护才最终阻止 merge。
 
 ---
 
@@ -742,15 +813,22 @@ tasks/<task-id>/
 
 | 故障现象 | 根因分析 | 推荐处理步骤 |
 | :--- | :--- | :--- |
-| Gate 1 报 `BDD_MISSING_PRECONDITION` / `BDD_MISSING_ACTION` | `01-contract.md` 中 `edge_cases` 未严格遵循 Given-When-Then 格式 | 检查每条 edge_case，修正为 `"Given ..., When ..., Then ..."` 三段式 |
+| Gate 1 报 `BDD_MISSING_PRECONDITION` / `BDD_MISSING_ACTION` / `BDD_MISSING_OUTCOME` | `01-contract.md` 的 `edge_cases` 或 Section 4 Gherkin 场景缺少 Given/When/Then 子句 | 补全场景三段式；Section 4 每个 `Scenario:` 都要有完整 Given/When/Then |
+| Gate 1 报 `BDD_GHERKIN_BLOCK_MISSING` / `BDD_GHERKIN_INVALID` | Section 4 没有围栏 `gherkin` 块，或块内缺 `Feature:`、缺收尾围栏、`Scenario:` 少于 2 个 | 按模板写围栏 `gherkin` 块：一条 `Feature:` + 至少两个完整 `Scenario:` |
+| Gate 1 报 `MISSING_FEATURE_FILE` / `BDD_FEATURE_FILE_EXTENSION` / `FEATURE_FILE_OUTSIDE_ACCEPTANCE` | `dod.feature_file` 缺失、不是 `.feature`、不在 `tests/acceptance/` 下，或 `dod.test_file` 指向了 feature 文件 | 在 `dod.feature_file` 声明 `tests/acceptance/**.feature`；`dod.test_file` 写 BDD runner/测试入口而非 feature 文件 |
+| Gate 1 报 `BDD_STEP_DEFINITIONS_INVALID` | `dod.step_definitions` 为空串或指向 `.feature` 文件 | 写粘合代码路径；项目没有 glue 层时删除该键 |
 | Gate 1 报 `FORBIDDEN_TOUCH_FILE` | `touch_files` 中包含了 `tests/acceptance/` | 移除验收测试路径，验收测试专属于 QA 角色 |
 | Gate 3 报 `COMPLEXITY_MISSING_SECTION` | 勾选了 `QA_PASSED` 但 `03` 未包含或未填复杂度表 | 在 `03` 第 3 节填写修改函数的圈复杂度与路径映射 |
 | Gate 3 报 `COMPLEXITY_BASIS_PATH_INSUFFICIENT` | 验收测试用例数量少于函数圈复杂度 $V(G)$ | 补充独立路径的黑盒测试用例，使 $\text{用例数} \ge V(G)$ |
 | Gate 3 报 `COMPLEXITY_MISMATCH_WITH_AST` / `COMPLEXITY_FUNCTION_MISSING_IN_03` | `03` 的 V(G) 与真实 AST 不一致，或漏列了 touch_files 中的函数 | 用 `complexity_check.py --json` 的 `functions` 重填 Section 3 |
 | Gate 3 报 `QA_INVALID_MSI_SCORE` | 变异得分低于 80%（core 为 90%） | 检查未杀伤的变异体，消除弱断言，补充强校验断言并重新变异 |
-| Gate 3 报 `EVIDENCE_MISSING_ARTIFACT` / `EVIDENCE_HASH_INVALID` | 开启了 provenance 但 artifact 路径/哈希缺失或不匹配 | 在 `03` Section 5 写入真实 artifact 路径与 SHA-256 |
+| Gate 3 报 `MUTATION_MISMATCH_WITH_REPORT` / `MUTATION_PHANTOM_TARGET` / `MUTATION_TARGET_MISSING_IN_03` | `03` Section 4 的聚合或逐目标计数/MSI 与真实归一化变异报告不一致、列了报告里没有的目标，或漏了报告里的目标 | 从真实报告重填 Section 4；不要改报告或编造目标行 |
+| Gate 3 报 `MUTATION_REPORT_MISSING` | 传了 `--require-actual-mutation` 但没有可用的变异报告，或 CI 未先运行变异 job | 让变异 job 先生成并上传 `artifacts/mutation-report.json`，Gate 3 下载后用 `--actual-mutation` 传入 |
+| Gate 3 报 `EVIDENCE_MISSING_COMMAND` / `EVIDENCE_MISSING_RESULT` / `EVIDENCE_MISSING_ARTIFACT` / `EVIDENCE_HASH_INVALID` | Section 5 的命令、结果、artifact 路径或 SHA-256 缺失/不匹配；BDD runner 证据未记录 | 在 `03` Section 5 写入真实 BDD runner 命令、机器可读报告路径与 SHA-256 |
 | CI RBAC 报 `DEV_EDITED_ACCEPTANCE_TESTS` / `QA_EDITED_SOURCE` | Dev 改了验收测试或 QA 改了源码 | revert 越权改动，按角色边界重新提交 |
-| 变异 job 报 `MUTATION_REPORT_MISSING` / `MUTATION_THRESHOLD_FAILED` | `MUTATION_COMMAND` 未配置/未生成报告，或 MSI 不足 | 配置归一化报告；击杀存活变异体直到 MSI 达标 |
+| 变异 job 报 `MUTATION_COMMAND_FAILED` / `MUTATION_REPORT_MISSING` / `MUTATION_THRESHOLD_FAILED` | `quality-gate.config.json` 的 `mutation.command` 未配置/执行失败/未生成报告，或 MSI 不足 | 提交 `quality-gate.config.json`（`mutation.command`、`mutation.report`、`mutation.min_msi`）并击杀存活变异体；`MUTATION_COMMAND` 仅作回退，禁止把 job 设为非阻塞 |
+| 分支门禁报 `BRANCH_PROTECTED` / `BRANCH_PATTERN_INVALID` / `BRANCH_DETACHED` | 工作分支是 `main`/`master`、命名不是 `feat/`、`fix/`、`task/`、`change/`、`docs/`、`chore/`、`security/` 之一加名称，或 HEAD 处于 detached 状态 | 从最新 base 建 `feat/<task-id>` 并切过去；重做/合并工作，不要在主干上继续提交 |
+| 分支门禁报 `BRANCH_DECLARED_MISSING` / `BRANCH_MISMATCH` / `TASK_DOC_MISSING` | `02-dev-workspace.md` 的 `Branch` 行缺失/为空、与当前分支不一致，或 `--task-dir` 下没有该文档 | 在 `02` 记录当前任务分支，切回一致的分支后重新运行 `branch_guard.py check --require-declared` |
 | `converge` 拒绝执行（exit 1） | `03` 未勾选 `QA_PASSED`，或 `02` 偏差表为空 | 确保 QA 验收通过，并在 `02` 偏差表中写明偏差记录（无偏差填 `None` 行） |
 
 ---
@@ -769,17 +847,27 @@ python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks --jso
 # 3. 运行圈复杂度静态检查（McCabe V(G) <= 10；无 src/ 时需显式传 --src-dir）
 python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src --json
 
-# 4. 运行 Gate 3 验收期静态检查（--actual-complexity 用于交叉核验）
+# 4. 运行 Gate 3 验收期静态检查（--actual-complexity / --actual-mutation 用于交叉核验）
 python .agents/skills/quality-engineering/scripts/verification_linter.py \
-  --tasks-dir tasks --actual-complexity artifacts/complexity-report.json \
-  --require-actual-complexity --strict --json
+  --tasks-dir tasks \
+  --actual-complexity artifacts/complexity-report.json --require-actual-complexity \
+  --actual-mutation artifacts/mutation-report.json --require-actual-mutation \
+  --strict --json
 
 # 5. 运行 RBAC 角色边界审计
 python .agents/skills/quality-engineering/scripts/rbac_audit.py --base HEAD~1 --role dev --tasks-dir tasks
 
-# 6. 运行变异硬门禁（需要项目提供 MUTATION_COMMAND 与归一化报告）
-python .agents/skills/quality-engineering/scripts/mutation_gate.py check --report artifacts/mutation-report.json --min-msi 80
+# 6. 运行变异硬门禁（config 驱动；项目根目录提交 quality-gate.config.json）
+python .agents/skills/quality-engineering/scripts/mutation_gate.py run \
+  --config quality-gate.config.json --min-msi 80
+
+# 7. 校验任务分支隔离（拒绝 main/master 与未声明的 Branch）
+python .agents/skills/quality-engineering/scripts/branch_guard.py check \
+  --task-dir tasks/<task-id> --require-declared --json
 ```
+
+> 第 6 步没有 `quality-gate.config.json` 时可用 `--command "<真实变异命令>" --report artifacts/mutation-report.json`
+> 临时替代；没有命令时 `run` 以退出码 2 fail-closed，绝不会执行空命令。
 
 ---
 
@@ -791,6 +879,7 @@ python .agents/skills/quality-engineering/scripts/mutation_gate.py check --repor
 - [技能类别索引（skills/README.md）](../skills/README.md)
 - [Brownfield 增量变更与规格收敛指南](brownfield-convergence.zh-CN.md)
 - [CI 自动化门禁配置与工作流模板](../.agents/skills/quality-engineering/assets/templates/ci/README.md)
+- [分支隔离参考（branch-isolation）](../.agents/skills/quality-engineering/references/branch-isolation.md)
 - [多语言 CI 参考模板（Stack Profiles）](ci-stack-profiles.zh-CN.md)
 - [文档索引](README.md)
 - [Gate 3 本地预检](gate3-precheck.zh-CN.md)

@@ -22,9 +22,10 @@
 > 不写测试与 `03`、不运行 CI 门禁。本文的评分口径与基线仍为 v3.1.0，**不重新打分**；下面的组件
 > 评分表仍只覆盖 v3.1.0 基线的十个技能，`test-engineering` 作为全局方法学技能不进入本表。
 >
-> **v3.4.x 当前状态（2026-10-19）**：v3.4.0 接入全局测试策略，v3.4.1 QA 自带 Gate 3 预检，
-> v3.4.2–v3.4.4 固化并升级 AGENTS.md 的 skill-change workflow。本文仍是 **v3.1.0 评分快照**，
-> 不重新打分；当前发布树单元测试为 **425 passed, 1 skipped**（v3.1.0 基线为 301 passed, 1 skipped）。
+> **v3.4.x–v5.0.0 当前状态（2026-10-19）**：v3.4.0 接入全局测试策略，v3.4.1 QA 自带 Gate 3 预检，
+> v3.4.2–v3.4.4 固化并升级 AGENTS.md 的 skill-change workflow；v5.0.0 硬约束 BDD 契约、Gate 3 交叉核验
+> 真实变异报告、PR 阶段真实变异与单任务分支隔离。本文仍是 **v3.1.0 评分快照**，不重新打分；
+> v4.0.1 为 **425 passed, 1 skipped**，v5.0.0 当前为 **500 passed, 1 skipped**（v3.1.0 基线为 301 passed, 1 skipped）。
 
 ---
 
@@ -47,8 +48,8 @@
 
 - **强项**：端到端流程完整（想法 → PRD → 规格 → 任务 → Gate 1/2 → Dev → QA → 收敛）；确定性
   Gate 1 + CI RBAC 审计；四文档契约与角色隔离；brownfield 增量与活规格；自包含技能与插件分发；
-  prompt-first、可迁移、无引擎依赖；v3.1.0 基线发布包 301 个黑盒单元测试（1 skip），当前 v4.0.1
-  为 425 个（1 skip）。
+  prompt-first、可迁移、无引擎依赖；v3.1.0 基线发布包 301 个黑盒单元测试（1 skip），v4.0.1
+  为 425 个（1 skip），当前 v5.0.0 为 500 个（1 skip）。
 - **仍弱**：生态与公开采用接近零；插件清单已就绪，但尚未进入公开市场，没有公开示例库 / 社区 /
   `skills-ref validate`；Gate 2 仍是人工提示词；没有 per-task 子代理编排；没有真实仓库上的公开 A/B 数据。
 - **最接近的竞品**：GitHub Spec Kit（流程与生态）与 OpenSpec（brownfield 模型），cc-sdd（Agent Skills
@@ -106,7 +107,7 @@ Taskmaster           3.08  ██████▏
 
 - 本套件（发布树）：`skills/` 可安装布局（十一个 workflow 技能 + `diagnose-windows-sandbox-acl`）、
   `.claude-plugin/` 插件与市场清单、`tools/`、`.agents/skills/quality-engineering/assets/templates/ci/`、`docs/`、`tests/unit/`；本文引用的
-  v3.1.0 基线为 **301 个黑盒单元测试（1 skip）**，当前 v4.0.1 为 **425 个（1 skip）**。
+  v3.1.0 基线为 **301 个黑盒单元测试（1 skip）**，v4.0.1 为 **425 个（1 skip）**，当前 v5.0.0 为 **500 个（1 skip）**。
 - 上游开发仓库另有完整测试套件（历史数据：539 个单元测试 + 109 个 E2E），**不随发布包分发**，
   仅作上游证据，不计入发布基线（详见 [技能使用指南](skills-guide.zh-CN.md)、[brownfield 与收敛](brownfield-convergence.zh-CN.md)、
   [宿主兼容性](skills-compatibility.md) 与 [技能布局说明](../.agents/skills/README.md)）。
@@ -224,7 +225,7 @@ Taskmaster           3.08  ██████▏
 | eyaltoledano/claude-task-master | 28,237 | MIT + Commons Clause | 任务管理 |
 | buildermethods/agent-os | 5,513 | MIT | standards + spec |
 | gotalab/cc-sdd | 3,720 | MIT | Agent Skills + 8 宿主 |
-| 本套件 | 本地项目，暂无公开 star 数据 | MIT（本仓库） | v4.0.1 插件清单就绪；未发布到公开市场 |
+| 本套件 | 本地项目，暂无公开 star 数据 | MIT（本仓库） | v5.0.0 插件清单就绪；未发布到公开市场 |
 
 > 星标来自 GitHub API 快照，会持续变化；它衡量关注度，不衡量工程质量或适用性。
 
@@ -294,7 +295,7 @@ v3.1.0 的交付项已经做完：**3.90 → 4.16**。
   的项目；希望以插件方式安装、同时保留确定性门禁的团队。
 - **今天不适合谁**：需要成熟公共插件市场、大量现成示例与社区支持的团队；只想要轻量 prompt、快速
   原型、或不愿接受四文档与角色分工成本的用户。
-- **下一步最值得做的一件事**：把 v4.0.1 发布到公共插件市场，配一个公开示例仓库，并持续公开真实
+- **下一步最值得做的一件事**：把 v5.0.0 发布到公共插件市场，配一个公开示例仓库，并持续公开真实
   任务上的通过/返工/收敛数据——先让 D7 从 1.4 往上走，这是 4.3+ 的门槛。
 
 ---

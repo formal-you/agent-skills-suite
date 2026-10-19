@@ -97,8 +97,10 @@ it.
 When Python is unavailable, Gate 1 can be reviewed manually using the table in
 SKILL.md: for every task bundle, check task_id vs directory name, touch_files
 count and prefixes, estimated_lines, origin_spec_anchor, adherence_adrs, the
-three dod commands, edge case count, required documents and the dependency graph.
-The result is a manual review, not a script result; say so explicitly.
+three dod commands, `dod.feature_file`/`dod.step_definitions`, the fenced Gherkin
+Section 4 block (Feature + >=2 scenarios with Given/When/Then), edge case count,
+required documents and the dependency graph. The result is a manual review, not a
+script result; say so explicitly.
 
 ## Gate 1 error codes reference
 
@@ -124,3 +126,10 @@ The result is a manual review, not a script result; say so explicitly.
 | `MICRO_REQUIRES_CHANGE_ID` | Micro task missing `change_id` frontmatter key | Declare `change_id` for micro task |
 | `MICRO_TOO_MANY_TOUCH_FILES` | Micro task touches more than 1 file | Constrain micro task to exactly 1 touch file |
 | `MICRO_DIFF_TOO_SMALL` / `MICRO_DIFF_TOO_LARGE` | Micro diff outside budget (default 10–49 lines) | Adjust diff or resize to standard class |
+| `MISSING_FEATURE_FILE` | `dod.feature_file` is absent but required | Add the `.feature` path QA will author under `tests/acceptance/` |
+| `BDD_FEATURE_FILE_EXTENSION` | `dod.feature_file` does not end in `.feature`, or `dod.test_file` points at the feature file instead of the runner target | Use `.feature` for the specification and the BDD runner/test entrypoint for `dod.test_file` |
+| `FEATURE_FILE_OUTSIDE_ACCEPTANCE` | `dod.feature_file` is outside the allowed acceptance prefixes | Move the feature file under `tests/acceptance/` or adjust `feature_allowed_prefixes` |
+| `BDD_GHERKIN_BLOCK_MISSING` | Section 4 has no fenced ```gherkin block (default `require_gherkin_block: true`) | Add the fenced block with `Feature:` and >=2 `Scenario:` blocks |
+| `BDD_GHERKIN_INVALID` | Gherkin block has no `Feature:` line, no closing fence, or fewer than 2 scenarios | Complete the block; every scenario needs Given, When and Then |
+| `BDD_STEP_DEFINITIONS_INVALID` | `dod.step_definitions` is blank or points at a `.feature` file | Name the glue code, or omit the key when the project has no glue layer |
+| `BDD_MISSING_PRECONDITION` / `BDD_MISSING_ACTION` / `BDD_MISSING_OUTCOME` | A scenario (Gherkin block or `dod.edge_cases`) lacks Given, When or Then | Add the missing clause; legacy Markdown-table contracts get warnings, never hard findings |
