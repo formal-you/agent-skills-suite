@@ -15,11 +15,11 @@ ROOT = Path(__file__).resolve().parents[2]
 QE_SKILL = ROOT / ".agents" / "skills" / "quality-engineering" / "SKILL.md"
 QE_TRIAGE = ROOT / ".agents" / "skills" / "quality-engineering" / "references" / "triage-routing.md"
 VERIFICATION = ROOT / ".agents" / "skills" / "quality-engineering" / "scripts" / "verification_linter.py"
-MUTATION_GATE = ROOT / "tools" / "mutation_gate.py"
+MUTATION_GATE = ROOT / ".agents" / "skills" / "quality-engineering" / "scripts" / "mutation_gate.py"
 PLAN_SKILL = ROOT / ".agents" / "skills" / "plan-linter" / "SKILL.md"
 PLAN_LINTER = ROOT / ".agents" / "skills" / "plan-linter" / "scripts" / "plan_linter.py"
 GUIDE = ROOT / "docs" / "skills-guide.zh-CN.md"
-CI_README = ROOT / "templates" / "ci" / "README.md"
+CI_README = ROOT / ".agents" / "skills" / "quality-engineering" / "assets" / "templates" / "ci" / "README.md"
 
 GATE3_CODES = {
     "COMPLEXITY_MISSING_SECTION",
@@ -78,7 +78,7 @@ class ErrorCodeConsistencyTests(unittest.TestCase):
         routed = read(QE_TRIAGE)
         missing_emitted = sorted(code for code in MUTATION_CODES if code not in emitted)
         missing_routed = sorted(code for code in MUTATION_CODES if code not in routed)
-        self.assertEqual(missing_emitted, [], "codes not emitted by tools/mutation_gate.py")
+        self.assertEqual(missing_emitted, [], "codes not emitted by quality-engineering/scripts/mutation_gate.py")
         self.assertEqual(missing_routed, [], "codes missing from triage-routing.md")
 
     def test_retired_codes_are_not_documented(self) -> None:

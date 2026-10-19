@@ -1,11 +1,11 @@
 # 多语言 CI 参考模板（Stack Profiles）
 
 > 适用对象：使用 `quality-engineering` skill 搭建/调整 CI 的 Agent 与工程师。
-> 关联文档：[CI 门禁模板说明](../templates/ci/README.md)、[技能使用指南](skills-guide.zh-CN.md)、[文档索引](README.md)。门禁加固的历史记录见 [archive/skills-remediation.zh-CN.md](archive/skills-remediation.zh-CN.md)（历史，不是当前规范）。
+> 关联文档：[CI 门禁模板说明](../.agents/skills/quality-engineering/assets/templates/ci/README.md)、[技能使用指南](skills-guide.zh-CN.md)、[文档索引](README.md)。门禁加固的历史记录见 [archive/skills-remediation.zh-CN.md](archive/skills-remediation.zh-CN.md)（历史，不是当前规范）。
 
 ## 1. 为什么不是"一个 YAML 适配所有项目"
 
-`templates/ci/quality-gate.yml` 是 **Python-first、GitHub Actions-first、spec-driven** 的参考实现，不是通用 CI 产品。它把门禁不变量（Gate 1/2/3、RBAC、证据、fail-closed、artifact、triage）固定下来，但栈相关命令仍是 Python 的：
+`.agents/skills/quality-engineering/assets/templates/ci/quality-gate.yml` 是 **Python-first、GitHub Actions-first、spec-driven** 的参考实现，不是通用 CI 产品。它把门禁不变量（Gate 1/2/3、RBAC、证据、fail-closed、artifact、triage）固定下来，但栈相关命令仍是 Python 的：
 
 - `setup-python`
 - `--src-dir src`
@@ -15,7 +15,7 @@
 
 如果直接把它复制到 Node/Go/Java/Rust/.NET/C++ 项目，常见结果是"装了依赖但没跑该栈的测试"。
 
-因此新增 `templates/ci/profiles/`：**每个栈一份参考片段**。项目保留不变量，只替换：
+因此新增 `.agents/skills/quality-engineering/assets/templates/ci/profiles/`：**每个栈一份参考片段**。项目保留不变量，只替换：
 
 1. 工具链 setup；
 2. 依赖安装；
@@ -69,7 +69,7 @@
 }
 ```
 
-`killed + timed_out + equivalent + survived <= total`。`tools/mutation_gate.py` 会重新计算 MSI，不信任报告里手填的 `msi`。
+`killed + timed_out + equivalent + survived <= total`。`.agents/skills/quality-engineering/scripts/mutation_gate.py` 会重新计算 MSI，不信任报告里手填的 `msi`。
 
 各栈的原始报告不同：
 

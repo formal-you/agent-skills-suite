@@ -4,15 +4,15 @@ name: Quality Engineering Gate
 # Maintained by the quality-engineering skill for building CI pipelines, configuring
 # test environments, and managing pre-merge and post-merge automated verification.
 # For other stacks, adapt the toolchain/install/acceptance/mutation blocks from
-# templates/ci/profiles/ (Node, Go, Java, Rust, .NET, C/C++) and keep the invariant jobs.
+# profiles/ (Node, Go, Java, Rust, .NET, C/C++) and keep the invariant jobs.
 #   1. BDD Executable Specifications & Contract Validation (Gate 1 - plan_linter.py)
 #   2. Cyclomatic Complexity (McCabe V(G) <= 10) & Basis Path Testing
 #   3. Mutation Testing & MSI Kill Ratio Audit (MSI >= 80% - Gate 3 verification_linter.py)
-#   4. Authoritative Role Separation & RBAC Audit (tools/rbac_audit.py)
+#   4. Authoritative Role Separation & RBAC Audit (scripts/rbac_audit.py)
 #   5. Acceptance Test Suite Execution (tests/acceptance/**)
 #
 # Copy this file to .github/workflows/quality-gate.yml in the adopting repository.
-# See templates/ci/README.md for installation, configuration, and troubleshooting.
+# See README.md in this directory for installation, configuration, and troubleshooting.
 
 on:
   pull_request:
@@ -120,7 +120,7 @@ jobs:
             args+=(--role "$RBAC_ROLE")
           fi
           status=0
-          python tools/rbac_audit.py "${args[@]}" > rbac-report.json 2> rbac-error.log || status=$?
+          python .agents/skills/quality-engineering/scripts/rbac_audit.py "${args[@]}" > rbac-report.json 2> rbac-error.log || status=$?
           {
             echo "## RBAC Audit Report"
             echo ""
@@ -427,7 +427,7 @@ jobs:
             exit 1
           fi
           mkdir -p artifacts
-          python tools/mutation_gate.py run \
+          python .agents/skills/quality-engineering/scripts/mutation_gate.py run \
             --command "$MUTATION_COMMAND" \
             --report artifacts/mutation-report.json \
             --min-msi 80

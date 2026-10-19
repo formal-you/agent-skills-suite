@@ -9,13 +9,14 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-CI_DIR = ROOT / "templates" / "ci"
+SKILL_DIR = ROOT / ".agents" / "skills" / "quality-engineering"
+CI_DIR = SKILL_DIR / "assets" / "templates" / "ci"
 PROFILES_DIR = CI_DIR / "profiles"
 INDEX = PROFILES_DIR / "index.json"
 CONFIG_EXAMPLE = CI_DIR / "quality-gate.config.example.json"
 README = CI_DIR / "README.md"
 GUIDE = ROOT / "docs" / "ci-stack-profiles.zh-CN.md"
-SKILL = ROOT / ".agents" / "skills" / "quality-engineering" / "SKILL.md"
+SKILL = SKILL_DIR / "SKILL.md"
 
 EXPECTED_STACKS = ["python", "node", "go", "java", "rust", "dotnet", "cpp"]
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
@@ -99,10 +100,10 @@ class CiProfileCatalogTests(unittest.TestCase):
     def test_ci_readme_and_skill_point_to_profiles(self) -> None:
         readme = read(README)
         self.assertIn("profiles", readme.lower())
-        self.assertIn("ci-stack-profiles.zh-CN.md", readme)
         skill = read(SKILL)
         self.assertIn("profile", skill.lower())
-        self.assertNotIn("templates/ci", skill, "skill docs must stay self-contained")
+        self.assertIn("assets/templates/ci/", skill, "skill must point at its own bundled CI assets")
+        self.assertNotIn("../", skill, "skill docs must stay self-contained")
 
 
 if __name__ == "__main__":

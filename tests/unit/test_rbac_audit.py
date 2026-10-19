@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for tools/rbac_audit.py (git-diff based RBAC audit).
+"""Tests for the quality-engineering rbac_audit.py script (git-diff based RBAC audit).
 
 Run: python -m unittest discover -s tests/unit -p "test_*.py"
 """
@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-TOOL = REPO_ROOT / "tools" / "rbac_audit.py"
+TOOL = REPO_ROOT / ".agents" / "skills" / "quality-engineering" / "scripts" / "rbac_audit.py"
 
 BASE_FILES = {
     "README.md": "# fixture repo\n",

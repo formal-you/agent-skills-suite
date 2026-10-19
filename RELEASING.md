@@ -5,7 +5,8 @@ This tree is the distributable skill package. It ships a Claude Code plugin
 
 The packaging tool (`tools/package_skills.py`) is **not** shipped in this tree. Run it from the
 upstream development repository to regenerate this package; the upstream build also produces the
-deterministic zip and `MANIFEST.sha256`.
+deterministic zip and `MANIFEST.sha256`. In this tree, `python tools/gen_manifest.py` regenerates the
+manifest and `python tools/gen_manifest.py --check` verifies it (the unit suite does this too).
 
 ## One-time publishing setup
 

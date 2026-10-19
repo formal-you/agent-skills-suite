@@ -19,7 +19,7 @@ rules layer as optional context and work without it.
 | Planner | `planner.md` | `tasks/<task-id>/` while planning | `.specs/`, `src/`, `tests/` |
 | Dev | `dev.md` | `src/**`, `tasks/<task-id>/02-dev-workspace.md` | `01-contract.md`, `03-qa-verification.md`, `04-process.md`, `tests/acceptance/**` |
 | QA | `qa.md` | `tests/acceptance/**`, `tests/integration/**`, `tasks/<task-id>/03-qa-verification.md` | `src/**`, `01-contract.md`, `02-dev-workspace.md`, `04-process.md` |
-| Quality Engineering | `quality-engineering` skill | CI workflows (`.github/workflows/*`, `templates/ci/*`) | `tasks/`, `src/`, `tests/` (audited/executed in CI) |
+| Quality Engineering | `quality-engineering` skill | CI workflows (`.github/workflows/*`, the skill's `assets/templates/ci/*`) | `tasks/`, `src/`, `tests/` (audited/executed in CI) |
 | Test Engineering | `test-engineering.md` | the agreed test-strategy document and test-design review notes | `tasks/`, `src/`, `tests/` and CI artifacts (reviewed read-only) |
 | Reviewer (Gate 2) | `reviewer.md` | none (read-only semantic audit) | `.specs/`, `tasks/`, `src/`, `tests/` |
 | Orchestrator / Lead | `orchestrator.md` | coordination artifacts only (task board, status, routing notes) | all role documents, `.specs/`, `src/`, `tests/`, `tasks/` |
@@ -95,7 +95,7 @@ initial state are detailed in `task-decomposition/references/role-lifecycle.md`.
 | Layer | Mechanism | Applies to | Guarantee |
 | :--- | :--- | :--- | :--- |
 | L0 | Prompt rules (this page, `AGENTS.md`, `.agents/rules/*.md`) | every agent/harness | advisory; depends on the agent following instructions |
-| L1 | `tools/rbac_audit.py` in CI | every harness with git | authoritative for committed changes |
+| L1 | `quality-engineering` skill's `rbac_audit.py` in CI | every harness with git | authoritative for committed changes |
 | L2 | Branch protection / CODEOWNERS | repository settings | authoritative |
 
 Prompt rules are **not** physical enforcement and must not be described as such. The authoritative

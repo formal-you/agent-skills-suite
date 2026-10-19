@@ -497,7 +497,8 @@ class SkillAndRulesTests(unittest.TestCase):
         text = read_text(AGENT_RULES_MD)
         for layer in ("L0", "L1", "L2"):
             self.assertIn(layer, text)
-        self.assertIn("tools/rbac_audit.py", text)
+        self.assertIn("quality-engineering", text)
+        self.assertIn("rbac_audit.py", text)
         self.assertIn("not** physical enforcement", text)
         self.assertIn("derived", text.lower())
         self.assertIn("Reviewer (Gate 2)", text)

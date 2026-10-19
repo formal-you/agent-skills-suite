@@ -28,7 +28,8 @@ REVIEW_SKILL = SKILLS / "review" / "SKILL.md"
 TE_SKILL = SKILLS / "test-engineering" / "SKILL.md"
 SKILL_INDEX = SKILLS / "README.md"
 
-FORBIDDEN_TOKENS = ("docs/", "tools/", ".agents/rules", ".agents/scripts", "templates/ci")
+FORBIDDEN_TOKENS = ("docs/", "tools/", ".agents/rules", ".agents/scripts")
+REPO_LEVEL_CI = re.compile(r"(?<!assets/)(?<!skills/)templates/ci")
 CJK_RE = re.compile(r"[\u4e00-\u9fff]")
 PLACEHOLDER_RE = re.compile(r"\{\{[^}]*\}\}")
 TBD_RE = re.compile(r"\[TBD\]|\bTODO\b")
@@ -193,7 +194,7 @@ class QualityEngineeringWiringTests(unittest.TestCase):
         text = read_text(QE_SKILL)
         self.assertRegex(frontmatter(text), VERSION_RE)
         versions = VERSION_RE.findall(frontmatter(text))
-        self.assertEqual(versions, ["2.1.0"], "quality-engineering metadata.version must be 2.1.0")
+        self.assertEqual(versions, ["2.2.0"], "quality-engineering metadata.version must be 2.2.0")
         self.assertLess(len(text.splitlines()), 200, "SKILL.md must stay below 200 lines")
 
     def test_protocol_contains_the_strategy_to_ci_mapping(self) -> None:
@@ -238,6 +239,8 @@ class SkillSelfContainmentTests(unittest.TestCase):
                     for token in FORBIDDEN_TOKENS:
                         if token in text:
                             offenders.append(relative + " -> " + token)
+                    if REPO_LEVEL_CI.search(text):
+                        offenders.append(relative + " -> repo-level templates/ci")
         self.assertEqual(
             offenders,
             [],
@@ -265,22 +268,22 @@ class DocsAndVersionTests(unittest.TestCase):
 
     def test_version_files_agree(self) -> None:
         version = read_text(ROOT / "VERSION").strip()
-        self.assertEqual(version, "3.4.7")
+        self.assertEqual(version, "4.0.0")
         plugin = json.loads(read_text(ROOT / ".claude-plugin" / "plugin.json"))
-        self.assertEqual(plugin["version"], "3.4.7")
+        self.assertEqual(plugin["version"], "4.0.0")
         self.assertIn("eleven", plugin["description"].lower())
         marketplace = json.loads(read_text(ROOT / ".claude-plugin" / "marketplace.json"))
         plugins = marketplace["plugins"]
         self.assertEqual(len(plugins), 1)
-        self.assertEqual(plugins[0]["version"], "3.4.7")
+        self.assertEqual(plugins[0]["version"], "4.0.0")
         self.assertIn("eleven", plugins[0]["description"].lower())
 
     def test_changelog_has_the_release_section(self) -> None:
         text = read_text(ROOT / "CHANGELOG.md")
-        self.assertIn("## [3.4.7] - 2026-10-19", text)
-        section = text.split("## [3.4.7] - 2026-10-19", 1)[1].split("\n## [", 1)[0]
-        for heading in ("### Changed", "### Fixed"):
-            self.assertIn(heading, section, "3.4.7 changelog misses: " + heading)
+        self.assertIn("## [4.0.0] - 2026-10-19", text)
+        section = text.split("## [4.0.0] - 2026-10-19", 1)[1].split("\n## [", 1)[0]
+        for heading in ("### Changed", "### Removed"):
+            self.assertIn(heading, section, "4.0.0 changelog misses: " + heading)
 
 
 if __name__ == "__main__":

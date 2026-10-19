@@ -2,7 +2,7 @@ name: Plan Gate (Gate 1)
 
 # Gate 1 - deterministic plan lint (plan-linter).
 # Copy this file to .github/workflows/plan-gate.yml in the adopting repository.
-# See templates/ci/README.md for installation, permissions and troubleshooting.
+# See README.md in this directory for installation, permissions and troubleshooting.
 
 on:
   pull_request:

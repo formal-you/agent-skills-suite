@@ -57,11 +57,11 @@ The aggregate file is authoritative; the bundle is its modular copy.
 3. **Converge.** Record the decisions and the unresolved architectural forks
    (`FORK-*`) with at least two viable options and decision drivers. Never pre-select
    an option in the PRD.
-4. **Scaffold (optional).** From this skill directory:
-   `python scripts/scaffold.py --out .specs` (add `--dry-run` first).
+4. **Scaffold (optional).** From the repository root:
+   `python .agents/skills/prd-generator/scripts/scaffold.py --out .specs` (add `--dry-run` first).
 5. **Author the artifacts.** Follow [references/prd-format.md](references/prd-format.md).
    Replace every `{{UPPER_SNAKE}}` placeholder; keep identifiers consistent and each anchor tied to its module.
-6. **Lint (optional).** `python scripts/lint_prd.py .specs/01-prd.md` (or `.specs`).
+6. **Lint (optional).** `python .agents/skills/prd-generator/scripts/lint_prd.py .specs/01-prd.md` (or `.specs`).
    Fix every error before handing off.
 7. **Hand off.** State the output paths and the unresolved `FORK-*` items. The next
    step is `spec-generator`.
@@ -69,14 +69,14 @@ The aggregate file is authoritative; the bundle is its modular copy.
 ## Tooling (optional)
 
 All helpers are stdlib-only Python and resolve paths from their own location, so the
-skill directory can be copied anywhere. Run them with `--help` instead of reading the
-source.
+skill directory can be copied anywhere. Run them from the repository root with
+`--help` instead of reading the source.
 
 | Command | Purpose |
 | :--- | :--- |
-| `python scripts/scaffold.py --out .specs [--dry-run] [--force] [--json]` | Copy templates into the output tree |
-| `python scripts/lint_prd.py .specs [--json]` | Structural gate: placeholders, anchors, required tokens, links |
-| `python scripts/engine.py run --idea "..." --output-dir .specs` | Optional engine proxy |
+| `python .agents/skills/prd-generator/scripts/scaffold.py --out .specs [--dry-run] [--force] [--json]` | Copy templates into the output tree |
+| `python .agents/skills/prd-generator/scripts/lint_prd.py .specs [--json]` | Structural gate: placeholders, anchors, required tokens, links |
+| `python .agents/skills/prd-generator/scripts/engine.py run --idea "..." --output-dir .specs` | Optional engine proxy |
 
 Exit codes: `0` success, `1` content/gate failure, `2` optional dependency or usage
 unavailable, `3` unexpected error.

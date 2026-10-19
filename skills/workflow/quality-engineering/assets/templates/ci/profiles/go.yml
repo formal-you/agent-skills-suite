@@ -1,0 +1,40 @@
+# Reference profile: Go
+stack: go
+display_name: "Go"
+
+toolchain:
+  setup:
+    - "uses: actions/setup-go@v5"
+    - "with: {go-version: \"1.22\", cache: true}"
+  setup_notes: "Pin the Go version declared in go.mod."
+
+install:
+  - "go mod download"
+
+acceptance:
+  command: "gotestsum --junitfile artifacts/acceptance-junit.xml -- ./..."
+  junit: "artifacts/acceptance-junit.xml"
+  alternatives:
+    - "go test ./... -json > artifacts/acceptance.jsonl"
+  bdd_tools: ["Godog"]
+
+mutation:
+  tool: "go-mutesting"
+  command: "go-mutesting ./..."
+  raw_report: "text output"
+  report: "artifacts/mutation-report.json"
+  adapter: "Parse go-mutesting pass/fail output into targets[] per package/file."
+  min_msi: 80
+
+complexity:
+  command: "python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir . --json"
+  engines: ["tree-sitter", "lizard"]
+  source: "."
+  setup_notes: "Exclude vendor/ and generated code; or use gocyclo/gocognit and feed the 03 table."
+
+services: []
+
+notes:
+  - "Use gotestsum for JUnit; plain go test has no JUnit output."
+  - "For integration tests requiring PostgreSQL/Redis/Kafka, add services: or testcontainers."
+  - "Keep acceptance tests in tests/acceptance or a stack-native path declared in the project profile."

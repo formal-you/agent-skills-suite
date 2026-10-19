@@ -122,10 +122,10 @@ The bundle format is shared; the work is not. A short contract for the three rol
    template tokens: leave them untouched so a freshly planned bundle can pass Gate 1 before Dev/QA start.
    Leave `04` initialized (`TODO`/`UNASSIGNED`/`None`/retry 0) with an empty event table.
 5. **Validate (optional but recommended).** If the `plan-linter` skill is installed, run its helper
-   from the plan-linter skill directory:
+   from the repository root (project-relative path, not the skill directory):
 
    ```bash
-   python scripts/plan_linter.py --tasks-dir <tasks-dir> --json
+   python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks --json
    ```
 
    Exit codes: `0` pass, `1` violations, `2` usage/config error, `3` unexpected error. Read the JSON

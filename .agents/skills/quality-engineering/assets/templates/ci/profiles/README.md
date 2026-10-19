@@ -31,8 +31,8 @@ The machine-readable catalog is [`index.json`](index.json). The profile shape is
 
 ## Mutation report adapter contract
 
-Every profile ultimately writes the normalized report consumed by `tools/mutation_gate.py`
-and Gate 3:
+Every profile ultimately writes the normalized report consumed by the bundled
+`scripts/mutation_gate.py` (at the skill root) and Gate 3:
 
 ```json
 {

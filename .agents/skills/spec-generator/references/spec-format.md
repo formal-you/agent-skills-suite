@@ -61,4 +61,4 @@ cost.
 ## Gate
 
 - Manual: use the checklist in `SKILL.md`.
-- Script: `python scripts/lint_spec.py .specs` and fix all errors.
+- Script: `python .agents/skills/spec-generator/scripts/lint_spec.py .specs` and fix all errors.

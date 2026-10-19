@@ -103,8 +103,9 @@ anchors it changes. Full lifecycle and sizing rules: [references/brownfield-prot
 4. **Gate 1, then Gate 2.** Run deterministic Gate 1, then independent semantic review:
 
    ```bash
-   python scripts/plan_linter.py --tasks-dir tasks --repo-root . --spec .specs/02-tech-spec.md --changes-dir .specs/changes
-   python scripts/lint_change.py --change-id CHG-001-rate-limit --repo-root .
+   # Run from the repository root. The Gate 1 helper requires the plan-linter skill to be installed.
+   python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks --repo-root . --spec .specs/02-tech-spec.md --changes-dir .specs/changes
+   python .agents/skills/change/scripts/lint_change.py --change-id CHG-001-rate-limit --repo-root .
    ```
 
    Gate 1 must pass before implementation; Gate 2 must not report `BLOCKED` or `REQUEST CHANGES`.

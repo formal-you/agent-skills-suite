@@ -1,0 +1,441 @@
+name: Quality Engineering Gate
+
+# Master CI Quality Gate Workflow Template (Python reference implementation)
+# Maintained by the quality-engineering skill for building CI pipelines, configuring
+# test environments, and managing pre-merge and post-merge automated verification.
+# For other stacks, adapt the toolchain/install/acceptance/mutation blocks from
+# profiles/ (Node, Go, Java, Rust, .NET, C/C++) and keep the invariant jobs.
+#   1. BDD Executable Specifications & Contract Validation (Gate 1 - plan_linter.py)
+#   2. Cyclomatic Complexity (McCabe V(G) <= 10) & Basis Path Testing
+#   3. Mutation Testing & MSI Kill Ratio Audit (MSI >= 80% - Gate 3 verification_linter.py)
+#   4. Authoritative Role Separation & RBAC Audit (scripts/rbac_audit.py)
+#   5. Acceptance Test Suite Execution (tests/acceptance/**)
+#
+# Copy this file to .github/workflows/quality-gate.yml in the adopting repository.
+# See README.md in this directory for installation, configuration, and troubleshooting.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-gate-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Stage 1: Gate 1 Plan Linter & BDD Contract Validation
+  # Checks: 01-contract format, YAML frontmatter, BDD Given-When-Then scenarios,
+  #         Goldilocks task sizing (50-250 lines, 1-3 files), DAG acyclicity,
+  #         spec anchor coverage (#sec-*), zero unresolved placeholders.
+  # ---------------------------------------------------------------------------
+  gate1-plan-linter:
+    name: Gate 1 - BDD & Plan Linter
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run Gate 1 Plan Linter
+        shell: bash
+        run: |
+          set -uo pipefail
+          status=0
+          if [ -d "tasks" ]; then
+            spec_arg=""
+            if [ -f ".specs/02-tech-spec.md" ]; then
+              spec_arg="--spec .specs/02-tech-spec.md"
+            fi
+            python .agents/skills/plan-linter/scripts/plan_linter.py \
+              --tasks-dir tasks \
+              $spec_arg \
+              --json > plan-lint-report.json 2> plan-lint-error.log || status=$?
+          else
+            echo '{"status": "skipped", "message": "No tasks directory found"}' > plan-lint-report.json
+          fi
+
+          {
+            echo "## Gate 1 Plan Linter Report"
+            echo ""
+            echo '```json'
+            if [ -s plan-lint-report.json ]; then
+              cat plan-lint-report.json
+            else
+              cat plan-lint-error.log
+            fi
+            echo '```'
+            echo ""
+            if [ "$status" -eq 0 ]; then
+              echo "Result: **PASSED**"
+            else
+              echo "Result: **FAILED** (exit $status)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -s plan-lint-report.json ]; then cat plan-lint-report.json; fi
+          if [ -s plan-lint-error.log ]; then cat plan-lint-error.log >&2; fi
+          exit "$status"
+
+  # ---------------------------------------------------------------------------
+  # Stage 2: RBAC Role Separation Audit (Authoritative L1 Enforcement)
+  # Checks: Role write boundaries across PR diff:
+  #         Dev never edits tests/acceptance/**; QA never edits src/**;
+  #         Planner never edits implementation or tests.
+  # ---------------------------------------------------------------------------
+  rbac-audit:
+    name: RBAC - Role Boundary Audit
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Audit role permissions across pull request diff
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RBAC_ROLE: ${{ vars.RBAC_ROLE }}
+        run: |
+          set -uo pipefail
+          args=(--base "$BASE_SHA" --head "$HEAD_SHA" --tasks-dir tasks --json)
+          if [ -n "${RBAC_ROLE:-}" ]; then
+            args+=(--role "$RBAC_ROLE")
+          fi
+          status=0
+          python .agents/skills/quality-engineering/scripts/rbac_audit.py "${args[@]}" > rbac-report.json 2> rbac-error.log || status=$?
+          {
+            echo "## RBAC Audit Report"
+            echo ""
+            echo '```json'
+            if [ -s rbac-report.json ]; then cat rbac-report.json; else cat rbac-error.log; fi
+            echo '```'
+            echo ""
+            if [ "$status" -eq 0 ]; then
+              echo "Result: **PASSED**"
+            else
+              echo "Result: **FAILED** (exit $status)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -s rbac-report.json ]; then cat rbac-report.json; fi
+          if [ -s rbac-error.log ]; then cat rbac-error.log >&2; fi
+          exit "$status"
+
+  # ---------------------------------------------------------------------------
+  # Stage 3: Cyclomatic Complexity (McCabe) Static Check
+  # Checks: Single-function McCabe complexity limits:
+  #         V(G) <= 10 (Standard / Approved)
+  #         11 <= V(G) <= 15 (Warning / Architectural justification needed)
+  #         V(G) > 15 (Critical / Strictly prohibited, block build)
+  # ---------------------------------------------------------------------------
+  complexity-gate:
+    name: Complexity - McCabe V(G) Static Check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Tree-sitter & Lizard Multi-Language Parsers
+        run: |
+          python -m pip install --upgrade pip
+          pip install "tree-sitter<0.22" tree-sitter-languages lizard
+
+      - name: Inspect Cyclomatic Complexity (Tree-sitter Multi-Language Engine)
+        shell: bash
+        run: |
+          set -uo pipefail
+          status=0
+          mkdir -p artifacts
+          echo "Auditing Cyclomatic Complexity (Tree-sitter multi-language engine, McCabe V(G) <= 10)..."
+
+          python .agents/skills/quality-engineering/scripts/complexity_check.py \
+            --src-dir src \
+            --json > artifacts/complexity-report.json 2> artifacts/complexity-error.log || status=$?
+
+          {
+            echo "## Cyclomatic Complexity (McCabe) Report"
+            echo ""
+            echo '```json'
+            if [ -s artifacts/complexity-report.json ]; then
+              cat artifacts/complexity-report.json
+            else
+              cat artifacts/complexity-error.log
+            fi
+            echo '```'
+            echo ""
+            if [ "$status" -eq 0 ]; then
+              echo "Result: **PASSED** (all functions meet V(G) <= 15, standard <= 10)"
+            else
+              echo "Result: **FAILED** (functions detected with critical V(G) > 15)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -s artifacts/complexity-report.json ]; then cat artifacts/complexity-report.json; fi
+          if [ -s artifacts/complexity-error.log ]; then cat artifacts/complexity-error.log >&2; fi
+          exit "$status"
+
+      - name: Upload Complexity Artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complexity-report
+          path: artifacts/complexity-report.json
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # Stage 4: Acceptance Test Suite Execution
+  # Checks: Executes black-box acceptance tests (tests/acceptance/**) derived
+  #         from BDD Given-When-Then scenarios. Requires 100% test pass.
+  # ---------------------------------------------------------------------------
+  acceptance-tests:
+    name: Acceptance - Test Suite Execution
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install project dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f requirements.txt ]; then
+            python -m pip install -r requirements.txt
+          fi
+          if [ -f pyproject.toml ]; then
+            python -m pip install -e .
+          fi
+          if [ -f package.json ] && [ -f package-lock.json ]; then
+            npm ci
+          fi
+          if [ -f go.mod ]; then
+            go mod download
+          fi
+          if [ -f Cargo.toml ]; then
+            cargo fetch
+          fi
+
+      - name: Environment readiness (collect acceptance tests)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -d tests/acceptance ]; then
+            echo "No tests/acceptance directory; acceptance gate cannot run." >&2
+            exit 1
+          fi
+          if python -c "import pytest" >/dev/null 2>&1; then
+            python -m pytest --collect-only -q tests/acceptance
+          else
+            python -m unittest discover -s tests/acceptance -v
+          fi
+
+      - name: Run acceptance test suite
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p artifacts
+          status=0
+          if python -c "import pytest" >/dev/null 2>&1; then
+            args=(-q --junitxml=artifacts/acceptance-junit.xml)
+            if python -c "import pytest_socket" >/dev/null 2>&1; then
+              args+=(--disable-socket)
+            else
+              echo "NETWORK_ISOLATION=advisory (install pytest-socket for hard blocking)"
+            fi
+            python -m pytest tests/acceptance "${args[@]}" 2>&1 | tee acceptance-test.log || status=$?
+          else
+            python -m unittest discover -s tests/acceptance -v 2>&1 | tee acceptance-test.log || status=$?
+          fi
+
+          {
+            echo "## Acceptance Test Suite Results"
+            echo ""
+            echo '```'
+            tail -n 25 acceptance-test.log
+            echo '```'
+            echo ""
+            if [ "$status" -eq 0 ]; then
+              echo "Result: **PASSED**"
+            else
+              echo "Result: **FAILED** (exit $status)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Upload acceptance artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-report
+          path: |
+            acceptance-test.log
+            artifacts/acceptance-junit.xml
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Stage 5: Gate 3 Verification Linter & Mutation Score Audit
+  # Checks: Audits 03-qa-verification.md when signed off with QA_PASSED:
+  #         - Basis Path Test Cases >= actual AST V(G) for modified functions
+  #         - Cross-validates Section 3 V(G) against the uploaded AST artifact
+  #         - Mutation Testing table consistency & MSI >= 80% (MSI >= 90% core)
+  # ---------------------------------------------------------------------------
+  gate3-verification:
+    name: Gate 3 - Acceptance & MSI Audit
+    runs-on: ubuntu-latest
+    needs: [gate1-plan-linter, rbac-audit, complexity-gate, acceptance-tests]
+    if: |
+      always() &&
+      needs.gate1-plan-linter.result == 'success' &&
+      needs.complexity-gate.result == 'success' &&
+      needs.acceptance-tests.result == 'success' &&
+      (needs.rbac-audit.result == 'success' || needs.rbac-audit.result == 'skipped')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Download complexity artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: complexity-report
+          path: artifacts
+
+      - name: Run Gate 3 Verification Linter (cross-validated with AST report)
+        shell: bash
+        run: |
+          set -uo pipefail
+          status=0
+          if [ -d "tasks" ]; then
+            python .agents/skills/quality-engineering/scripts/verification_linter.py \
+              --tasks-dir tasks \
+              --actual-complexity artifacts/complexity-report.json \
+              --require-actual-complexity \
+              --strict --json > verification-report.json 2> verification-error.log || status=$?
+          else
+            echo '{"status": "skipped", "message": "No tasks directory found"}' > verification-report.json
+          fi
+
+          {
+            echo "## Gate 3 Verification & MSI Audit Report"
+            echo ""
+            echo '```json'
+            if [ -s verification-report.json ]; then
+              cat verification-report.json
+            else
+              cat verification-error.log
+            fi
+            echo '```'
+            echo ""
+            if [ "$status" -eq 0 ]; then
+              echo "Result: **PASSED** (Basis paths >= AST V(G) and MSI >= 80% confirmed)"
+            else
+              echo "Result: **FAILED** (exit $status)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ -s verification-report.json ]; then cat verification-report.json; fi
+          if [ -s verification-error.log ]; then cat verification-error.log >&2; fi
+          exit "$status"
+
+      - name: Upload Gate 3 report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gate3-report
+          path: |
+            verification-report.json
+            verification-error.log
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Stage 6: Active Mutation Testing (fail-closed)
+  # Runs the project's MUTATION_COMMAND and enforces the normalized report and
+  # MSI threshold. A missing command or report fails the build; it never skips.
+  # ---------------------------------------------------------------------------
+  mutation-active-check:
+    name: Mutation - Active Kill Ratio Check
+    runs-on: ubuntu-latest
+    needs: [acceptance-tests]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install project dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f requirements.txt ]; then
+            python -m pip install -r requirements.txt
+          fi
+          if [ -f pyproject.toml ]; then
+            python -m pip install -e .
+          fi
+          if [ -f package.json ] && [ -f package-lock.json ]; then
+            npm ci
+          fi
+          if [ -f go.mod ]; then
+            go mod download
+          fi
+          if [ -f Cargo.toml ]; then
+            cargo fetch
+          fi
+
+      - name: Run mutation hard gate
+        shell: bash
+        env:
+          MUTATION_COMMAND: ${{ vars.MUTATION_COMMAND }}
+        run: |
+          set -uo pipefail
+          if [ -z "${MUTATION_COMMAND:-}" ]; then
+            echo "MUTATION_COMMAND repository variable is required; mutation gate is fail-closed." >&2
+            exit 1
+          fi
+          mkdir -p artifacts
+          python .agents/skills/quality-engineering/scripts/mutation_gate.py run \
+            --command "$MUTATION_COMMAND" \
+            --report artifacts/mutation-report.json \
+            --min-msi 80
+
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-report
+          path: artifacts/mutation-report.json
+          if-no-files-found: warn

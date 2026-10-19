@@ -1,0 +1,43 @@
+# Reference profile: Python
+# Copy/adapt these blocks into your quality-gate workflow. Python is also the
+# canonical reference implemented by quality-gate.yml.
+stack: python
+display_name: "Python"
+
+toolchain:
+  setup:
+    - "uses: actions/setup-python@v5"
+    - "with: {python-version: \"3.12\"}"
+  setup_notes: "Use a version matrix when the project supports multiple Python versions."
+
+install:
+  - "python -m pip install --upgrade pip"
+  - "if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi"
+  - "if [ -f pyproject.toml ]; then python -m pip install -e .; fi"
+
+acceptance:
+  command: "python -m pytest tests/acceptance -q --junitxml=artifacts/acceptance-junit.xml"
+  junit: "artifacts/acceptance-junit.xml"
+  alternatives:
+    - "python -m unittest discover -s tests/acceptance -v"
+  bdd_tools: ["pytest-bdd", "behave"]
+
+mutation:
+  tool: "mutmut"
+  command: "mutmut run --paths-to-mutate src"
+  raw_report: "mutmut results (text) or .mutmut-cache"
+  report: "artifacts/mutation-report.json"
+  adapter: "Parse mutmut results into targets[]; write one target per source file."
+  min_msi: 80
+
+complexity:
+  command: "python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src --json"
+  engines: ["tree-sitter", "lizard", "ast"]
+  source: "src"
+
+services: []
+
+notes:
+  - "Gate 3 cross-checks 03 Section 3 against the complexity JSON."
+  - "If acceptance uses PostgreSQL/Redis/Kafka, add services: or testcontainers; do not assume a local daemon."
+  - "Core modules should declare risk_level: core in 01-contract.md (90% MSI floor)."
