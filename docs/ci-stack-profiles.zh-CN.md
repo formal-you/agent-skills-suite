@@ -38,16 +38,17 @@
 机器可读目录：`profiles/index.json`。  
 配置形状示例：`quality-gate.config.example.json`。
 
-> Profile 是**参考片段**，不是可直接运行的完整 workflow；`quality-gate.yml` 仍是 Python 的 canonical 参考。
+> Profile 是**参考片段**，不是可直接运行的完整 workflow；`quality-gate.yml` 仍是 Python 的 canonical 参考。直接把 Python workflow 原样复制到 Node/Go/Rust/.NET/C++/Java 仓库不算采纳：必须把所选 profile 的真实 BDD runner 与变异工具命令**合并进** workflow，同时保留全部不变量 job。
 
 ## 3. 采纳步骤
 
 1. 根据技术栈选择 profile。
-2. 把 profile 的 `toolchain.setup`、`install`、`acceptance`、`mutation` 块复制进你的 `quality-gate.yml`（或项目自己的 CI）。
-3. 为变异工具实现归一化报告 adapter（见 §4）。
+2. 把 profile 的 `toolchain.setup`、`install`、`acceptance`、`mutation` 块**合并**进你的 `quality-gate.yml`（或项目自己的 CI），替换 Python 参考命令。
+3. 为变异工具实现归一化报告 adapter（见 §4），并把 `quality-gate.config.example.json` 复制为仓库根目录的 `quality-gate.config.json`，填入真实的 `mutation.command`、保持 `mutation.report` 为 `artifacts/mutation-report.json`。
 4. 如果验收依赖真实中间件，增加 `services:` 或 testcontainers（见 §5）。
-5. 保留 Gate 1、RBAC、complexity、Gate 3、artifact 上传/下载和 fail-closed 语义。
-6. 先跑通本项目 CI，再把它设为 required status checks。
+5. 保留 Gate 1、RBAC、complexity、Gate 3、artifact 上传/下载和 fail-closed 语义；PR 阶段必须真实运行变异门禁（`pull_request` 与 `push` 都触发），不得退回“仅合并后运行”。
+6. 给 Gate 3 增加 `--actual-mutation artifacts/mutation-report.json --require-actual-mutation`，让 `03` 中的 MSI/计数与真实报告交叉核验。
+7. 先跑通本项目 CI，再把它设为 required status checks（变异 job 必须是 PR 必过检查）。
 
 ## 4. 变异报告 adapter 契约
 
@@ -81,6 +82,16 @@
 
 Adapter 属于项目（或 profile 的使用者），不属于通用门禁；它只做格式转换，不改变击杀结果。
 
+## 4.1 配置驱动的变异命令（替代空 `MUTATION_COMMAND` 变量）
+
+模板不再依赖“仓库变量恰好已配置”。变异 job 在 `pull_request` 与 `push` 上按以下顺序解析命令：
+
+1. 仓库提交的 `quality-gate.config.json` → `mutation_gate.py run --config <path>`（读取 `mutation.command`、`mutation.report`、`mutation.min_msi`；`schema_version` 必须为 `1`）；
+2. 否则使用 `MUTATION_COMMAND` 仓库变量（回退路径）；
+3. 两者都没有 → 直接失败并给出可操作提示。
+
+显式 CLI 参数（`--command`/`--report`/`--min-msi`）优先于配置值，配置值优先于默认值。PR 阶段变异是**强制且 fail-closed**：缺命令、命令非零退出、报告缺失/不可解析、MSI 低于阈值都会让 PR 失败，绝不跳过。`run` 在既无 `--command` 也无 `mutation.command` 时以 usage 退出码 `2` 失败关闭，绝不执行空命令。把 `quality-gate.config.json` 随代码一起评审，比不可审计的仓库变量更可取。
+
 ## 5. Mock 还是真实中间件
 
 这与 `qa` 的黑盒策略一致：
@@ -95,15 +106,16 @@ Adapter 属于项目（或 profile 的使用者），不属于通用门禁；它
 
 **已具备**
 
-- 门禁顺序、fail-closed 语义、artifact 交叉核验；
+- 门禁顺序、fail-closed 语义、artifact 交叉核验（AST + 归一化变异报告）；
+- PR 阶段真实变异门禁（`pull_request` 与 `push` 都运行），配置驱动且失败关闭；
 - Python 参考实现可直接用；
 - 各栈 setup/install/验收/变异的参考片段；
-- 归一化变异报告契约与 `mutation_gate.py`；
+- 归一化变异报告契约与 `mutation_gate.py`（支持 `--config`）；
 - `triage-routing.md` 错误码路由。
 
 **仍不提供**
 
-- 一个能自动识别所有栈并运行的统一 workflow；
+- 一个能自动识别所有栈并运行的统一 workflow（profile 仍需人工合并）；
 - 内置 `services:` 或容器编排；
 - 各栈 mutation adapter 的完整实现；
 - 在真实多语言项目上的端到端验证。

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Plan Linter v2 - Gate 1 deterministic static checker for task bundles.
+"""Plan Linter v4 - Gate 1 deterministic static checker for task bundles.
 
 Contract format: YAML frontmatter first (a small stdlib YAML subset), with a
 legacy Markdown-table fallback for pre-v2 Chinese/English contracts.
@@ -10,6 +10,13 @@ task DAG. It never audits QA complexity/mutation evidence in
 quality-engineering/verification_linter.py. Scanning 03 for unresolved
 placeholders and checking that the four documents exist are allowed and remain
 in scope.
+
+v4 adds hard BDD enforcement: contracts must declare a Gherkin feature file
+(`dod.feature_file`) under an allowed acceptance prefix and, unless
+`require_gherkin_block` is disabled, Section 4 must contain a fenced ```gherkin
+block with one `Feature:` line and at least two `Scenario:` blocks, each with
+Given/When/Then clauses. Legacy Markdown-table contracts receive warnings for
+BDD block/feature problems instead of hard findings.
 
 Exit codes:
   0  every bundle passed
@@ -29,7 +36,7 @@ import re
 import sys
 from pathlib import Path
 
-VERSION = "3.0.0"
+VERSION = "4.0.0"
 
 EXIT_PASS = 0
 EXIT_VIOLATIONS = 1
@@ -55,6 +62,9 @@ DEFAULT_CONFIG = {
     "check_topology": True,
     "strict_topology": False,
     "ignore_task_dirs": ["archive"],
+    "require_feature_file": True,
+    "feature_allowed_prefixes": ["tests/acceptance/"],
+    "require_gherkin_block": True,
 }
 
 CONFIG_TYPES = {
@@ -72,6 +82,9 @@ CONFIG_TYPES = {
     "check_topology": bool,
     "strict_topology": bool,
     "ignore_task_dirs": list,
+    "require_feature_file": bool,
+    "feature_allowed_prefixes": list,
+    "require_gherkin_block": bool,
 }
 
 ANCHOR_RE = re.compile(r"#sec-[a-z0-9-]+$")
@@ -90,6 +103,17 @@ GHERKIN_PREFIXED_RE = re.compile(
     r"^(?:Scenario:\s*(?P<scenario>.+?)\s*\|\s*)?Given\s+(?P<given>.+?),\s+When\s+(?P<when>.+?),\s+Then\s+(?P<then>.+?)$",
     re.IGNORECASE,
 )
+GHERKIN_FENCE_OPEN_RE = re.compile(r"^\s*```\s*gherkin\s*$", re.IGNORECASE)
+GHERKIN_FENCE_CLOSE_RE = re.compile(r"^\s*```\s*$")
+GHERKIN_FEATURE_RE = re.compile(r"^\s*Feature\s*:\s*(?P<name>.*)$", re.IGNORECASE)
+GHERKIN_SCENARIO_RE = re.compile(
+    r"^\s*(?:Scenario\s*(?:Outline)?|Example)\s*:\s*(?P<title>.*)$",
+    re.IGNORECASE,
+)
+GHERKIN_GIVEN_RE = re.compile(r"^\s*Given\s+(?P<value>.*)$", re.IGNORECASE)
+GHERKIN_WHEN_RE = re.compile(r"^\s*When\s+(?P<value>.*)$", re.IGNORECASE)
+GHERKIN_THEN_RE = re.compile(r"^\s*Then\s+(?P<value>.*)$", re.IGNORECASE)
+FEATURE_EXTENSION = ".feature"
 
 
 class UsageError(Exception):
@@ -365,6 +389,8 @@ def contract_from_frontmatter(mapping, text, warnings):
             "type_check": _as_string(dod.get("type_check")),
             "lint": _as_string(dod.get("lint")),
             "test_file": _as_string(dod.get("test_file")),
+            "feature_file": _as_string(dod.get("feature_file")),
+            "step_definitions": _as_string(dod.get("step_definitions")),
             "edge_cases": edge_cases,
         }
     return contract
@@ -623,7 +649,8 @@ def _lint_bdd_edge_cases(task_name, contract_file, text, edge_cases, findings, w
                     )
 
 
-def _lint_bdd_section4_scenarios(task_name, contract_file, text, findings):
+def _section4_lines(text):
+    """Return [(line_no, line)] for the body of Section 4 ("## 4.") only."""
     lines = text.splitlines()
     in_sec4 = False
     sec4_lines = []
@@ -636,6 +663,12 @@ def _lint_bdd_section4_scenarios(task_name, contract_file, text, findings):
             if stripped.startswith("## ") and not stripped.startswith("## 4."):
                 break
             sec4_lines.append((line_no, line))
+    return sec4_lines
+
+
+def _lint_bdd_section4_scenarios(task_name, contract_file, text, findings):
+    """Legacy Markdown-bullet Scenario parser (active when require_gherkin_block is false)."""
+    sec4_lines = _section4_lines(text)
 
     scenarios = []
     current = None
@@ -702,6 +735,234 @@ def _lint_bdd_section4_scenarios(task_name, contract_file, text, findings):
 
 
 
+
+
+def _extract_gherkin_block(sec4_lines):
+    """Return the content of the first fenced ```gherkin block in Section 4, or None.
+
+    The returned dict has the opening fence line number and the block's lines as
+    (line_no, text) pairs. An unclosed fence is treated as an invalid block that
+    ends at the last Section 4 line so its content can still be inspected.
+    """
+    start_line = None
+    block_lines = []
+    for line_no, line in sec4_lines:
+        if start_line is None:
+            if GHERKIN_FENCE_OPEN_RE.match(line):
+                start_line = line_no
+            continue
+        if GHERKIN_FENCE_CLOSE_RE.match(line):
+            return {"line": start_line, "lines": block_lines, "closed": True}
+        block_lines.append((line_no, line))
+    if start_line is None:
+        return None
+    return {"line": start_line, "lines": block_lines, "closed": False}
+
+
+def _parse_gherkin_block(block_lines):
+    """Extract the Feature name and Scenario blocks from fenced Gherkin content."""
+    feature = None
+    feature_line = 0
+    scenarios = []
+    current = None
+    clause_regexes = (
+        ("given", GHERKIN_GIVEN_RE),
+        ("when", GHERKIN_WHEN_RE),
+        ("then", GHERKIN_THEN_RE),
+    )
+    for line_no, line in block_lines:
+        stripped = line.strip()
+        feature_match = GHERKIN_FEATURE_RE.match(stripped)
+        if feature_match:
+            if feature is None:
+                feature = feature_match.group("name").strip()
+                feature_line = line_no
+            continue
+        scenario_match = GHERKIN_SCENARIO_RE.match(stripped)
+        if scenario_match:
+            if current is not None:
+                scenarios.append(current)
+            title = scenario_match.group("title").strip()
+            current = {
+                "title": title or "(untitled)",
+                "line": line_no,
+                "given": None,
+                "when": None,
+                "then": None,
+            }
+            continue
+        if current is None:
+            continue
+        for clause, regex in clause_regexes:
+            clause_match = regex.match(stripped)
+            if clause_match:
+                value = clause_match.group("value").strip()
+                if value and not current.get(clause):
+                    current[clause] = value
+                break
+    if current is not None:
+        scenarios.append(current)
+    return {"feature": feature, "feature_line": feature_line, "scenarios": scenarios}
+
+
+def _bdd_sink(task_name, contract_file, contract, findings, warnings):
+    """Legacy contracts report BDD block/feature problems as warnings, never errors."""
+
+    def add(code, message, line):
+        if contract.get("format") == "legacy":
+            if warnings is not None:
+                warnings.append(
+                    {
+                        "task": task_name,
+                        "code": code,
+                        "message": message,
+                        "file": contract_file,
+                        "line": line,
+                    }
+                )
+            return
+        findings.append(Finding(task_name, code, message, contract_file, line))
+
+    return add
+
+
+def _lint_bdd_gherkin_section(task_name, contract_file, text, contract, config, findings, warnings):
+    """Validate the fenced Gherkin block in Section 4.
+
+    With require_gherkin_block enabled the fenced block is mandatory: a missing
+    block yields BDD_GHERKIN_BLOCK_MISSING and suppresses per-scenario findings.
+    With it disabled the pre-v4 Markdown-bullet parser keeps working.
+    """
+    add = _bdd_sink(task_name, contract_file, contract, findings, warnings)
+    sec4_lines = _section4_lines(text)
+    block = _extract_gherkin_block(sec4_lines)
+    if block is None:
+        if config.get("require_gherkin_block", True):
+            add(
+                "BDD_GHERKIN_BLOCK_MISSING",
+                "Section 4 must contain a fenced ```gherkin block with one Feature line"
+                " and at least two Scenario blocks",
+                (sec4_lines[0][0] if sec4_lines else _line_of(text, "## 4.")) or 1,
+            )
+            return
+        legacy_findings = []
+        _lint_bdd_section4_scenarios(task_name, contract_file, text, legacy_findings)
+        for finding in legacy_findings:
+            add(finding.code, finding.message, finding.line)
+        return
+
+    parsed = _parse_gherkin_block(block["lines"])
+    if not parsed["feature"]:
+        add(
+            "BDD_GHERKIN_INVALID",
+            "Gherkin block has no non-empty 'Feature:' line",
+            block["line"],
+        )
+    scenarios = parsed["scenarios"]
+    if not block["closed"]:
+        add(
+            "BDD_GHERKIN_INVALID",
+            "Gherkin block has no closing ``` fence",
+            block["line"],
+        )
+    if len(scenarios) < 2:
+        add(
+            "BDD_GHERKIN_INVALID",
+            "Gherkin block has %d Scenario block(s); at least 2 are required" % len(scenarios),
+            block["line"],
+        )
+    for scenario in scenarios:
+        title = scenario["title"]
+        line = scenario["line"]
+        if not scenario.get("given"):
+            add(
+                "BDD_MISSING_PRECONDITION",
+                "Scenario %r in the Gherkin block is missing a Given clause" % title,
+                line,
+            )
+        if not scenario.get("when"):
+            add(
+                "BDD_MISSING_ACTION",
+                "Scenario %r in the Gherkin block is missing a When clause" % title,
+                line,
+            )
+        if not scenario.get("then"):
+            add(
+                "BDD_MISSING_OUTCOME",
+                "Scenario %r in the Gherkin block is missing a Then clause" % title,
+                line,
+            )
+
+
+def _normalize_path(value):
+    return value.replace("\\", "/").strip()
+
+
+def _under_prefix(normalized, prefixes):
+    lowered = normalized.lstrip("./").lower()
+    for prefix in prefixes or []:
+        candidate = _normalize_path(prefix).lstrip("./").lower()
+        if candidate and lowered.startswith(candidate):
+            return True
+    return False
+
+
+def _lint_bdd_acceptance_targets(task_name, contract_file, text, contract, config, findings, warnings):
+    """Enforce dod.feature_file, dod.step_definitions and a non-feature dod.test_file."""
+    add = _bdd_sink(task_name, contract_file, contract, findings, warnings)
+    dod = contract.get("dod") or {}
+
+    test_file = dod.get("test_file")
+    if test_file and _normalize_path(test_file).lower().endswith(FEATURE_EXTENSION):
+        add(
+            "BDD_FEATURE_FILE_EXTENSION",
+            "dod.test_file must be the BDD runner/test target, not the feature file: " + test_file,
+            _line_of(text, "test_file"),
+        )
+
+    feature_file = dod.get("feature_file")
+    if not feature_file:
+        if config.get("require_feature_file", True):
+            add(
+                "MISSING_FEATURE_FILE",
+                "dod.feature_file is required and must name a .feature file under"
+                " the configured acceptance prefix (default: tests/acceptance/)",
+                _line_of(text, "dod"),
+            )
+    else:
+        normalized = _normalize_path(feature_file)
+        if not normalized.lower().endswith(FEATURE_EXTENSION):
+            add(
+                "BDD_FEATURE_FILE_EXTENSION",
+                "dod.feature_file must end with .feature: " + feature_file,
+                _line_of(text, "feature_file"),
+            )
+        prefixes = config.get("feature_allowed_prefixes") or []
+        if not _under_prefix(normalized, prefixes):
+            add(
+                "FEATURE_FILE_OUTSIDE_ACCEPTANCE",
+                "dod.feature_file must be under %s: %s"
+                % (", ".join(prefixes) or "(no allowed prefixes configured)", feature_file),
+                _line_of(text, "feature_file"),
+            )
+
+    step_definitions = dod.get("step_definitions")
+    if step_definitions is not None:
+        normalized = _normalize_path(step_definitions)
+        if not normalized:
+            add(
+                "BDD_STEP_DEFINITIONS_INVALID",
+                "dod.step_definitions must be a non-empty path when present;"
+                " omit the key when the project has no glue-code layer",
+                _line_of(text, "step_definitions"),
+            )
+        elif normalized.lower().endswith(FEATURE_EXTENSION):
+            add(
+                "BDD_STEP_DEFINITIONS_INVALID",
+                "dod.step_definitions must be the glue code for the BDD runner, not the"
+                " feature file: " + step_definitions,
+                _line_of(text, "step_definitions"),
+            )
 
 
 def _validate_contract(task_dir, contract, text, config, findings, warnings=None):
@@ -915,7 +1176,12 @@ def _validate_contract(task_dir, contract, text, config, findings, warnings=None
             )
         )
     _lint_bdd_edge_cases(task_name, contract_file, text, edge_cases, findings, warnings)
-    _lint_bdd_section4_scenarios(task_name, contract_file, text, findings)
+    _lint_bdd_acceptance_targets(
+        task_name, contract_file, text, contract, config, findings, warnings
+    )
+    _lint_bdd_gherkin_section(
+        task_name, contract_file, text, contract, config, findings, warnings
+    )
 
     for doc_name in config["require_docs"]:
         if not (task_dir / doc_name).is_file():
@@ -1198,6 +1464,7 @@ def load_config(path):
     config = dict(DEFAULT_CONFIG)
     config["require_docs"] = list(DEFAULT_CONFIG["require_docs"])
     config["forbidden_touch_prefixes"] = list(DEFAULT_CONFIG["forbidden_touch_prefixes"])
+    config["feature_allowed_prefixes"] = list(DEFAULT_CONFIG["feature_allowed_prefixes"])
     warnings = []
     if not path:
         return config, warnings

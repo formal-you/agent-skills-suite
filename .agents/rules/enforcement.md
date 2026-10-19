@@ -24,6 +24,11 @@ rules layer as optional context and work without it.
 | Reviewer (Gate 2) | `reviewer.md` | none (read-only semantic audit) | `.specs/`, `tasks/`, `src/`, `tests/` |
 | Orchestrator / Lead | `orchestrator.md` | coordination artifacts only (task board, status, routing notes) | all role documents, `.specs/`, `src/`, `tests/`, `tasks/` |
 
+**Task branch note.** Dev, QA and the orchestrator work on the dedicated task branch recorded in
+the `Branch` row of `02-dev-workspace.md` (`feat/<task-id>` or `task/<task-id>`); the protected
+trunks (`main`/`master`) are integration targets only. The write scopes above never authorize work
+on a protected branch.
+
 ## Gate 2 reviewer
 
 The reviewer is the read-only semantic gate between planning and implementation:
@@ -44,7 +49,9 @@ The orchestrator routes work and enforces the pipeline order; it does not author
 1. PRD → spec → task bundles → Gate 1 → Gate 2 → Dev → QA;
 2. one owner per task, dependencies for ordering;
 3. evidence required for completion (gate report, test output, verdict);
-4. escalate or split on blockers instead of bypassing a gate.
+4. escalate or split on blockers instead of bypassing a gate;
+5. every Dev/QA dispatch names the dedicated task branch (never a protected trunk), and a
+   handoff without a recorded branch is rejected.
 
 ## The 4-document task bundle
 
@@ -90,12 +97,33 @@ the box state; nothing else should be added. The derived mapping is:
 first real event is written only after a role checks a lifecycle box. Dev/QA working steps and the
 initial state are detailed in `task-decomposition/references/role-lifecycle.md`.
 
+## Branch isolation
+
+Every task runs on its own branch: Dev derives `feat/<task-id>` (or `task/<task-id>`) from an
+up-to-date base, implements and commits there, and records the branch in `02-dev-workspace.md`;
+QA checks out that same branch and signs off there; only then is the branch pushed, sent through
+the CI gates and merged. The protected trunks (`main`/`master`) are integration targets and are
+never a working branch.
+
+| Layer | Mechanism | Guarantee |
+| :--- | :--- | :--- |
+| L0 | Branch rules in `dev.md`, `qa.md` and `orchestrator.md` | advisory; depends on the agent following instructions |
+| L1 | `quality-engineering` skill's `branch_guard.py` in CI (`rbac-gate.yml` or the project's quality workflow) | authoritative for the pull request head branch: rejects a protected branch, an invalid branch name, a detached checkout and a mismatch with the declared branch |
+| L2 | Branch protection / CODEOWNERS with the guard as a required check | authoritative; blocks the merge |
+
+The guard reads the branch name locally from `git rev-parse --abbrev-ref HEAD` and in CI from
+`github.head_ref || github.ref_name`; it never mutates git state. Like the other prompt rules, the
+L0 branch rules are **not** physical enforcement: L1 plus branch protection and repository
+permissions are authoritative. The lifecycle, CLI and the migration runbook for work already
+committed on trunk live in
+`.agents/skills/quality-engineering/references/branch-isolation.md`.
+
 ## Enforcement layers (honest model)
 
 | Layer | Mechanism | Applies to | Guarantee |
 | :--- | :--- | :--- | :--- |
 | L0 | Prompt rules (this page, `AGENTS.md`, `.agents/rules/*.md`) | every agent/harness | advisory; depends on the agent following instructions |
-| L1 | `quality-engineering` skill's `rbac_audit.py` in CI | every harness with git | authoritative for committed changes |
+| L1 | `quality-engineering` skill's `rbac_audit.py` and `branch_guard.py` in CI | every harness with git | authoritative for committed changes and the pull request branch |
 | L2 | Branch protection / CODEOWNERS | repository settings | authoritative |
 
 Prompt rules are **not** physical enforcement and must not be described as such. The authoritative
@@ -106,15 +134,18 @@ host-side hook adapter; adopters may add local hooks, but they are best-effort a
 ## What each role must never do
 
 - The **planner** never writes source, tests or `04`; it also never fills `02`/`03` for other roles.
-- **Dev** never edits tests, the contract, QA's report or the process file.
-- **QA** never edits source, Dev's workspace, the contract or the process file.
+- **Dev** never edits tests, the contract, QA's report or the process file; it also never commits
+  or hands off on a protected trunk or on a branch other than the recorded one.
+- **QA** never edits source, Dev's workspace, the contract or the process file; it also never
+  verifies, signs off or commits on a protected trunk or on a branch other than the recorded one.
 - **Test Engineering** never accepts an individual task, writes tests or `03-qa-verification.md`,
   edits source, or runs CI gates; it only writes the agreed test-strategy document and test-design
   review notes, and its `DESIGN_READY`/`DESIGN_GAPS` marker is not a task verdict.
 - **Architect** never invents domain content and never edits source, tests, tasks or the PRD.
 - **PM** never edits architecture, tasks, source or tests.
 - **Reviewer** never edits artifacts, weakens Gate 1, or rewrites a contract to make it pass.
-- **Orchestrator** never implements, writes tests/specs, fills role documents or bypasses a gate.
+- **Orchestrator** never implements, writes tests/specs, fills role documents or bypasses a gate;
+  it also never dispatches Dev/QA work to a protected trunk.
 
 If an action is outside your write scope, escalate to the owner instead of editing; a scope conflict
 is a planning signal, not a licence.
@@ -131,5 +162,7 @@ is a planning signal, not a licence.
 - `.agents/skills/qa/SKILL.md` — QA black-box verification, evidence and verdict workflow.
 - `.agents/skills/test-engineering/SKILL.md` — repository-wide test strategy, test-design standards
   and independent test-design review (design markers only, never a task verdict).
+- `.agents/skills/quality-engineering/references/branch-isolation.md` — task branch lifecycle, the
+  `branch_guard.py` CLI and the migration runbook for work already committed on trunk.
 
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)

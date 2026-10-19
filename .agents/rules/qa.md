@@ -29,6 +29,12 @@ The QA role focuses on **local development stage testing** before submitting cod
 ## Must
 
 - Focus on local development stage testing to catch defects before CI submission.
+- Confirm the working tree is on the branch recorded in the `Branch` row of
+  `02-dev-workspace.md` (`git rev-parse --abbrev-ref HEAD`) and that the handoff commit is in
+  that branch's history (`git merge-base --is-ancestor <handoff-commit> HEAD`). Run QA only there.
+- Run the branch guard before recording the verdict:
+  `python .agents/skills/quality-engineering/scripts/branch_guard.py check --task-dir tasks/<task-id> --require-declared --json`;
+  a failing guard is a blocker, not a warning.
 - Derive tests strictly from `01-contract.md` and the tech spec, not from the implementation.
 - Design Given-When-Then black-box test cases from `01-contract.md` Section 4 BDD scenarios and
   `dod.edge_cases` before reading implementation code.
@@ -54,6 +60,10 @@ The QA role focuses on **local development stage testing** before submitting cod
 
 - Edit production code (`src/**`) or another role's document; do not "fix" the implementation.
 - Hand-edit `04-process.md`.
+- Verify, sign off or commit on `main`/`master`, or on a different branch than the one recorded in
+  `02-dev-workspace.md`.
+- Merge to a protected trunk or approve a merge without the required CI gates green (branch guard,
+  RBAC, Gate 1, Gate 3 and mutation).
 - Issue `QA_PASSED` with blank complexity (Section 3) or mutation testing (Section 4) sections in
   `03-qa-verification.md`, or when MSI < 80% or Test Cases < V(G).
 

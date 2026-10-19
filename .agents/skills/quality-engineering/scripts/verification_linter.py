@@ -8,6 +8,9 @@ Deterministic static checker for QA verification signoff:
 - Execution Evidence (Section 5): Command and Result fields must not be blank
 - Cross-validation (--actual-complexity): reported V(G) values are checked against the actual
   AST complexity report produced by complexity_check.py (WP-04)
+- Cross-validation (--actual-mutation): reported Section 4 aggregates and per-target rows are
+  checked against the normalized mutation report produced by mutation_gate.py; a missing or
+  unusable report fails when --require-actual-mutation is set
 - Provenance (--require-provenance): Section 5 artifact path/SHA-256 are verified against real
   files and every equivalent mutant must carry a justification
 """
@@ -23,7 +26,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 EXIT_PASS = 0
 EXIT_VIOLATIONS = 1
 EXIT_USAGE = 2
@@ -38,6 +41,8 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "require_provenance": False,
     "repo_root": ".",
     "actual_functions": None,
+    "actual_mutation": None,
+    "require_actual_mutation": False,
 }
 
 _MSI_RE = re.compile(
@@ -1080,6 +1085,375 @@ def _lint_qa_mutation(
 
 
 # ---------------------------------------------------------------------------
+# Section 4 cross-validation: normalized mutation report
+# ---------------------------------------------------------------------------
+
+_MUTATION_COUNT_FIELDS = ("total", "killed", "timed_out", "equivalent", "survived")
+
+_MUTATION_FIELD_ALIASES: Dict[str, Tuple[str, ...]] = {
+    "total": ("total", "total_mutants", "mutants"),
+    "killed": ("killed", "killed_mutants"),
+    "timed_out": ("timed_out", "timeout", "timedout"),
+    "equivalent": ("equivalent", "equivalent_mutants"),
+    "survived": ("survived", "survived_mutants"),
+}
+
+_MSI_FIELD_KEYS = ("msi", "mutation_score", "mutation_score_indicator", "score")
+
+
+def _parse_report_count(raw: Any) -> Optional[int]:
+    if isinstance(raw, bool) or raw is None:
+        return None
+    if isinstance(raw, int):
+        return raw if raw >= 0 else None
+    if isinstance(raw, str):
+        match = re.search(r"(\d+)", raw)
+        return int(match.group(1)) if match else None
+    return None
+
+
+def _parse_report_msi(raw: Any) -> Optional[float]:
+    if isinstance(raw, bool) or raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    if isinstance(raw, str):
+        match = re.search(r"(\d+(?:\.\d+)?)", raw)
+        return float(match.group(1)) if match else None
+    return None
+
+
+def _compute_mutation_msi(values: Dict[str, Optional[int]]) -> Optional[float]:
+    """MSI = (killed + timed_out) / (total - equivalent) * 100 (None when undefined)."""
+    total = values.get("total")
+    killed = values.get("killed")
+    if total is None or killed is None:
+        return None
+    equivalent = values.get("equivalent") or 0
+    timed_out = values.get("timed_out") or 0
+    survived = values.get("survived") or 0
+    denominator = total - equivalent
+    if denominator <= 0:
+        return 100.0 if survived == 0 else 0.0
+    return round((killed + timed_out) / denominator * 100.0, 4)
+
+
+def _target_identity(entry: Dict[str, Any], repo_root: Path) -> str:
+    """Read a report target identity from file/path/name and normalize it."""
+    for key in ("file", "path", "name", "target"):
+        value = entry.get(key)
+        if isinstance(value, str) and value.strip():
+            return _normalize_actual_path(value, repo_root)
+    return ""
+
+
+def _target_basename(identity: str) -> str:
+    return identity.rsplit("/", 1)[-1]
+
+
+def _load_actual_mutation(
+    report_path: Path, repo_root: Path
+) -> Tuple[Optional[Dict[str, Any]], str]:
+    """Load the normalized mutation report produced by mutation_gate.py.
+
+    Returns (report, "") on success or (None, error_message) on failure. The report
+    contains the normalized ``targets`` list; per-target counts are optional as long
+    as an MSI (or counts) can be recovered, and ``timeout``/``timed_out`` are aliases.
+    """
+    if not report_path.is_file():
+        return None, f"actual mutation report not found: {report_path}"
+    text = _read_text(report_path)
+    if text is None:
+        return None, f"actual mutation report is unreadable: {report_path}"
+    if not text.strip():
+        return None, f"actual mutation report is empty: {report_path}"
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        return None, f"actual mutation report is not valid JSON: {exc}"
+    if not isinstance(payload, dict) or not isinstance(payload.get("targets"), list):
+        return None, (
+            "actual mutation report must be a JSON object with a 'targets' list "
+            "(schema: {'targets': [{'file', 'total', 'killed', 'timed_out', "
+            "'equivalent', 'survived'}]}): " + str(report_path)
+        )
+    if not payload["targets"]:
+        return None, (
+            "actual mutation report 'targets' list is empty; the mutation tool produced no "
+            f"evidence: {report_path}"
+        )
+
+    records: List[Dict[str, Any]] = []
+    for index, entry in enumerate(payload["targets"]):
+        if not isinstance(entry, dict):
+            return None, f"actual mutation report targets[{index}] must be an object"
+        identity = _target_identity(entry, repo_root)
+        if not identity:
+            return None, (
+                f"actual mutation report targets[{index}] must carry a non-empty "
+                "'file'/'path'/'name' identity"
+            )
+        counts: Dict[str, Optional[int]] = {}
+        for field in _MUTATION_COUNT_FIELDS:
+            raw: Any = None
+            for alias in _MUTATION_FIELD_ALIASES[field]:
+                if alias in entry:
+                    raw = entry[alias]
+                    break
+            counts[field] = _parse_report_count(raw)
+        msi: Optional[float] = None
+        for key in _MSI_FIELD_KEYS:
+            if key in entry:
+                msi = _parse_report_msi(entry[key])
+                break
+        if msi is None:
+            msi = _compute_mutation_msi(counts)
+        records.append({"target": identity, "counts": counts, "msi": msi})
+
+    aggregate: Dict[str, Optional[float]] = {}
+    for field in _MUTATION_COUNT_FIELDS:
+        values = [record["counts"][field] for record in records]
+        aggregate[field] = sum(values) if all(v is not None for v in values) else None
+    aggregate["msi"] = _compute_mutation_msi(
+        {field: aggregate[field] for field in _MUTATION_COUNT_FIELDS}  # type: ignore[arg-type]
+    )
+    if aggregate["msi"] is None:
+        declared_msi = _parse_report_msi(payload.get("msi"))
+        if declared_msi is not None:
+            aggregate["msi"] = declared_msi
+        elif len(records) == 1:
+            aggregate["msi"] = records[0]["msi"]
+
+    return {"targets": records, "aggregate": aggregate}, ""
+
+
+def _mutation_table_columns(headers: Sequence[str]) -> Dict[str, int]:
+    columns: Dict[str, int] = {}
+    for idx, header in enumerate(headers):
+        if "total" in header and "total" not in columns:
+            columns["total"] = idx
+        elif ("killed" in header or "kill" in header) and "killed" not in columns:
+            columns["killed"] = idx
+        elif "survived" in header and "survived" not in columns:
+            columns["survived"] = idx
+        elif ("timeout" in header or "timed" in header) and "timed_out" not in columns:
+            columns["timed_out"] = idx
+        elif "equivalent" in header and "equivalent" not in columns:
+            columns["equivalent"] = idx
+        elif ("msi" in header or "score" in header) and "msi" not in columns:
+            columns["msi"] = idx
+    return columns
+
+
+def _parse_reported_mutation_evidence(
+    section_lines: Sequence[Tuple[int, str]]
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    """Parse Section 4 into per-target rows and summary (kv) metrics."""
+    target_rows: List[Dict[str, Any]] = []
+    summary: Dict[str, Any] = {field: None for field in _MUTATION_COUNT_FIELDS}
+    summary["msi"] = None
+
+    raw_tables: List[List[Tuple[int, str]]] = []
+    current_block: List[Tuple[int, str]] = []
+    for line_no, line in section_lines:
+        if line.strip().startswith("|"):
+            current_block.append((line_no, line))
+        elif current_block:
+            raw_tables.append(current_block)
+            current_block = []
+    if current_block:
+        raw_tables.append(current_block)
+
+    for block in raw_tables:
+        parsed = _parse_mutation_table_block(block)
+        if parsed is None:
+            continue
+        table_format, headers, data_rows = parsed
+        if table_format == "kv":
+            values: Dict[str, str] = {}
+            for _line_no, cells in data_rows:
+                if len(cells) >= 2:
+                    values[cells[0].lower()] = cells[1].strip()
+            metrics = _kv_metrics(values)
+            for key, value in metrics.items():
+                if value is not None and summary.get(key) is None:
+                    summary[key] = value
+            continue
+
+        columns = _mutation_table_columns(headers)
+        file_col = 0
+        for idx, header in enumerate(headers):
+            if "file" in header or "target" in header or "source" in header:
+                file_col = idx
+                break
+        msi_col = columns.get("msi")
+        if msi_col is None:
+            msi_col = 7 if len(headers) > 7 else len(headers) - 2
+
+        for line_no, cells in data_rows:
+            name = cells[file_col].strip("`\"' ") if file_col < len(cells) else ""
+            msi_raw = cells[msi_col].strip() if 0 <= msi_col < len(cells) else ""
+            if not any(cell.strip() for cell in cells) or (not name and not msi_raw):
+                continue
+            counts: Dict[str, Optional[int]] = {}
+            for field in _MUTATION_COUNT_FIELDS:
+                idx = columns.get(field)
+                counts[field] = (
+                    _parse_int_cell(cells[idx])
+                    if idx is not None and idx < len(cells)
+                    else None
+                )
+            msi = _parse_float_cell(msi_raw) if msi_raw else None
+            if msi is None:
+                msi = _compute_mutation_msi(counts)
+            target_rows.append(
+                {
+                    "line": line_no,
+                    "target": _normalize_posix_path(name),
+                    "counts": counts,
+                    "msi": msi,
+                }
+            )
+    return target_rows, summary
+
+
+def _cross_check_mutation(
+    task_name: str,
+    task_dir: Path,
+    findings: List[Finding],
+    actual_report: Dict[str, Any],
+    config: Optional[Dict[str, Any]] = None,
+) -> None:
+    """Cross-check Section 4 against the normalized mutation report (--actual-mutation)."""
+    qa_text = _read_text(task_dir / "03-qa-verification.md")
+    if qa_text is None or _qa_passed_line(qa_text) is None:
+        return
+
+    sec_line_num, section_lines = _collect_section(qa_text, _MUTATION_HEADING_RE)
+    if sec_line_num is None:
+        # The missing/blank Section 4 is already reported by the mutation audit.
+        return
+
+    target_rows, summary = _parse_reported_mutation_evidence(section_lines)
+    report_targets = actual_report.get("targets") or []
+    report_aggregate = actual_report.get("aggregate") or {}
+
+    if target_rows:
+        reported_aggregate: Dict[str, Any] = {}
+        for field in _MUTATION_COUNT_FIELDS:
+            values = [row["counts"].get(field) for row in target_rows]
+            reported_aggregate[field] = sum(values) if all(v is not None for v in values) else None
+        reported_aggregate["msi"] = _compute_mutation_msi(
+            {field: reported_aggregate[field] for field in _MUTATION_COUNT_FIELDS}  # type: ignore[arg-type]
+        )
+    else:
+        reported_aggregate = summary
+
+    differences: List[str] = []
+    for field in _MUTATION_COUNT_FIELDS:
+        reported_value = reported_aggregate.get(field)
+        actual_value = report_aggregate.get(field)
+        if reported_value is None or actual_value is None:
+            continue
+        if int(reported_value) != int(actual_value):
+            differences.append(f"{field}: 03 reports {int(reported_value)}, report has {int(actual_value)}")
+    reported_msi = reported_aggregate.get("msi")
+    actual_msi = report_aggregate.get("msi")
+    if reported_msi is not None and actual_msi is not None:
+        if abs(float(reported_msi) - float(actual_msi)) > 0.1:
+            differences.append(
+                f"MSI: 03 reports {float(reported_msi):.1f}%, report computed {float(actual_msi):.1f}%"
+            )
+    if differences:
+        findings.append(
+            Finding(
+                task_name,
+                "MUTATION_MISMATCH_WITH_REPORT",
+                "Section 4 aggregate mutation evidence does not match the actual mutation report ("
+                + "; ".join(differences)
+                + ")",
+                "03-qa-verification.md",
+                sec_line_num,
+            )
+        )
+
+    # Per-target rows must exist in and agree with the report.
+    report_by_identity = {record["target"]: record for record in report_targets}
+    matched_identities: Set[str] = set()
+    for row in target_rows:
+        identity = row["target"]
+        record = report_by_identity.get(identity)
+        if record is None:
+            basename = _target_basename(identity)
+            candidates = [
+                candidate
+                for candidate in report_targets
+                if candidate["target"] not in matched_identities
+                and _target_basename(candidate["target"]) == basename
+            ]
+            if len(candidates) == 1:
+                record = candidates[0]
+        if record is None:
+            findings.append(
+                Finding(
+                    task_name,
+                    "MUTATION_PHANTOM_TARGET",
+                    f"Section 4 lists mutation target {identity or 'unknown'!r} that does not exist "
+                    "in the actual mutation report",
+                    "03-qa-verification.md",
+                    row["line"],
+                )
+            )
+            continue
+
+        matched_identities.add(record["target"])
+        target_differences: List[str] = []
+        for field in _MUTATION_COUNT_FIELDS:
+            reported_value = row["counts"].get(field)
+            actual_value = (record.get("counts") or {}).get(field)
+            if reported_value is None or actual_value is None:
+                continue
+            if int(reported_value) != int(actual_value):
+                target_differences.append(
+                    f"{field}: 03 reports {int(reported_value)}, report has {int(actual_value)}"
+                )
+        if (
+            row["msi"] is not None
+            and record.get("msi") is not None
+            and abs(float(row["msi"]) - float(record["msi"])) > 0.1
+        ):
+            target_differences.append(
+                f"MSI: 03 reports {float(row['msi']):.1f}%, report computes "
+                f"{float(record['msi']):.1f}%"
+            )
+        if target_differences:
+            findings.append(
+                Finding(
+                    task_name,
+                    "MUTATION_MISMATCH_WITH_REPORT",
+                    f"Section 4 row for target {identity!r} does not match the actual mutation "
+                    "report (" + "; ".join(target_differences) + ")",
+                    "03-qa-verification.md",
+                    row["line"],
+                )
+            )
+
+    for record in report_targets:
+        if record["target"] in matched_identities:
+            continue
+        findings.append(
+            Finding(
+                task_name,
+                "MUTATION_TARGET_MISSING_IN_03",
+                f"Actual mutation report lists target {record['target']!r} but Section 4 has no "
+                "row for it",
+                "03-qa-verification.md",
+                sec_line_num,
+            )
+        )
+
+
+# ---------------------------------------------------------------------------
 # Section 4 provenance: equivalent mutants + Section 5 artifact provenance
 # ---------------------------------------------------------------------------
 
@@ -1375,6 +1749,9 @@ def lint_task_bundle(
             task_name, task_dir, findings, warnings, actual_functions, cfg
         )
     _lint_qa_mutation(task_name, task_dir, findings, warnings, cfg)
+    actual_mutation = cfg.get("actual_mutation")
+    if actual_mutation is not None and cfg.get("require_mutation_section", True):
+        _cross_check_mutation(task_name, task_dir, findings, actual_mutation, cfg)
     _audit_execution_evidence(task_name, task_dir, findings, cfg)
     _audit_provenance(task_name, task_dir, findings, cfg)
 
@@ -1453,6 +1830,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--require-actual-complexity",
         action="store_true",
         help="fail when --actual-complexity is missing so Gate 3 cannot rely on self-reported V(G) values",
+    )
+    parser.add_argument(
+        "--actual-mutation",
+        default=None,
+        metavar="PATH",
+        help="path to the actual normalized mutation report (JSON with a 'targets' list) produced by mutation_gate.py",
+    )
+    parser.add_argument(
+        "--require-actual-mutation",
+        action="store_true",
+        help="fail when --actual-mutation is missing or unusable so Gate 3 cannot rely on self-reported MSI",
     )
     parser.add_argument(
         "--repo-root",
@@ -1535,6 +1923,33 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         else:
             actual_functions = records
     config["actual_functions"] = actual_functions
+
+    actual_mutation: Optional[Dict[str, Any]] = None
+    if args.require_actual_mutation and not args.actual_mutation:
+        global_findings.append(
+            Finding(
+                "",
+                "MUTATION_REPORT_MISSING",
+                "--require-actual-mutation was set but --actual-mutation PATH was not provided; "
+                "Gate 3 cannot cross-check the reported MSI and mutant counts against the mutation report",
+                "mutation-report.json",
+                0,
+            )
+        )
+    elif args.actual_mutation:
+        mutation_report_path = Path(args.actual_mutation).expanduser()
+        actual_mutation, load_error = _load_actual_mutation(mutation_report_path, repo_root)
+        if load_error:
+            global_findings.append(
+                Finding(
+                    "",
+                    "MUTATION_REPORT_MISSING",
+                    load_error,
+                    str(mutation_report_path),
+                    0,
+                )
+            )
+    config["actual_mutation"] = actual_mutation
 
     tasks_dir = Path(args.tasks_dir).expanduser()
     if not tasks_dir.is_dir():

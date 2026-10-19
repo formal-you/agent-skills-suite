@@ -30,6 +30,31 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Enforce branch isolation on the pull request head
+        shell: bash
+        run: |
+          set -uo pipefail
+          status=0
+          python .agents/skills/quality-engineering/scripts/branch_guard.py check \
+            --branch "${{ github.head_ref || github.ref_name }}" --protected main master --json \
+            > branch-guard-report.json 2> branch-guard-error.log || status=$?
+          {
+            echo "## Branch isolation report"
+            echo ""
+            echo '```json'
+            if [ -s branch-guard-report.json ]; then cat branch-guard-report.json; else cat branch-guard-error.log; fi
+            echo '```'
+            echo ""
+            if [ "$status" -eq 0 ]; then
+              echo "Result: **PASSED**"
+            else
+              echo "Result: **FAILED** (exit $status)"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -s branch-guard-report.json ]; then cat branch-guard-report.json; fi
+          if [ -s branch-guard-error.log ]; then cat branch-guard-error.log >&2; fi
+          exit "$status"
+
       - name: Audit role permissions across the pull request diff
         shell: bash
         env:

@@ -4,7 +4,7 @@ description: "Implement one planned task bundle as the Dev role: read the contra
 license: MIT
 compatibility: "Harness-agnostic prompt workflow. Optional Python for the repository's scaffold/lint helpers; a manual fallback exists."
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
   category: execution
 ---
 
@@ -30,10 +30,12 @@ them when present; the skill never grants extra access.
 ## Inputs
 
 - `tasks/<task-id>/01-contract.md` — authoritative YAML frontmatter, `touch_files`, `dod`, Section 4
-  BDD behavioral scenarios (Given-When-Then invariants), and inherited ADRs.
+  Gherkin behavioral scenarios (Given-When-Then invariants), the acceptance feature file declared in
+  `dod.feature_file`, and inherited ADRs. Dev reads `dod.feature_file` for acceptance semantics but
+  must never author or edit `*.feature` files or step definitions; `tests/acceptance/` is QA-owned.
 - Spec anchors referenced by the contract.
 - Project commands for type check and lint, the existing test suite, and the QA-owned acceptance
-  target declared in `dod.test_file`.
+  target declared in `dod.test_file` (the BDD runner entrypoint, never the `.feature` file).
 - `tasks/<task-id>/02-dev-workspace.md` — the blank form you fill.
 
 ## Outputs
@@ -45,25 +47,29 @@ them when present; the skill never grants extra access.
   **Implementation deviations** table (rows `DEV-001`, `DEV-002`, ... or an explicit None row).
 - Exactly one handoff marker: `- [x] WAITING_FOR_QA`, checked only when every DoD item passes.
 - No edits to `01-contract.md`, `03-qa-verification.md`, `04-process.md` or
-  `tests/acceptance/**`.
+  `tests/acceptance/**` (including `*.feature` files and step definitions).
 
 ## Workflow
 
-1. **Confirm scope and BDD contract.** Read `01-contract.md` frontmatter and Section 4 BDD scenarios.
-   Check that `task_id` equals the directory name, and that `touch_files`, `dod`, `adherence_adrs`
-   and Given-When-Then invariants are defined. Report missing or contradictory items to the Planner.
-2. **Prepare the work.** Note the base commit and adhere to project branch/commit conventions. Do not
-   reopen an already accepted task unless a reviewer reopens it.
+1. **Confirm scope and BDD contract.** Read `01-contract.md` frontmatter and Section 4 Gherkin
+   scenarios. Check that `task_id` equals the directory name, and that `touch_files`, `dod`
+   (`test_file`, `feature_file`), `adherence_adrs` and Given-When-Then invariants are defined. Report
+   missing or contradictory items to the Planner.
+2. **Prepare the work and isolate the branch.** Check `git rev-parse --abbrev-ref HEAD`; never edit or
+   commit on `main`/`master`; derive/switch to `feat/<task-id>` (or `task/<task-id>`) and record it in
+   `02-dev-workspace.md`. Do not reopen an already accepted task unless a reviewer reopens it.
 3. **Implement vertical slice under BDD and complexity limits.** Change only files in `touch_files`.
    Implement logic fulfilling the Given-When-Then invariants declared in Section 4 and `dod.edge_cases`.
-   Control single-function cyclomatic complexity ($V(G) \le 10$ standard). If complexity approaches
-   the warning limit ($11-15$), apply refactoring patterns (Extract Method, Strategy / Lookup Table,
-   Guard Clauses). If $V(G) > 15$, refactor before proceeding. Do not edit or create `tests/acceptance/**`.
+   Read `dod.feature_file` only to understand acceptance semantics; never author or edit `*.feature`
+   files or their step definitions. Control single-function cyclomatic complexity ($V(G) \le 10$
+   standard). If complexity approaches the warning limit ($11-15$), apply refactoring patterns (Extract
+   Method, Strategy / Lookup Table, Guard Clauses). If $V(G) > 15$, refactor before proceeding.
 4. **Run machine-checkable DoD and self-verification.** Execute `dod.type_check` and `dod.lint`, then
    run the project's existing tests; consider every `dod.edge_cases` item. Self-audit cyclomatic
-   complexity on all touched functions. The acceptance target (`dod.test_file`) is QA-owned: run it
-   only if it already exists, never author or edit it. If it does not exist yet, record that in `02`
-   and let QA run it during verification. Capture commands/results.
+   complexity on all touched functions. The acceptance artifacts (`dod.feature_file`, its step
+   definitions and the `dod.test_file` runner target) are QA-owned: run them only if they already
+   exist, never author or edit them. If they do not exist yet, record that in `02` and let QA run them
+   during verification. Capture commands/results.
 5. **Fill `02-dev-workspace.md`.** Record branch, base/handoff commit, design notes, one row per
    actually changed file, net line counts, and tick each self-verification item that is true.
    Include explicit architectural justification for any function with warning complexity
@@ -82,12 +88,15 @@ them when present; the skill never grants extra access.
 
 - [ ] Every changed path is listed in `01-contract.md` → `touch_files`.
 - [ ] No file outside the blast radius was created or modified.
-- [ ] Implementation honors all Given-When-Then BDD scenarios and behavioral invariants.
+- [ ] The working tree is on the branch recorded in `02-dev-workspace.md`; nothing was edited or
+      committed on `main`/`master`.
+- [ ] Implementation honors all Given-When-Then Gherkin scenarios and behavioral invariants.
 - [ ] Type check and lint exit successfully; the project's existing tests pass.
 - [ ] Cyclomatic complexity self-audit passes: all functions meet $V(G) \le 10$ (or $11-15$ with
       justification in `02`); none exceed $V(G) > 15$.
-- [ ] The QA-owned acceptance target (`dod.test_file`) is declared; if it is not authored yet, that
-      is recorded for QA.
+- [ ] The QA-owned acceptance artifacts (`dod.feature_file`, its step definitions and the
+      `dod.test_file` BDD runner target) are declared; none was authored or edited by Dev, and any
+      not-yet-authored artifact is recorded for QA.
 - [ ] Every `dod.edge_cases` item has an implementation/test rationale.
 - [ ] `02-dev-workspace.md` is complete for this attempt, including the Implementation deviations
       table (explicit None row when nothing deviated).
@@ -96,6 +105,8 @@ them when present; the skill never grants extra access.
 ## Failure handling
 
 - **Missing or contradictory contract**: stop; report the field and ask the Planner to fix it.
+- **Branch guard or acceptance ownership conflict**: stop; never edit/commit on `main`/`master` and
+  never author `*.feature` files or step definitions — escalate instead of bypassing the boundary.
 - **Out-of-scope change needed**: split the task or escalate; never edit outside `touch_files`.
 - **DoD command missing or not runnable**: report it with the command and error; do not hand-wave
   the check.

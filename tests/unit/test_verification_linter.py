@@ -65,6 +65,8 @@ class VerificationLinterCliTests(unittest.TestCase):
                 "--min-msi",
                 "--actual-complexity",
                 "--require-actual-complexity",
+                "--actual-mutation",
+                "--require-actual-mutation",
                 "--repo-root",
                 "--require-provenance",
                 "--no-mutation",
@@ -78,7 +80,7 @@ class VerificationLinterCliTests(unittest.TestCase):
             res = subprocess.run([sys.executable, str(p), "--version"], capture_output=True, text=True)
             self.assertEqual(res.returncode, 0, f"--version failed for {p}: {res.stderr}")
             self.assertIn("verification_linter", res.stdout)
-            self.assertIn("1.0.0", res.stdout)
+            self.assertIn("1.1.0", res.stdout)
 
     def test_cli_unpassed_task_passes_backward_compatibility(self) -> None:
         self._create_task("task-001", """# QA Verification
@@ -638,7 +640,14 @@ class _Gate3FixtureBase(unittest.TestCase):
         )
         return report_path
 
-    def _run(self, *extra: str, report_path=None):
+    def _write_mutation_report(self, targets, tool="fixture", name="mutation-report.json") -> Path:
+        report_path = self.work_root / name
+        report_path.write_text(
+            json.dumps({"tool": tool, "targets": targets}), encoding="utf-8"
+        )
+        return report_path
+
+    def _run(self, *extra: str, report_path=None, mutation_report=None):
         command = [
             sys.executable,
             str(self.script_path),
@@ -648,6 +657,8 @@ class _Gate3FixtureBase(unittest.TestCase):
         ]
         if report_path is not None:
             command.extend(["--actual-complexity", str(report_path)])
+        if mutation_report is not None:
+            command.extend(["--actual-mutation", str(mutation_report)])
         command.extend(extra)
         return subprocess.run(command, capture_output=True, text=True)
 
@@ -834,6 +845,146 @@ class Gate3CrossValidationTests(_Gate3FixtureBase):
 
     def test_without_actual_complexity_keeps_legacy_behavior(self) -> None:
         self._create_task("task-200", _cross_check_qa(), COMPLEXITY_CONTRACT)
+        res = self._run()
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        data = json.loads(res.stdout)
+        self.assertTrue(data["passed"])
+        self.assertEqual(data["errors"], [])
+
+
+def _mutation_cross_check_qa(target_rows: str = "") -> str:
+    if not target_rows:
+        target_rows = "| src/app.py | mutmut | 10 | 9 | 1 | 0 | 0 | 90% | PASS |"
+    return f"""# QA Verification
+- [x] QA_PASSED
+- [ ] REWORK_REQUIRED
+
+## 3. Complexity and basis path coverage
+| Function / Module | Cyclomatic Complexity V(G) | Independent Basis Paths | Test Case IDs | Compliance (<=10) |
+| :--- | :--- | :--- | :--- | :--- |
+| handler | 2 | P1, P2 | TC-01, TC-02 | YES |
+
+## 4. Mutation testing and MSI audit
+| Target Source File | Mutation Tool | Total Mutants | Killed | Survived | Timeout | Equivalent | MSI (%) | Pass/Fail |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+{target_rows}
+"""
+
+
+def _mutation_target(
+    file: str = "src/app.py",
+    total: int = 10,
+    killed: int = 9,
+    timed_out: int = 0,
+    equivalent: int = 0,
+    survived: int = 1,
+    **extra,
+):
+    target = {
+        "file": file,
+        "total": total,
+        "killed": killed,
+        "timed_out": timed_out,
+        "equivalent": equivalent,
+        "survived": survived,
+    }
+    target.update(extra)
+    return target
+
+
+class Gate3MutationCrossValidationTests(_Gate3FixtureBase):
+    """WP-06: Gate 3 cross-checks Section 4 against the normalized mutation report."""
+
+    def test_actual_mutation_match_passes(self) -> None:
+        self._create_task("task-400", _mutation_cross_check_qa())
+        report = self._write_mutation_report([_mutation_target()])
+        res = self._run("--require-actual-mutation", mutation_report=report)
+        self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
+        data = json.loads(res.stdout)
+        self.assertTrue(data["passed"])
+        self.assertEqual(data["errors"], [])
+
+    def test_aggregate_mismatch_with_report_fails(self) -> None:
+        self._create_task("task-400", _mutation_cross_check_qa())
+        report = self._write_mutation_report(
+            [_mutation_target(killed=5, survived=5)]
+        )
+        res = self._run(mutation_report=report)
+        self.assertEqual(res.returncode, 1)
+        codes = [e["code"] for e in json.loads(res.stdout)["errors"]]
+        self.assertIn("MUTATION_MISMATCH_WITH_REPORT", codes)
+
+    def test_per_target_mismatch_with_report_fails(self) -> None:
+        # Counts agree with the report but the reported per-target MSI does not.
+        self._create_task("task-400", _mutation_cross_check_qa())
+        report = self._write_mutation_report([_mutation_target(msi=80)])
+        res = self._run(mutation_report=report)
+        self.assertEqual(res.returncode, 1)
+        codes = [e["code"] for e in json.loads(res.stdout)["errors"]]
+        self.assertIn("MUTATION_MISMATCH_WITH_REPORT", codes)
+
+    def test_target_in_03_absent_from_report_fails(self) -> None:
+        rows = (
+            "| src/app.py | mutmut | 10 | 9 | 1 | 0 | 0 | 90% | PASS |\n"
+            "| src/ghost.py | mutmut | 0 | 0 | 0 | 0 | 0 | 100% | PASS |"
+        )
+        self._create_task("task-400", _mutation_cross_check_qa(rows))
+        report = self._write_mutation_report([_mutation_target()])
+        res = self._run(mutation_report=report)
+        self.assertEqual(res.returncode, 1)
+        codes = [e["code"] for e in json.loads(res.stdout)["errors"]]
+        self.assertIn("MUTATION_PHANTOM_TARGET", codes)
+
+    def test_report_target_absent_from_03_fails(self) -> None:
+        self._create_task("task-400", _mutation_cross_check_qa())
+        report = self._write_mutation_report(
+            [
+                _mutation_target(),
+                _mutation_target(
+                    file="src/extra.py", total=0, killed=0, survived=0
+                ),
+            ]
+        )
+        res = self._run(mutation_report=report)
+        self.assertEqual(res.returncode, 1)
+        codes = [e["code"] for e in json.loads(res.stdout)["errors"]]
+        self.assertIn("MUTATION_TARGET_MISSING_IN_03", codes)
+
+    def test_require_actual_mutation_without_report_fails(self) -> None:
+        self._create_task("task-400", _mutation_cross_check_qa())
+        res = self._run("--require-actual-mutation")
+        self.assertEqual(res.returncode, 1)
+        codes = [e["code"] for e in json.loads(res.stdout)["errors"]]
+        self.assertIn("MUTATION_REPORT_MISSING", codes)
+
+    def test_missing_mutation_report_file_fails_closed(self) -> None:
+        self._create_task("task-400", _mutation_cross_check_qa())
+        missing = self.work_root / "does-not-exist-mutation.json"
+        res = self._run("--require-actual-mutation", mutation_report=missing)
+        self.assertEqual(res.returncode, 1)
+        codes = [e["code"] for e in json.loads(res.stdout)["errors"]]
+        self.assertIn("MUTATION_REPORT_MISSING", codes)
+
+    def test_empty_targets_report_fails_closed(self) -> None:
+        self._create_task("task-400", _mutation_cross_check_qa())
+        report = self._write_mutation_report([])
+        res = self._run("--require-actual-mutation", mutation_report=report)
+        self.assertEqual(res.returncode, 1)
+        codes = [e["code"] for e in json.loads(res.stdout)["errors"]]
+        self.assertIn("MUTATION_REPORT_MISSING", codes)
+
+    def test_actual_mutation_without_require_flag_still_cross_checks(self) -> None:
+        self._create_task("task-400", _mutation_cross_check_qa())
+        report = self._write_mutation_report(
+            [_mutation_target(killed=5, survived=5)]
+        )
+        res = self._run(mutation_report=report)
+        self.assertEqual(res.returncode, 1)
+        codes = [e["code"] for e in json.loads(res.stdout)["errors"]]
+        self.assertIn("MUTATION_MISMATCH_WITH_REPORT", codes)
+
+    def test_without_actual_mutation_keeps_legacy_behavior(self) -> None:
+        self._create_task("task-400", _mutation_cross_check_qa())
         res = self._run()
         self.assertEqual(res.returncode, 0, res.stdout + res.stderr)
         data = json.loads(res.stdout)

@@ -35,8 +35,10 @@
   },
   "services": [],
   "notes": [
-    "Profiles are reference fragments; copy/adapt them into quality-gate.yml.",
+    "Copy this file to quality-gate.config.json in the adopting repository root and fill mutation.command with the real stack command.",
+    "The shipped quality-gate.yml passes this file to mutation_gate.py run --config on every pull request and trunk push; MUTATION_COMMAND is only a fallback.",
+    "Profiles are reference fragments; merge/adapt them into quality-gate.yml (the Python workflow is the reference implementation).",
     "Add services: or testcontainers when acceptance tests require real middleware.",
-    "Do not wrap gate commands in || true or continue-on-error."
+    "Do not wrap gate commands in || true or make them non-blocking."
   ]
 }

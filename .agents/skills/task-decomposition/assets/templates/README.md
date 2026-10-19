@@ -16,7 +16,9 @@ This directory is the single source for the four task-bundle documents. Copy the
 
 1. `01-contract.md` starts with YAML frontmatter; it is authoritative. `task_id` must equal the task
    directory name. `touch_files` has 1–3 entries; `estimated_lines` defaults to the 50–250 range;
-   `origin_spec_anchor` matches `#sec-[a-z0-9-]+`; `adherence_adrs` has at least one ADR.
+   `origin_spec_anchor` matches `#sec-[a-z0-9-]+`; `adherence_adrs` has at least one ADR;
+   `dod.feature_file` names a `.feature` file under `tests/acceptance/` and Section 4 holds the
+   extractable fenced `gherkin` block with `Feature:` and at least two `Scenario:` blocks.
 2. `01` must contain **no** unresolved placeholder tokens after planning. `02` and `03` are blank
    role forms: they contain no template tokens, so Gate 1 can pass before Dev/QA start. `04` is
    initialized with concrete status values by this template (only `{{TASK_ID}}` is substituted by the
@@ -54,19 +56,17 @@ increments it.
 | `{{ADR_ID_1}}` | Inherited ADR ID; add more `adherence_adrs` items when needed. |
 | `{{TYPE_CHECK_COMMAND}}` | Type-check command that must exit 0. |
 | `{{LINT_COMMAND}}` | Lint command that must exit 0. |
-| `{{TEST_FILE_PATH}}` | Acceptance test file owned by QA. |
+| `{{TEST_FILE_PATH}}` | BDD runner/test target owned by QA; executed for acceptance and never a `.feature` file. |
+| `{{FEATURE_FILE_PATH}}` | Required; Gherkin `.feature` file under `tests/acceptance/` holding the Section 4 scenarios. |
+| `{{STEP_DEFINITIONS_PATH}}` | Optional; glue code for the BDD runner. Omit the line when the project has no glue-code layer. |
 | `{{EDGE_CASE_1}}` / `{{EDGE_CASE_2}}` | At least two edge/negative assertions formatted as "Given [precondition], When [action], Then [outcome]". |
 | `{{GOAL_AND_SCOPE}}` | One-paragraph goal and scope. |
 | `{{OUT_OF_SCOPE}}` | Explicit non-goals. |
-| `{{INVARIANT_INPUT_VALIDATION_GIVEN}}` | Input validation scenario: precondition or initial state. |
-| `{{INVARIANT_INPUT_VALIDATION_WHEN}}` | Input validation scenario: trigger action or input stimulus. |
-| `{{INVARIANT_INPUT_VALIDATION_THEN}}` | Input validation scenario: expected observable outcome or error response. |
-| `{{INVARIANT_STATE_TRANSITIONS_GIVEN}}` | State transition scenario: precondition or initial state. |
-| `{{INVARIANT_STATE_TRANSITIONS_WHEN}}` | State transition scenario: mutation trigger or transition event. |
-| `{{INVARIANT_STATE_TRANSITIONS_THEN}}` | State transition scenario: expected target state and terminal properties. |
-| `{{INVARIANT_IDEMPOTENCY_GIVEN}}` | Idempotency/consistency scenario: precondition or existing system state. |
-| `{{INVARIANT_IDEMPOTENCY_WHEN}}` | Idempotency/consistency scenario: repeated request or concurrent execution. |
-| `{{INVARIANT_IDEMPOTENCY_THEN}}` | Idempotency/consistency scenario: identical outcome with no redundant side effects. |
+| `{{FEATURE_NAME}}` | Name of the Gherkin `Feature:` in Section 4; matches the feature file's headline. |
+| `{{SCENARIO_1_TITLE}}` / `{{SCENARIO_2_TITLE}}` / `{{SCENARIO_3_TITLE}}` | Short titles for the three mandatory Gherkin `Scenario:` blocks (input validation, state transitions, idempotency/consistency). |
+| `{{SCENARIO_1_GIVEN}}` / `{{SCENARIO_2_GIVEN}}` / `{{SCENARIO_3_GIVEN}}` | Gherkin `Given` precondition for each scenario. |
+| `{{SCENARIO_1_WHEN}}` / `{{SCENARIO_2_WHEN}}` / `{{SCENARIO_3_WHEN}}` | Gherkin `When` trigger or input stimulus for each scenario. |
+| `{{SCENARIO_1_THEN}}` / `{{SCENARIO_2_THEN}}` / `{{SCENARIO_3_THEN}}` | Gherkin `Then` expected observable outcome for each scenario. |
 | `{{INHERITED_ADR_SUMMARY}}` | One-line summary of inherited ADR decisions. |
 | `{{NOTES}}` | Open questions or notes for the implementer. |
 

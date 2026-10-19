@@ -8,28 +8,32 @@
       "file": "python.yml",
       "display_name": "Python",
       "acceptance": "pytest",
-      "mutation": "mutmut"
+      "mutation": "mutmut",
+      "config": "python.config.json"
     },
     {
       "stack": "node",
       "file": "node.yml",
       "display_name": "Node.js / TypeScript",
       "acceptance": "Cucumber.js / Jest",
-      "mutation": "Stryker"
+      "mutation": "Stryker",
+      "config": "node.config.json"
     },
     {
       "stack": "go",
       "file": "go.yml",
       "display_name": "Go",
       "acceptance": "go test / gotestsum",
-      "mutation": "go-mutesting"
+      "mutation": "go-mutesting",
+      "config": "go.config.json"
     },
     {
       "stack": "java",
       "file": "java.yml",
       "display_name": "Java / Kotlin",
       "acceptance": "Maven Surefire / Cucumber-JVM",
-      "mutation": "PITest"
+      "mutation": "PITest",
+      "config": "java.config.json"
     },
     {
       "stack": "rust",

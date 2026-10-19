@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the plan-linter v2 Gate 1 checker.
+"""Tests for the plan-linter v4 Gate 1 checker.
 
 Run: python -m unittest discover -s tests/unit -p "test_*.py"
 """
@@ -38,6 +38,21 @@ DOC_04 = (
 )
 
 
+DEFAULT_GHERKIN_LINES = [
+    "Feature: Example acceptance behavior",
+    "",
+    "  Scenario: Empty payload is rejected",
+    "    Given an empty input payload",
+    "    When the request is submitted to the API",
+    "    Then the API returns 400 Bad Request",
+    "",
+    "  Scenario: Expired credentials are rejected",
+    "    Given an expired token",
+    "    When the token is authenticated",
+    "    Then the API returns 401 Unauthorized",
+]
+
+
 def frontmatter_contract(
     task_id="task-001",
     dependencies="[]",
@@ -49,6 +64,11 @@ def frontmatter_contract(
     deps=None,
     size_class=None,
     change_id=None,
+    feature_file="tests/acceptance/example.feature",
+    step_definitions=None,
+    test_file="tests/acceptance/test_example.ts",
+    gherkin_block=True,
+    gherkin=None,
 ):
     if touch_files is None:
         touch_files = [
@@ -77,7 +97,11 @@ def frontmatter_contract(
     lines.append("  type_check: \"npm run type-check\"")
     if lint:
         lines.append("  lint: \"npm run lint\"")
-    lines.append("  test_file: \"tests/acceptance/test_example.ts\"")
+    lines.append("  test_file: \"" + test_file + "\"")
+    if feature_file is not None:
+        lines.append("  feature_file: \"" + feature_file + "\"")
+    if step_definitions is not None:
+        lines.append("  step_definitions: \"" + step_definitions + "\"")
     lines.append("  edge_cases:")
     lines.append("    - \"empty input returns 400\"")
     lines.append("    - \"expired token returns 401\"")
@@ -86,6 +110,16 @@ def frontmatter_contract(
     lines.append("# Task: Example")
     lines.append("")
     lines.append("Human readable detail.")
+    if gherkin_block:
+        lines.append("")
+        lines.append("## 4. Behavioral contract and invariants")
+        lines.append("")
+        lines.append("```gherkin")
+        if gherkin is None:
+            lines.extend(DEFAULT_GHERKIN_LINES)
+        else:
+            lines.extend(gherkin.strip("\n").splitlines())
+        lines.append("```")
     return "\n".join(lines) + "\n"
 
 
@@ -179,6 +213,10 @@ class PlanLinterV2Tests(unittest.TestCase):
         self.assertTrue(payload["passed"])
         codes = [warning["code"] for warning in payload["warnings"]]
         self.assertIn("LEGACY_FORMAT", codes)
+        # v4 BDD rules never hard-fail a legacy Markdown-table contract.
+        self.assertEqual(payload["errors"], [])
+        self.assertIn("MISSING_FEATURE_FILE", codes)
+        self.assertIn("BDD_GHERKIN_BLOCK_MISSING", codes)
 
     def test_english_legacy_tables_also_parse(self):
         write_task(self.tasks_dir, "task-001", legacy_contract().replace("前置依赖", "Dependencies"))
@@ -378,7 +416,7 @@ class PlanLinterV2Tests(unittest.TestCase):
         self.assertIn("usage", result.stdout.lower())
         result = run_linter(["--version"])
         self.assertEqual(result.returncode, 0)
-        self.assertIn("3.0.0", result.stdout)
+        self.assertIn("4.0.0", result.stdout)
 
     def test_empty_tasks_dir_is_violation(self):
         result = self.lint("--json")
@@ -638,7 +676,12 @@ class PlanLinterV3Tests(unittest.TestCase):
 
 
 class PlanLinterBddTests(unittest.TestCase):
-    """Feature 20: BDD scenario linting validation in plan_linter.py."""
+    """Feature 20: BDD scenario linting validation in plan_linter.py.
+
+    Edge-case and fenced-Gherkin checks run under the v4 defaults. The
+    Markdown-bullet Section 4 tests exercise the backward-compatible
+    ``require_gherkin_block: false`` parser via ``legacy_markdown_config``.
+    """
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -652,6 +695,12 @@ class PlanLinterBddTests(unittest.TestCase):
         result = run_linter(["--tasks-dir", str(self.tasks_dir), "--json"] + list(extra))
         payload = json.loads(result.stdout)
         return result, payload
+
+    def legacy_markdown_config(self):
+        """Config escape hatch that re-enables the pre-v4 Markdown-bullet parser."""
+        config_path = Path(self._tmp.name) / "legacy-bullets.json"
+        config_path.write_text(json.dumps({"require_gherkin_block": False}), encoding="utf-8")
+        return str(config_path)
 
     def test_bdd_valid_contract_passes(self):
         contract = frontmatter_contract()
@@ -705,7 +754,7 @@ class PlanLinterBddTests(unittest.TestCase):
 
     def test_bdd_section4_scenarios_validation(self):
         body_with_bad_scenario = (
-            frontmatter_contract()
+            frontmatter_contract(gherkin_block=False)
             + "\n## 4. Behavioral contract and invariants\n\n"
             + "### Feature: Authentication\n\n"
             + "#### Scenario 1: Input validation\n"
@@ -713,7 +762,7 @@ class PlanLinterBddTests(unittest.TestCase):
             + "- **Then** rejected with 400\n"
         )
         write_task(self.tasks_dir, "task-001", body_with_bad_scenario)
-        result, payload = self.lint_json()
+        result, payload = self.lint_json("--config", self.legacy_markdown_config())
         self.assertEqual(result.returncode, 1)
         codes = [e["code"] for e in payload["errors"]]
         self.assertIn("BDD_MISSING_PRECONDITION", codes)
@@ -729,7 +778,7 @@ class PlanLinterBddTests(unittest.TestCase):
     def test_bdd_section4_empty_bold_clauses_emit_errors(self):
         """Empty bold clauses (- **Given**, * **When**, + **Then**) must emit all three BDD error codes."""
         body_with_empty_bold = (
-            frontmatter_contract()
+            frontmatter_contract(gherkin_block=False)
             + "\n## 4. Behavioral contract and invariants\n\n"
             + "### Feature: Authentication\n\n"
             + "#### Scenario 1: Mixed empty bold bullets\n"
@@ -738,7 +787,7 @@ class PlanLinterBddTests(unittest.TestCase):
             + "+ **Then**\n"
         )
         write_task(self.tasks_dir, "task-001", body_with_empty_bold)
-        result, payload = self.lint_json()
+        result, payload = self.lint_json("--config", self.legacy_markdown_config())
         self.assertEqual(result.returncode, 1)
         self.assertFalse(payload["passed"])
         codes = [e["code"] for e in payload["errors"]]
@@ -749,7 +798,7 @@ class PlanLinterBddTests(unittest.TestCase):
     def test_bdd_section4_empty_bold_given_emits_missing_precondition(self):
         """Scenario with only - **Given** empty emits BDD_MISSING_PRECONDITION."""
         body = (
-            frontmatter_contract()
+            frontmatter_contract(gherkin_block=False)
             + "\n## 4. Behavioral contract and invariants\n\n"
             + "### Feature: Authentication\n\n"
             + "#### Scenario 1: Empty given\n"
@@ -758,7 +807,7 @@ class PlanLinterBddTests(unittest.TestCase):
             + "+ **Then** access granted\n"
         )
         write_task(self.tasks_dir, "task-001", body)
-        result, payload = self.lint_json()
+        result, payload = self.lint_json("--config", self.legacy_markdown_config())
         self.assertEqual(result.returncode, 1)
         codes = [e["code"] for e in payload["errors"]]
         self.assertIn("BDD_MISSING_PRECONDITION", codes)
@@ -768,7 +817,7 @@ class PlanLinterBddTests(unittest.TestCase):
     def test_bdd_section4_empty_bold_when_emits_missing_action(self):
         """Scenario with only * **When** empty emits BDD_MISSING_ACTION."""
         body = (
-            frontmatter_contract()
+            frontmatter_contract(gherkin_block=False)
             + "\n## 4. Behavioral contract and invariants\n\n"
             + "### Feature: Authentication\n\n"
             + "#### Scenario 1: Empty when\n"
@@ -777,7 +826,7 @@ class PlanLinterBddTests(unittest.TestCase):
             + "+ **Then** access granted\n"
         )
         write_task(self.tasks_dir, "task-001", body)
-        result, payload = self.lint_json()
+        result, payload = self.lint_json("--config", self.legacy_markdown_config())
         self.assertEqual(result.returncode, 1)
         codes = [e["code"] for e in payload["errors"]]
         self.assertNotIn("BDD_MISSING_PRECONDITION", codes)
@@ -787,7 +836,7 @@ class PlanLinterBddTests(unittest.TestCase):
     def test_bdd_section4_empty_bold_then_emits_missing_outcome(self):
         """Scenario with only + **Then** empty emits BDD_MISSING_OUTCOME."""
         body = (
-            frontmatter_contract()
+            frontmatter_contract(gherkin_block=False)
             + "\n## 4. Behavioral contract and invariants\n\n"
             + "### Feature: Authentication\n\n"
             + "#### Scenario 1: Empty then\n"
@@ -796,7 +845,7 @@ class PlanLinterBddTests(unittest.TestCase):
             + "+ **Then**\n"
         )
         write_task(self.tasks_dir, "task-001", body)
-        result, payload = self.lint_json()
+        result, payload = self.lint_json("--config", self.legacy_markdown_config())
         self.assertEqual(result.returncode, 1)
         codes = [e["code"] for e in payload["errors"]]
         self.assertNotIn("BDD_MISSING_PRECONDITION", codes)
@@ -806,7 +855,7 @@ class PlanLinterBddTests(unittest.TestCase):
     def test_bdd_section4_empty_bold_clauses_with_colons(self):
         """Empty bold clauses with colons and whitespace still emit errors."""
         body = (
-            frontmatter_contract()
+            frontmatter_contract(gherkin_block=False)
             + "\n## 4. Behavioral contract and invariants\n\n"
             + "### Feature: Authentication\n\n"
             + "#### Scenario 1: Colon empty bold clauses\n"
@@ -815,7 +864,7 @@ class PlanLinterBddTests(unittest.TestCase):
             + "+ **Then**:\n"
         )
         write_task(self.tasks_dir, "task-001", body)
-        result, payload = self.lint_json()
+        result, payload = self.lint_json("--config", self.legacy_markdown_config())
         self.assertEqual(result.returncode, 1)
         codes = [e["code"] for e in payload["errors"]]
         self.assertIn("BDD_MISSING_PRECONDITION", codes)
@@ -825,7 +874,7 @@ class PlanLinterBddTests(unittest.TestCase):
     def test_bdd_section4_mixed_bullet_markers_pass(self):
         """Populated scenarios using mixed list bullets (-, *, +) pass Gate 1 with 0 errors."""
         body = (
-            frontmatter_contract()
+            frontmatter_contract(gherkin_block=False)
             + "\n## 4. Behavioral contract and invariants\n\n"
             + "### Feature: Authentication\n\n"
             + "#### Scenario 1: Valid mixed bullets\n"
@@ -834,7 +883,7 @@ class PlanLinterBddTests(unittest.TestCase):
             + "+ **Then** session state transitions to active\n"
         )
         write_task(self.tasks_dir, "task-001", body)
-        result, payload = self.lint_json()
+        result, payload = self.lint_json("--config", self.legacy_markdown_config())
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertTrue(payload["passed"])
         self.assertEqual(payload["errors"], [])
@@ -842,7 +891,7 @@ class PlanLinterBddTests(unittest.TestCase):
     def test_bdd_section4_all_dash_empty_bold_clauses(self):
         """Standard dash-bullet empty bold clauses emit all three error codes."""
         body = (
-            frontmatter_contract()
+            frontmatter_contract(gherkin_block=False)
             + "\n## 4. Behavioral contract and invariants\n\n"
             + "### Feature: Authentication\n\n"
             + "#### Scenario 1: Standard dash empty\n"
@@ -851,12 +900,243 @@ class PlanLinterBddTests(unittest.TestCase):
             + "- **Then**\n"
         )
         write_task(self.tasks_dir, "task-001", body)
-        result, payload = self.lint_json()
+        result, payload = self.lint_json("--config", self.legacy_markdown_config())
         self.assertEqual(result.returncode, 1)
         codes = [e["code"] for e in payload["errors"]]
         self.assertIn("BDD_MISSING_PRECONDITION", codes)
         self.assertIn("BDD_MISSING_ACTION", codes)
         self.assertIn("BDD_MISSING_OUTCOME", codes)
+
+
+class PlanLinterBddEnforcementTests(unittest.TestCase):
+    """plan-linter v4: hard feature-file and fenced-Gherkin enforcement."""
+
+    NEW_BDD_CODES = {
+        "MISSING_FEATURE_FILE",
+        "BDD_FEATURE_FILE_EXTENSION",
+        "FEATURE_FILE_OUTSIDE_ACCEPTANCE",
+        "BDD_GHERKIN_BLOCK_MISSING",
+        "BDD_GHERKIN_INVALID",
+        "BDD_MISSING_PRECONDITION",
+        "BDD_MISSING_ACTION",
+        "BDD_MISSING_OUTCOME",
+        "BDD_STEP_DEFINITIONS_INVALID",
+    }
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tasks_dir = Path(self._tmp.name) / "tasks"
+        self.tasks_dir.mkdir(parents=True, exist_ok=True)
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def write_config(self, **overrides):
+        config_path = Path(self._tmp.name) / "plan-linter.json"
+        config_path.write_text(json.dumps(overrides), encoding="utf-8")
+        return str(config_path)
+
+    def lint_json(self, *extra):
+        result = run_linter(["--tasks-dir", str(self.tasks_dir), "--json"] + list(extra))
+        payload = json.loads(result.stdout)
+        return result, payload
+
+    def error_codes(self, payload):
+        return [error["code"] for error in payload["errors"]]
+
+    def warning_codes(self, payload):
+        return [warning["code"] for warning in payload["warnings"]]
+
+    def test_valid_gherkin_block_passes(self):
+        write_task(self.tasks_dir, "task-001", frontmatter_contract())
+        result, payload = self.lint_json()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(payload["passed"])
+        self.assertEqual(payload["errors"], [])
+        emitted = set(self.error_codes(payload)) | set(self.warning_codes(payload))
+        self.assertEqual(emitted & self.NEW_BDD_CODES, set())
+
+    def test_missing_feature_file_is_a_violation(self):
+        write_task(self.tasks_dir, "task-001", frontmatter_contract(feature_file=None))
+        result, payload = self.lint_json()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.error_codes(payload), ["MISSING_FEATURE_FILE"])
+
+    def test_feature_file_with_wrong_extension_is_a_violation(self):
+        write_task(
+            self.tasks_dir,
+            "task-001",
+            frontmatter_contract(feature_file="tests/acceptance/example.txt"),
+        )
+        result, payload = self.lint_json()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.error_codes(payload), ["BDD_FEATURE_FILE_EXTENSION"])
+
+    def test_feature_file_outside_acceptance_is_a_violation(self):
+        write_task(
+            self.tasks_dir,
+            "task-001",
+            frontmatter_contract(feature_file="tests/unit/example.feature"),
+        )
+        result, payload = self.lint_json()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.error_codes(payload), ["FEATURE_FILE_OUTSIDE_ACCEPTANCE"])
+
+    def test_feature_allowed_prefixes_config_override(self):
+        write_task(
+            self.tasks_dir,
+            "task-001",
+            frontmatter_contract(feature_file="features/example.feature"),
+        )
+        result, payload = self.lint_json()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.error_codes(payload), ["FEATURE_FILE_OUTSIDE_ACCEPTANCE"])
+
+        config_path = self.write_config(feature_allowed_prefixes=["features/"])
+        result, payload = self.lint_json("--config", config_path)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(payload["passed"])
+        self.assertEqual(payload["errors"], [])
+
+    def test_missing_gherkin_block_is_a_violation(self):
+        contract = frontmatter_contract(gherkin_block=False) + (
+            "\n## 4. Behavioral contract and invariants\n\n"
+            "Scenarios are described in prose only.\n"
+        )
+        write_task(self.tasks_dir, "task-001", contract)
+        result, payload = self.lint_json()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.error_codes(payload), ["BDD_GHERKIN_BLOCK_MISSING"])
+
+    def test_gherkin_block_without_feature_line_is_invalid(self):
+        gherkin = "\n".join(
+            [
+                "Scenario: First behavior",
+                "  Given a precondition",
+                "  When an action happens",
+                "  Then an outcome is observed",
+                "",
+                "Scenario: Second behavior",
+                "  Given a precondition",
+                "  When an action happens",
+                "  Then an outcome is observed",
+            ]
+        )
+        write_task(self.tasks_dir, "task-001", frontmatter_contract(gherkin=gherkin))
+        result, payload = self.lint_json()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.error_codes(payload), ["BDD_GHERKIN_INVALID"])
+
+    def test_gherkin_block_with_single_scenario_is_invalid(self):
+        gherkin = "\n".join(
+            [
+                "Feature: Authentication",
+                "",
+                "  Scenario: Only scenario",
+                "    Given a valid user",
+                "    When the user signs in",
+                "    Then a session is created",
+            ]
+        )
+        write_task(self.tasks_dir, "task-001", frontmatter_contract(gherkin=gherkin))
+        result, payload = self.lint_json()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.error_codes(payload), ["BDD_GHERKIN_INVALID"])
+
+    def test_gherkin_scenario_missing_then_is_a_violation(self):
+        gherkin = "\n".join(
+            [
+                "Feature: Authentication",
+                "",
+                "  Scenario: Complete scenario",
+                "    Given a valid user",
+                "    When the user signs in",
+                "    Then a session is created",
+                "",
+                "  Scenario: Missing outcome",
+                "    Given a valid user",
+                "    When the user signs out",
+            ]
+        )
+        write_task(self.tasks_dir, "task-001", frontmatter_contract(gherkin=gherkin))
+        result, payload = self.lint_json()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.error_codes(payload), ["BDD_MISSING_OUTCOME"])
+
+    def test_test_file_must_not_be_the_feature_file(self):
+        write_task(
+            self.tasks_dir,
+            "task-001",
+            frontmatter_contract(test_file="tests/acceptance/example.feature"),
+        )
+        result, payload = self.lint_json()
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.error_codes(payload), ["BDD_FEATURE_FILE_EXTENSION"])
+
+    def test_step_definitions_reject_feature_path_and_empty_value(self):
+        cases = {
+            "feature file as step definitions": frontmatter_contract(
+                step_definitions="tests/acceptance/example.feature"
+            ),
+            "empty step definitions": frontmatter_contract(step_definitions=""),
+        }
+        for label, contract in cases.items():
+            with self.subTest(label):
+                for child in self.tasks_dir.iterdir():
+                    shutil.rmtree(child)
+                write_task(self.tasks_dir, "task-001", contract)
+                result, payload = self.lint_json()
+                self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+                self.assertEqual(self.error_codes(payload), ["BDD_STEP_DEFINITIONS_INVALID"])
+
+    def test_require_gherkin_block_false_restores_bullet_parser(self):
+        contract = frontmatter_contract(gherkin_block=False) + (
+            "\n## 4. Behavioral contract and invariants\n\n"
+            "#### Scenario 1: Valid markdown bullet scenario\n"
+            "- **Given** a valid user session\n"
+            "* **When** the user signs in\n"
+            "+ **Then** the session becomes active\n"
+        )
+        write_task(self.tasks_dir, "task-001", contract)
+        config_path = self.write_config(require_gherkin_block=False)
+        result, payload = self.lint_json("--config", config_path)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(payload["passed"])
+        self.assertEqual(payload["errors"], [])
+        emitted = set(self.error_codes(payload)) | set(self.warning_codes(payload))
+        self.assertNotIn("BDD_GHERKIN_BLOCK_MISSING", emitted)
+
+    def test_require_gherkin_block_false_still_reports_bullet_gaps(self):
+        contract = frontmatter_contract(gherkin_block=False) + (
+            "\n## 4. Behavioral contract and invariants\n\n"
+            "#### Scenario 1: Missing precondition\n"
+            "* **When** the user signs in\n"
+            "+ **Then** the session becomes active\n"
+        )
+        write_task(self.tasks_dir, "task-001", contract)
+        config_path = self.write_config(require_gherkin_block=False)
+        result, payload = self.lint_json("--config", config_path)
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        self.assertEqual(self.error_codes(payload), ["BDD_MISSING_PRECONDITION"])
+
+    def test_require_feature_file_false_allows_omitting_feature_file(self):
+        write_task(self.tasks_dir, "task-001", frontmatter_contract(feature_file=None))
+        config_path = self.write_config(require_feature_file=False)
+        result, payload = self.lint_json("--config", config_path)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(payload["passed"])
+        self.assertEqual(payload["errors"], [])
+        self.assertNotIn("MISSING_FEATURE_FILE", self.warning_codes(payload))
+
+    def test_legacy_table_contract_only_warns_on_bdd_rules(self):
+        write_task(self.tasks_dir, "task-001", legacy_contract())
+        result, payload = self.lint_json()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertTrue(payload["passed"])
+        self.assertEqual(payload["errors"], [])
+        warning_codes = self.warning_codes(payload)
+        self.assertIn("MISSING_FEATURE_FILE", warning_codes)
+        self.assertIn("BDD_GHERKIN_BLOCK_MISSING", warning_codes)
 
 
 class PlanLinterGate3BoundaryTests(unittest.TestCase):

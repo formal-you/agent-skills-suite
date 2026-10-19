@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "mode": "spec-driven",
+  "stack": "node",
+  "display_name": "Node.js / TypeScript reference",
+  "source": {
+    "dirs": ["src"],
+    "languages": ["typescript", "javascript"]
+  },
+  "install": [
+    "npm ci"
+  ],
+  "acceptance": {
+    "command": "npx cucumber-js tests/acceptance/features --format junit:artifacts/acceptance-junit.xml",
+    "junit": "artifacts/acceptance-junit.xml",
+    "alternatives": [
+      "npm test -- --ci",
+      "npx playwright test --reporter=junit"
+    ]
+  },
+  "mutation": {
+    "tool": "Stryker",
+    "command": "npx stryker run --mutate \"src/**/*.ts\" --reporters json",
+    "raw_report": "reports/mutation/mutation.json (Stryker JSON reporter)",
+    "report": "artifacts/mutation-report.json",
+    "adapter": "Map Stryker files[]/mutants[] into targets[]: one target per file, killed/survived/timeout counts from mutant status, equivalent mutants excluded from the denominator.",
+    "min_msi": 80,
+    "core_min_msi": 90
+  },
+  "complexity": {
+    "command": "python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src --json",
+    "engines": ["tree-sitter", "lizard"],
+    "standard": 10,
+    "warning": 15
+  },
+  "services": [],
+  "notes": [
+    "Copy this file to quality-gate.config.json in the adopting repository root and keep mutation.report at artifacts/mutation-report.json.",
+    "The shipped quality-gate.yml passes this file to mutation_gate.py run --config on every pull request and trunk push; MUTATION_COMMAND is only a fallback.",
+    "Cucumber.js is the industry-standard BDD runner for Node.js and writes JUnit XML through --format junit:<path>.",
+    "Stryker is the industry-standard mutation testing framework for JavaScript and TypeScript.",
+    "The adapter normalizes Stryker's reports/mutation/mutation.json into the report consumed by mutation_gate.py and Gate 3.",
+    "Add services: or testcontainers when acceptance tests require real middleware.",
+    "Never mark a gate command non-blocking or ignore its exit code."
+  ]
+}

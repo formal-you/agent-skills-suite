@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "mode": "spec-driven",
+  "stack": "go",
+  "display_name": "Go reference",
+  "source": {
+    "dirs": ["."],
+    "languages": ["go"]
+  },
+  "install": [
+    "go mod download"
+  ],
+  "acceptance": {
+    "command": "godog run tests/acceptance/features --format junit:artifacts/acceptance-junit.xml",
+    "junit": "artifacts/acceptance-junit.xml",
+    "alternatives": [
+      "gotestsum --junitfile artifacts/acceptance-junit.xml -- ./...",
+      "go test ./... -json > artifacts/acceptance.jsonl"
+    ]
+  },
+  "mutation": {
+    "tool": "go-mutesting",
+    "command": "go-mutesting ./...",
+    "raw_report": "go-mutesting text output",
+    "report": "artifacts/mutation-report.json",
+    "adapter": "Parse go-mutesting pass/fail output into targets[]: one target per package/file with killed/survived counts.",
+    "min_msi": 80,
+    "core_min_msi": 90
+  },
+  "complexity": {
+    "command": "python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir . --json",
+    "engines": ["tree-sitter", "lizard"],
+    "standard": 10,
+    "warning": 15
+  },
+  "services": [],
+  "notes": [
+    "Copy this file to quality-gate.config.json in the adopting repository root and keep mutation.report at artifacts/mutation-report.json.",
+    "The shipped quality-gate.yml passes this file to mutation_gate.py run --config on every pull request and trunk push; MUTATION_COMMAND is only a fallback.",
+    "Godog is the industry-standard Cucumber/BDD runner for Go and writes JUnit XML through --format junit:<path>.",
+    "go-mutesting is the standard open-source mutation testing tool for Go; gotestsum remains the fallback JUnit reporter.",
+    "gocyclo -over 10 ./... is a second complexity opinion; exclude vendor/ and generated code.",
+    "Add services: or testcontainers when acceptance tests require real middleware.",
+    "Never mark a gate command non-blocking or ignore its exit code."
+  ]
+}

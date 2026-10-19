@@ -13,6 +13,14 @@ name: Quality Engineering Gate
 #
 # Copy this file to .github/workflows/quality-gate.yml in the adopting repository.
 # See README.md in this directory for installation, configuration, and troubleshooting.
+#
+# Config-driven adoption: mutation runs on every pull_request and on push to main/master and is
+# fail-closed. Provide the project's real mutation command by committing a
+# quality-gate.config.json (copy quality-gate.config.example.json and fill mutation.command +
+# mutation.report), or by setting the MUTATION_COMMAND repository variable. If neither exists the
+# mutation job fails with an actionable message; it never skips and must not be made non-blocking.
+# The shipped Python commands are the reference implementation:
+# each adopting stack must merge its profile fragment (profiles/) into this workflow.
 
 on:
   pull_request:
@@ -303,17 +311,20 @@ jobs:
   # Checks: Audits 03-qa-verification.md when signed off with QA_PASSED:
   #         - Basis Path Test Cases >= actual AST V(G) for modified functions
   #         - Cross-validates Section 3 V(G) against the uploaded AST artifact
+  #         - Cross-validates Section 4 aggregate MSI/counts and per-target rows
+  #           against the uploaded mutation-report artifact
   #         - Mutation Testing table consistency & MSI >= 80% (MSI >= 90% core)
   # ---------------------------------------------------------------------------
   gate3-verification:
     name: Gate 3 - Acceptance & MSI Audit
     runs-on: ubuntu-latest
-    needs: [gate1-plan-linter, rbac-audit, complexity-gate, acceptance-tests]
+    needs: [gate1-plan-linter, rbac-audit, complexity-gate, acceptance-tests, mutation-active-check]
     if: |
       always() &&
       needs.gate1-plan-linter.result == 'success' &&
       needs.complexity-gate.result == 'success' &&
       needs.acceptance-tests.result == 'success' &&
+      needs.mutation-active-check.result == 'success' &&
       (needs.rbac-audit.result == 'success' || needs.rbac-audit.result == 'skipped')
     steps:
       - name: Checkout
@@ -330,7 +341,13 @@ jobs:
           name: complexity-report
           path: artifacts
 
-      - name: Run Gate 3 Verification Linter (cross-validated with AST report)
+      - name: Download mutation report artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: mutation-report
+          path: artifacts
+
+      - name: Run Gate 3 Verification Linter (cross-validated with AST and mutation reports)
         shell: bash
         run: |
           set -uo pipefail
@@ -340,6 +357,8 @@ jobs:
               --tasks-dir tasks \
               --actual-complexity artifacts/complexity-report.json \
               --require-actual-complexity \
+              --actual-mutation artifacts/mutation-report.json \
+              --require-actual-mutation \
               --strict --json > verification-report.json 2> verification-error.log || status=$?
           else
             echo '{"status": "skipped", "message": "No tasks directory found"}' > verification-report.json
@@ -378,15 +397,19 @@ jobs:
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
-  # Stage 6: Active Mutation Testing (fail-closed)
-  # Runs the project's MUTATION_COMMAND and enforces the normalized report and
-  # MSI threshold. A missing command or report fails the build; it never skips.
+  # Stage 6: Active Mutation Testing (fail-closed, pre-merge on PR and push)
+  # Runs the project's real mutation tool on every pull_request and on push to
+  # main/master. Command resolution (first match wins):
+  #   1. committed quality-gate.config.json -> mutation_gate.py run --config ...
+  #   2. MUTATION_COMMAND repository variable -> --command ... --report ...
+  #   3. neither -> hard failure with an actionable message
+  # A missing command, a non-zero command, a missing/malformed report or MSI below
+  # 80% fails the build. Never wrap this job in a non-blocking setting (`|| true`).
   # ---------------------------------------------------------------------------
   mutation-active-check:
     name: Mutation - Active Kill Ratio Check
     runs-on: ubuntu-latest
     needs: [acceptance-tests]
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -416,20 +439,27 @@ jobs:
             cargo fetch
           fi
 
-      - name: Run mutation hard gate
+      - name: Run mutation hard gate (config-driven, fail-closed)
         shell: bash
         env:
           MUTATION_COMMAND: ${{ vars.MUTATION_COMMAND }}
         run: |
           set -uo pipefail
-          if [ -z "${MUTATION_COMMAND:-}" ]; then
-            echo "MUTATION_COMMAND repository variable is required; mutation gate is fail-closed." >&2
+          mkdir -p artifacts
+          gate_args=()
+          if [ -f "quality-gate.config.json" ]; then
+            echo "Mutation configuration: quality-gate.config.json (--config)"
+            gate_args=(--config quality-gate.config.json)
+          elif [ -n "${MUTATION_COMMAND:-}" ]; then
+            echo "Mutation configuration: MUTATION_COMMAND repository variable"
+            gate_args=(--command "$MUTATION_COMMAND" --report artifacts/mutation-report.json)
+          else
+            echo "No mutation command configured; the mutation gate is fail-closed." >&2
+            echo "Fix: commit quality-gate.config.json (copy quality-gate.config.example.json and fill mutation.command + mutation.report), or set the MUTATION_COMMAND repository variable. Do not disable this job." >&2
             exit 1
           fi
-          mkdir -p artifacts
           python .agents/skills/quality-engineering/scripts/mutation_gate.py run \
-            --command "$MUTATION_COMMAND" \
-            --report artifacts/mutation-report.json \
+            "${gate_args[@]}" \
             --min-msi 80
 
       - name: Upload mutation report

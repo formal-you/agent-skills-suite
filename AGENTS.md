@@ -44,25 +44,25 @@
 
 `task bundles -> Gate 1 -> Gate 2 -> Dev <-> QA -> Gate 3 -> converge`
 
-- Planner writes `01-contract.md`; Dev writes `02-dev-workspace.md`; QA writes `03-qa-verification.md`;
-  `04-process.md` is derived and never hand-edited.
-- Do not start Dev without a contract, start QA without `WAITING_FOR_QA`, or merge with a red required
-  gate. Completion = `QA_PASSED` + Gate 3 + clean role audit.
+- Planner writes `01-contract.md` (Gherkin + `dod.feature_file`); Dev writes `02-dev-workspace.md`;
+  QA writes `03-qa-verification.md`; `04-process.md` is derived and never hand-edited.
+- Dev and QA share one task branch recorded in `02`, never `main`/`master`; never start Dev without a
+  contract or QA without `WAITING_FOR_QA`, and never merge a red gate. Done = `QA_PASSED` + Gate 3 +
+  clean role audit.
 
 ### 2.3 Skill-suite development
 
-Changes to skills, rules, templates, tools, manifests, CI or docs follow §4. Use it when improving
-the suite rather than delivering one task bundle.
+Changes to skills, rules, templates, tools, manifests, CI or docs follow §4; use it to improve the suite, not to deliver one task bundle.
 
 ## 3. Roles, gates and single sources of truth
 
 - **Role matrix:** [`enforcement.md#role-matrix`](.agents/rules/enforcement.md#role-matrix) is the
   canonical list of owners, write scopes and read-only areas. Do not duplicate it here; each role
   follows its `.agents/rules/<role>.md`.
-- **Gates:** Gate 1 `plan-linter` validates contracts/anchors/DAG; Gate 2 is independent `review`;
-  Gate 3 `verification_linter.py` audits V(G)/basis paths/MSI/provenance; mutation runs on trunk via
-  `mutation_gate.py`; RBAC uses `rbac_audit.py`. Gate scripts and CI templates live inside the
-  `quality-engineering` skill; canonical details:
+- **Gates:** Gate 1 `plan-linter` validates contracts/Gherkin feature/anchors/DAG; Gate 2 `review`;
+  Gate 3 `verification_linter.py` audits V(G)/MSI/provenance and cross-validates supplied complexity
+  and mutation artifacts; mutation runs pre-merge via `mutation_gate.py`; RBAC `rbac_audit.py`, branch
+  guard `branch_guard.py`; scripts/CI templates live in `quality-engineering`:
   [`.agents/skills/quality-engineering/assets/templates/ci/README.md`](.agents/skills/quality-engineering/assets/templates/ci/README.md).
 - **Quality bar:** PRD/spec have no unresolved placeholders, stable IDs/anchors and every ADR fork
   resolved or explicitly open before decomposition. Code: `V(G) <= 10` per function (`11-15` waiver,

@@ -194,7 +194,7 @@ class QualityEngineeringWiringTests(unittest.TestCase):
         text = read_text(QE_SKILL)
         self.assertRegex(frontmatter(text), VERSION_RE)
         versions = VERSION_RE.findall(frontmatter(text))
-        self.assertEqual(versions, ["2.2.0"], "quality-engineering metadata.version must be 2.2.0")
+        self.assertEqual(versions, ["3.0.0"], "quality-engineering metadata.version must be 3.0.0")
         self.assertLess(len(text.splitlines()), 200, "SKILL.md must stay below 200 lines")
 
     def test_protocol_contains_the_strategy_to_ci_mapping(self) -> None:
@@ -268,21 +268,21 @@ class DocsAndVersionTests(unittest.TestCase):
 
     def test_version_files_agree(self) -> None:
         version = read_text(ROOT / "VERSION").strip()
-        self.assertEqual(version, "4.0.1")
+        self.assertEqual(version, "5.0.0")
         plugin = json.loads(read_text(ROOT / ".claude-plugin" / "plugin.json"))
-        self.assertEqual(plugin["version"], "4.0.1")
+        self.assertEqual(plugin["version"], "5.0.0")
         self.assertIn("eleven", plugin["description"].lower())
         marketplace = json.loads(read_text(ROOT / ".claude-plugin" / "marketplace.json"))
         plugins = marketplace["plugins"]
         self.assertEqual(len(plugins), 1)
-        self.assertEqual(plugins[0]["version"], "4.0.1")
+        self.assertEqual(plugins[0]["version"], "5.0.0")
         self.assertIn("eleven", plugins[0]["description"].lower())
 
     def test_changelog_has_the_release_section(self) -> None:
         text = read_text(ROOT / "CHANGELOG.md")
-        self.assertIn("## [4.0.1] - 2026-10-19", text)
-        section = text.split("## [4.0.1] - 2026-10-19", 1)[1].split("\n## [", 1)[0]
-        self.assertIn("### Changed", section, "4.0.1 changelog misses: ### Changed")
+        self.assertIn("## [5.0.0] - 2026-10-19", text)
+        section = text.split("## [5.0.0] - 2026-10-19", 1)[1].split("\n## [", 1)[0]
+        self.assertIn("### Changed", section, "5.0.0 changelog misses: ### Changed")
 
 
 if __name__ == "__main__":

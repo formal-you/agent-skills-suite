@@ -16,6 +16,7 @@ QE_SKILL = ROOT / ".agents" / "skills" / "quality-engineering" / "SKILL.md"
 QE_TRIAGE = ROOT / ".agents" / "skills" / "quality-engineering" / "references" / "triage-routing.md"
 VERIFICATION = ROOT / ".agents" / "skills" / "quality-engineering" / "scripts" / "verification_linter.py"
 MUTATION_GATE = ROOT / ".agents" / "skills" / "quality-engineering" / "scripts" / "mutation_gate.py"
+BRANCH_GUARD = ROOT / ".agents" / "skills" / "quality-engineering" / "scripts" / "branch_guard.py"
 PLAN_SKILL = ROOT / ".agents" / "skills" / "plan-linter" / "SKILL.md"
 PLAN_LINTER = ROOT / ".agents" / "skills" / "plan-linter" / "scripts" / "plan_linter.py"
 GUIDE = ROOT / "docs" / "skills-guide.zh-CN.md"
@@ -34,6 +35,10 @@ GATE3_CODES = {
     "QA_INVALID_MSI_SCORE",
     "MUTATION_TABLE_INCONSISTENT",
     "MUTATION_EQUIVALENT_JUSTIFICATION_MISSING",
+    "MUTATION_REPORT_MISSING",
+    "MUTATION_MISMATCH_WITH_REPORT",
+    "MUTATION_PHANTOM_TARGET",
+    "MUTATION_TARGET_MISSING_IN_03",
     "EVIDENCE_MISSING_COMMAND",
     "EVIDENCE_MISSING_RESULT",
     "EVIDENCE_MISSING_ARTIFACT",
@@ -46,6 +51,24 @@ MUTATION_CODES = {
     "MUTATION_REPORT_INVALID",
     "MUTATION_THRESHOLD_FAILED",
     "MUTATION_COMMAND_FAILED",
+}
+
+PLAN_BDD_CODES = {
+    "MISSING_FEATURE_FILE",
+    "BDD_FEATURE_FILE_EXTENSION",
+    "FEATURE_FILE_OUTSIDE_ACCEPTANCE",
+    "BDD_GHERKIN_BLOCK_MISSING",
+    "BDD_GHERKIN_INVALID",
+    "BDD_STEP_DEFINITIONS_INVALID",
+}
+
+BRANCH_CODES = {
+    "BRANCH_PROTECTED",
+    "BRANCH_PATTERN_INVALID",
+    "BRANCH_DETACHED",
+    "BRANCH_DECLARED_MISSING",
+    "BRANCH_MISMATCH",
+    "TASK_DOC_MISSING",
 }
 
 RETIRED_CODES = {
@@ -97,6 +120,22 @@ class ErrorCodeConsistencyTests(unittest.TestCase):
         for code in ("BDD_MISSING_PRECONDITION", "FORBIDDEN_TOUCH_FILE", "DAG_CYCLE"):
             self.assertIn(code, emitted, "plan_linter.py does not emit " + code)
             self.assertIn(code, documented, "plan-linter/SKILL.md does not document " + code)
+
+    def test_plan_bdd_codes_are_emitted_and_documented(self) -> None:
+        emitted = read(PLAN_LINTER)
+        documented = read(PLAN_SKILL)
+        for code in sorted(PLAN_BDD_CODES):
+            self.assertIn(code, emitted, "plan_linter.py does not emit " + code)
+            self.assertIn("`" + code + "`", documented, "plan-linter/SKILL.md does not document " + code)
+
+    def test_branch_guard_codes_are_emitted_documented_and_routed(self) -> None:
+        emitted = read(BRANCH_GUARD)
+        documented = read(QE_SKILL)
+        routed = read(QE_TRIAGE)
+        for code in sorted(BRANCH_CODES):
+            self.assertIn(code, emitted, "branch_guard.py does not emit " + code)
+            self.assertIn("`" + code + "`", documented, "quality-engineering/SKILL.md does not document " + code)
+            self.assertIn("`" + code + "`", routed, "triage-routing.md does not route " + code)
 
     def test_code_tables_are_backticked(self) -> None:
         # Guard against prose mentions that accidentally look like a registry entry.

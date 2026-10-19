@@ -5,6 +5,21 @@ This helper is intentionally small and dependency-free. It either runs a project
 provided mutation command and then validates the normalized report, or validates
 an existing report. A missing or malformed report is a failure, never a skip.
 
+Usage::
+
+    mutation_gate.py run --config quality-gate.config.json --min-msi 80
+    mutation_gate.py run --command "<mutation command>" --report artifacts/mutation-report.json
+    mutation_gate.py check --report artifacts/mutation-report.json --json
+
+``--config PATH`` (accepted by both ``run`` and ``check``) reads the committed
+``quality-gate.config.json``-shaped JSON object and resolves ``mutation.command``,
+``mutation.report`` and ``mutation.min_msi`` from it. Explicit CLI flags always win
+over config values, which win over defaults; ``schema_version`` must be 1.
+``mutation.core_min_msi`` is validated when present (numeric and >= ``min_msi``); it
+documents the stricter core-module floor that Gate 3 enforces via ``risk_level: core``.
+``run`` fails closed (usage exit 2) when neither ``--command`` nor ``mutation.command``
+is configured: it never executes an empty command.
+
 Normalized report schema::
 
     {
@@ -38,13 +53,106 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 EXIT_PASS = 0
 EXIT_FAIL = 1
 EXIT_USAGE = 2
 
+CONFIG_SCHEMA_VERSION = 1
 REQUIRED_TARGET_FIELDS = ("file", "total", "killed", "timed_out", "equivalent", "survived")
+
+
+class ConfigError(ValueError):
+    """Raised when --config is missing, unreadable or structurally invalid."""
+
+
+def _config_str(mutation: Dict[str, Any], key: str) -> Optional[str]:
+    value = mutation.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ConfigError("config field mutation.%s must be a non-empty string" % key)
+    return value.strip()
+
+
+def _config_min_msi(mutation: Dict[str, Any]) -> Optional[float]:
+    value = mutation.get("min_msi")
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ConfigError("config field mutation.min_msi must be numeric")
+    if not (0.0 <= float(value) <= 100.0):
+        raise ConfigError("config field mutation.min_msi must be between 0 and 100")
+    return float(value)
+
+
+def _validate_core_min_msi(mutation: Dict[str, Any]) -> None:
+    """Validate the optional core floor recorded in the config (Gate 3 enforces it)."""
+    value = mutation.get("core_min_msi")
+    if value is None:
+        return
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ConfigError("config field mutation.core_min_msi must be numeric")
+    if not (0.0 <= float(value) <= 100.0):
+        raise ConfigError("config field mutation.core_min_msi must be between 0 and 100")
+    min_msi = mutation.get("min_msi")
+    if isinstance(min_msi, (int, float)) and not isinstance(min_msi, bool):
+        if float(value) < float(min_msi):
+            raise ConfigError("config field mutation.core_min_msi must be >= mutation.min_msi")
+
+
+def _load_config(config_path: Path) -> Dict[str, Any]:
+    """Load and validate the config object used by run/check (schema_version 1)."""
+    if not config_path.is_file():
+        raise ConfigError("config file not found: %s" % config_path)
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ConfigError("config file is not valid JSON: %s" % exc) from exc
+    if not isinstance(data, dict):
+        raise ConfigError("config root must be a JSON object")
+    schema_version = data.get("schema_version", CONFIG_SCHEMA_VERSION)
+    if schema_version != CONFIG_SCHEMA_VERSION:
+        raise ConfigError(
+            "unsupported config schema_version %r (expected %d)"
+            % (schema_version, CONFIG_SCHEMA_VERSION)
+        )
+    mutation = data.get("mutation")
+    if not isinstance(mutation, dict):
+        raise ConfigError("config must contain a 'mutation' object")
+    _validate_core_min_msi(mutation)
+    return mutation
+
+
+def _resolve_settings(args: argparse.Namespace) -> Tuple[Optional[str], Optional[str], float]:
+    """Resolve command/report/min_msi with precedence CLI flag > config > default."""
+    mutation: Dict[str, Any] = {}
+    if getattr(args, "config", None):
+        mutation = _load_config(Path(args.config))
+
+    command = getattr(args, "command", None)
+    if command is not None and not command.strip():
+        raise ConfigError("--command must not be empty")
+    if command is None:
+        command = _config_str(mutation, "command")
+
+    report = args.report
+    if report is not None and not report.strip():
+        raise ConfigError("--report must not be empty")
+    if report is None:
+        report = _config_str(mutation, "report")
+
+    min_msi = args.min_msi
+    if min_msi is None:
+        min_msi = _config_min_msi(mutation)
+    if min_msi is None:
+        min_msi = 80.0
+    if not (0.0 <= float(min_msi) <= 100.0):
+        raise ConfigError("--min-msi must be between 0 and 100")
+
+    return command, report, float(min_msi)
+
 
 
 def _as_count(value: Any, field: str) -> int:
@@ -183,14 +291,38 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="action")
 
     run_parser = subparsers.add_parser("run", help="run the mutation command, then evaluate its report")
-    run_parser.add_argument("--command", required=True, help="shell command that produces the normalized report")
-    run_parser.add_argument("--report", required=True, help="path to the normalized mutation report")
-    run_parser.add_argument("--min-msi", type=float, default=80.0, help="minimum MSI percentage (default: 80)")
+    run_parser.add_argument(
+        "--command",
+        default=None,
+        help="shell command that produces the normalized report (precedence: flag > config > none)",
+    )
+    run_parser.add_argument(
+        "--report",
+        default=None,
+        help="path to the normalized mutation report (precedence: flag > config > required)",
+    )
+    run_parser.add_argument(
+        "--config",
+        default=None,
+        metavar="PATH",
+        help="quality-gate.config.json-shaped file providing mutation.command/report/min_msi",
+    )
+    run_parser.add_argument("--min-msi", type=float, default=None, help="minimum MSI percentage (default: 80)")
     run_parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
 
     check_parser = subparsers.add_parser("check", help="evaluate an existing normalized report")
-    check_parser.add_argument("--report", required=True, help="path to the normalized mutation report")
-    check_parser.add_argument("--min-msi", type=float, default=80.0, help="minimum MSI percentage (default: 80)")
+    check_parser.add_argument(
+        "--report",
+        default=None,
+        help="path to the normalized mutation report (precedence: flag > config > required)",
+    )
+    check_parser.add_argument(
+        "--config",
+        default=None,
+        metavar="PATH",
+        help="quality-gate.config.json-shaped file providing mutation.report/min_msi",
+    )
+    check_parser.add_argument("--min-msi", type=float, default=None, help="minimum MSI percentage (default: 80)")
     check_parser.add_argument("--json", action="store_true", help="emit machine-readable JSON")
 
     parser.add_argument("--version", action="version", version="mutation_gate " + VERSION)
@@ -205,17 +337,27 @@ def main(argv: Optional[List[str]] = None) -> int:
         parser.print_help(sys.stderr)
         return EXIT_USAGE
 
-    if not (0.0 <= args.min_msi <= 100.0):
-        sys.stderr.write("error: --min-msi must be between 0 and 100\n")
+    try:
+        command, report, min_msi = _resolve_settings(args)
+    except ConfigError as exc:
+        sys.stderr.write("error: %s\n" % exc)
         return EXIT_USAGE
 
-    report_path = Path(args.report)
+    if report is None:
+        sys.stderr.write(
+            "error: no mutation report configured; pass --report or set mutation.report in --config\n"
+        )
+        return EXIT_USAGE
+    report_path = Path(report)
 
     if args.action == "run":
-        if not args.command.strip():
-            sys.stderr.write("error: --command must not be empty\n")
+        if not command:
+            sys.stderr.write(
+                "error: no mutation command configured; pass --command or set mutation.command "
+                "in --config (the gate is fail-closed and never runs an empty command)\n"
+            )
             return EXIT_USAGE
-        code = _run_command(args.command)
+        code = _run_command(command)
         if code != 0:
             sys.stderr.write("error: mutation command failed with exit code %d\n" % code)
             result = {
@@ -232,7 +374,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             return EXIT_FAIL
 
     try:
-        result = evaluate(report_path, args.min_msi)
+        result = evaluate(report_path, min_msi)
     except FileNotFoundError as exc:
         result = {
             "passed": False,

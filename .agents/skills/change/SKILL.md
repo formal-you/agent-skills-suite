@@ -4,7 +4,7 @@ description: "Run a bounded brownfield change (bugfix, small feature, behavior t
 license: MIT
 compatibility: "Harness-agnostic. Python >=3.9 optional for standards extraction, scaffolding and linting; a manual fallback exists."
 metadata:
-  version: "3.1.0"
+  version: "3.2.0"
   category: spec-pipeline
 ---
 

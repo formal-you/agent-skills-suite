@@ -10,6 +10,14 @@ ROOT = Path(__file__).resolve().parents[2]
 AGENTS = ROOT / "AGENTS.md"
 CONTRIBUTING = ROOT / "CONTRIBUTING.md"
 PR_TEMPLATE = ROOT / ".github" / "pull_request_template.md"
+RULES = ROOT / ".agents" / "rules"
+QE_SKILL = ROOT / ".agents" / "skills" / "quality-engineering"
+BRANCH_GUARD = QE_SKILL / "scripts" / "branch_guard.py"
+BRANCH_ISOLATION = QE_SKILL / "references" / "branch-isolation.md"
+RBAC_GATE = QE_SKILL / "assets" / "templates" / "ci" / "rbac-gate.yml"
+BRANCH_GUARD_COMMAND = (
+    "python .agents/skills/quality-engineering/scripts/branch_guard.py check"
+)
 
 REQUIRED_AGENTS_PHRASES = (
     "## 4. Skill change workflow",
@@ -132,6 +140,101 @@ class AgentsWorkflowTests(unittest.TestCase):
             "byte-identical",
         ):
             self.assertIn(phrase, text, "PR template misses: " + phrase)
+
+
+class BranchIsolationRuleTests(unittest.TestCase):
+    """Guards the branch-isolation guard, its CI wiring and the role rules."""
+
+    def test_branch_guard_script_and_reference_exist(self) -> None:
+        self.assertTrue(BRANCH_GUARD.is_file(), "missing branch guard script")
+        self.assertTrue(BRANCH_ISOLATION.is_file(), "missing branch isolation reference")
+        script = read(BRANCH_GUARD)
+        self.assertTrue(script.startswith("#!/usr/bin/env python3"), "branch guard needs a shebang")
+        self.assertIn('VERSION = "1.0.0"', script)
+        for code in (
+            "BRANCH_PROTECTED",
+            "BRANCH_PATTERN_INVALID",
+            "BRANCH_DETACHED",
+            "BRANCH_DECLARED_MISSING",
+            "BRANCH_MISMATCH",
+            "TASK_DOC_MISSING",
+        ):
+            self.assertIn(code, script, "branch guard does not emit " + code)
+        self.assertIn("rev-parse", script)
+        self.assertIn("--abbrev-ref", script)
+
+    def test_dev_rule_requires_a_dedicated_task_branch(self) -> None:
+        text = flat(read(RULES / "dev.md"))
+        self.assertIn("git rev-parse --abbrev-ref HEAD", text)
+        self.assertIn("feat/<task-id>", text)
+        self.assertIn("02-dev-workspace.md", text)
+        self.assertIn("`main`/`master`", text)
+        self.assertIn(BRANCH_GUARD_COMMAND, text)
+        self.assertIn("Record the branch", text)
+        self.assertIn("Switch branches in the middle of a task", text)
+
+    def test_qa_rule_verifies_the_recorded_branch(self) -> None:
+        text = flat(read(RULES / "qa.md"))
+        self.assertIn("git rev-parse --abbrev-ref HEAD", text)
+        self.assertIn("git merge-base --is-ancestor", text)
+        self.assertIn("`main`/`master`", text)
+        self.assertIn("02-dev-workspace.md", text)
+        self.assertIn(BRANCH_GUARD_COMMAND, text)
+        self.assertIn("CI gates", text)
+
+    def test_orchestrator_rule_blocks_protected_branch_dispatch(self) -> None:
+        text = flat(read(RULES / "orchestrator.md"))
+        for phrase in (
+            "Never dispatch Dev or QA work onto a protected branch",
+            "`main`/`master`",
+            "every Dev/QA dispatch prompt",
+            "02-dev-workspace.md",
+            "branch_guard.py",
+        ):
+            self.assertIn(phrase, text)
+
+    def test_enforcement_documents_branch_isolation_and_honest_limits(self) -> None:
+        text = flat(read(RULES / "enforcement.md"))
+        for phrase in (
+            "## Branch isolation",
+            "branch_guard.py",
+            "branch-isolation.md",
+            "advisory",
+            "authoritative",
+            "Branch protection",
+            "not** physical enforcement",
+            "never commits or hands off on a protected trunk",
+        ):
+            self.assertIn(phrase, text)
+
+    def test_ci_template_runs_the_branch_guard_before_the_audit(self) -> None:
+        text = read(RBAC_GATE)
+        self.assertIn(BRANCH_GUARD_COMMAND, text)
+        self.assertIn('--branch "${{ github.head_ref || github.ref_name }}"', text)
+        self.assertIn("--protected main master", text)
+        self.assertIn("--json", text)
+        self.assertIn('exit "$status"', text)
+        self.assertIn("rbac_audit.py", text)
+        self.assertLess(
+            text.index("branch_guard.py"),
+            text.index("rbac_audit.py"),
+            "the branch guard must run before the RBAC diff audit",
+        )
+
+    def test_reference_covers_lifecycle_ci_and_migration(self) -> None:
+        text = flat(read(BRANCH_ISOLATION))
+        for phrase in (
+            "## 1. Lifecycle",
+            "feat/<task-id>",
+            "--require-declared",
+            "BRANCH_PROTECTED",
+            "## 3. How CI consumes it",
+            "## 4. Migration runbook",
+            "branch protection",
+            "advisory",
+            "authoritative",
+        ):
+            self.assertIn(phrase, text)
 
 
 if __name__ == "__main__":
