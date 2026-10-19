@@ -39,7 +39,7 @@ import shutil
 import sys
 from pathlib import Path
 
-VERSION = "4.0.0"
+VERSION = "4.0.1"
 DEFAULT_DEST = ".agents/skills"
 QUALITY_ENGINEERING = "quality-engineering"
 SKIP_DIRS = {"__pycache__", ".git"}

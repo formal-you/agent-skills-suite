@@ -68,6 +68,8 @@ the suite rather than delivering one task bundle.
   resolved or explicitly open before decomposition. Code: `V(G) <= 10` per function (`11-15` waiver,
   `>15` rejected); `Test Cases >= V(G)`; `MSI >= 80%` (`>= 90%` for `risk_level: core`); no critical
   surviving mutant; no fabricated evidence.
+- **Evidence and freshness:** current files, commands and tests are the evidence for current
+  behavior. Archived notes explain history only and never establish a current gap; read before claiming.
 - **Task bundles and Goldilocks:** `01` Planner contract, `02` Dev handoff, `03` QA evidence/verdict,
   `04` derived and tooling-owned; `task_id` in `01` equals the directory name. Default 1–3 touched
   files and 50–250 estimated diff lines; split larger work and merge smaller work.
@@ -89,10 +91,9 @@ reversible; evidence over claims; one writer per file; no bypassed gates.
 3. **Author or optimize.** Edit canonical `.agents/skills/<name>/` and the byte-identical mirror
    `skills/workflow/<name>/`; keep `SKILL.md` under 200 lines, canonical English, self-contained;
    put detail in `references/`/`assets/`; keep templates token-free where Gate 1 scans them. Compose
-   with other skills by name, never by copying their scripts or using a bare `scripts/...` path.
-   Update the role rule, docs, skill `metadata.version`, `CHANGELOG.md`, `VERSION` and plugin
-   manifests for behavior changes; document breaking changes and migration. Never weaken a gate,
-   test or role boundary.
+   with other skills by name, never by copying their scripts or a bare `scripts/...` path. Update
+   the role rule, docs, `metadata.version`, `CHANGELOG.md`, `VERSION` and plugin manifests for
+   behavior changes; document breaking changes and migration. Never weaken a gate, test or boundary.
 4. **Test and evidence before commit.** Run targeted tests, then the full suite:
    `python -m unittest discover -s tests/unit -p "test_*.py"`. Verify dual-tree parity,
    self-containment, line limits, YAML/JSON parse, `git diff --check` and the CI matrix
@@ -141,9 +142,8 @@ git diff --check
 
 ## 6. Maintaining this file
 - Keep this always-loaded summary at most 155 lines; move detail to the source of truth linked above.
-- Do not duplicate role permissions, gate implementation details or pinned tool versions here.
-- Changes need a docs PR, the workflow guard tests and the same review rules as §4. If this file
-  conflicts with a role rule, the role rule wins for permissions; fix the stale source in the PR.
+- Do not duplicate role permissions, gate details or pinned versions; changes need a docs PR, the
+  workflow guard tests and §4 review. If this conflicts with a role rule, the role rule wins.
 
 ## References
 
