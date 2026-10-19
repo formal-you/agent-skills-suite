@@ -70,6 +70,6 @@
 - [ ] 是否更新了受影响的单一事实源，而不是只改 AGENTS？
 - [ ] `python -m unittest tests.unit.test_agents_workflow -v` 通过。
 - [ ] 全量测试、`git diff --check`、CI 矩阵通过。
-- [ ] 变更走 issue -> branch -> PR -> merge -> tag 流程。
+- [ ] 默认 branch -> commit；issue/PR/tag 仅在用户要求或发布时创建，相关修复可合并为一个 issue/PR。
 
 相关守卫：[`tests/unit/test_agents_workflow.py`](../tests/unit/test_agents_workflow.py) 检查结构、行数预算、必需链接和不重复角色/门禁表。

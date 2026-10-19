@@ -24,7 +24,7 @@
 >
 > **v3.4.x 当前状态（2026-10-19）**：v3.4.0 接入全局测试策略，v3.4.1 QA 自带 Gate 3 预检，
 > v3.4.2–v3.4.4 固化并升级 AGENTS.md 的 skill-change workflow。本文仍是 **v3.1.0 评分快照**，
-> 不重新打分；当前发布树单元测试为 **424 passed, 1 skipped**（v3.1.0 基线为 301 passed, 1 skipped）。
+> 不重新打分；当前发布树单元测试为 **425 passed, 1 skipped**（v3.1.0 基线为 301 passed, 1 skipped）。
 
 ---
 
@@ -48,7 +48,7 @@
 - **强项**：端到端流程完整（想法 → PRD → 规格 → 任务 → Gate 1/2 → Dev → QA → 收敛）；确定性
   Gate 1 + CI RBAC 审计；四文档契约与角色隔离；brownfield 增量与活规格；自包含技能与插件分发；
   prompt-first、可迁移、无引擎依赖；v3.1.0 基线发布包 301 个黑盒单元测试（1 skip），当前 v4.0.1
-  为 424 个（1 skip）。
+  为 425 个（1 skip）。
 - **仍弱**：生态与公开采用接近零；插件清单已就绪，但尚未进入公开市场，没有公开示例库 / 社区 /
   `skills-ref validate`；Gate 2 仍是人工提示词；没有 per-task 子代理编排；没有真实仓库上的公开 A/B 数据。
 - **最接近的竞品**：GitHub Spec Kit（流程与生态）与 OpenSpec（brownfield 模型），cc-sdd（Agent Skills
@@ -106,7 +106,7 @@ Taskmaster           3.08  ██████▏
 
 - 本套件（发布树）：`skills/` 可安装布局（十一个 workflow 技能 + `diagnose-windows-sandbox-acl`）、
   `.claude-plugin/` 插件与市场清单、`tools/`、`.agents/skills/quality-engineering/assets/templates/ci/`、`docs/`、`tests/unit/`；本文引用的
-  v3.1.0 基线为 **301 个黑盒单元测试（1 skip）**，当前 v4.0.1 为 **424 个（1 skip）**。
+  v3.1.0 基线为 **301 个黑盒单元测试（1 skip）**，当前 v4.0.1 为 **425 个（1 skip）**。
 - 上游开发仓库另有完整测试套件（历史数据：539 个单元测试 + 109 个 E2E），**不随发布包分发**，
   仅作上游证据，不计入发布基线（详见 [技能使用指南](skills-guide.zh-CN.md)、[brownfield 与收敛](brownfield-convergence.zh-CN.md)、
   [宿主兼容性](skills-compatibility.md) 与 [技能布局说明](../.agents/skills/README.md)）。
@@ -149,7 +149,7 @@ Taskmaster           3.08  ██████▏
 | `quality-engineering` | 4.6 | CI 流水线构建、环境治理、合并前/后自动化门禁、Gate 3 审计（`verification_linter.py`）与圈复杂度检查（`complexity_check.py`） | 分布式复杂环境调度与混沌工程待深入 |
 | `converge` | 4.1 | append-only 写回、幂等 marker、归档与指纹漂移检测 | 依赖 Dev 如实填偏差表；无自动语义冲突消解 |
 | 可选引擎 | 3.0 | 确定性生成/回放对回归有价值 | 领域启发式与预制内容可能污染输出；默认不应依赖 |
-| 工具/文档 | 4.5 | 插件清单（Claude Code/Codex/Copilot）、自包含技能、兼容矩阵、中文指南、RBAC/安装工具、quickstart 分发 + CI 模板、301/424 单元测试（基线/当前） | 公开市场采用与社区仍为零；无公开 A/B；示例库待补 |
+| 工具/文档 | 4.5 | 插件清单（Claude Code/Codex/Copilot）、自包含技能、兼容矩阵、中文指南、RBAC/安装工具、quickstart 分发 + CI 模板、301/425 单元测试（基线/当前） | 公开市场采用与社区仍为零；无公开 A/B；示例库待补 |
 
 **一句话**：最强的仍是 `plan-linter` 与 `task-decomposition`；v3.1.0 的插件分发与自包含技能
 把"装得上、可独立加载"补齐；最需要继续补的是生态/公开采用，而不是再加技能。

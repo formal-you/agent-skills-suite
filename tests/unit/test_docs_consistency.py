@@ -57,7 +57,7 @@ class DocsIndexTests(unittest.TestCase):
     def test_benchmark_is_marked_as_baseline_and_current(self) -> None:
         text = read(DOCS / "skills-benchmark.zh-CN.md")
         self.assertIn("v3.1.0 基线", text)
-        self.assertIn("424 passed, 1 skipped", text)
+        self.assertIn("425 passed, 1 skipped", text)
 
 
 if __name__ == "__main__":
