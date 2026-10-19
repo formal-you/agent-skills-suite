@@ -65,15 +65,16 @@ All tests must pass on Windows and Linux. CI runs the matrix in `.github/workflo
 ## Git flow
 
 The canonical workflow is in [`AGENTS.md`](AGENTS.md#skill-change-workflow-authoring---optimization---tests---git-flow).
-In short: risk-based issue -> branch from `main` -> author/optimize -> tests + evidence -> conventional
-commit -> PR (`Closes #<issue>`) -> green checks + independent review where required -> merge ->
-watch post-merge CI -> sync `main` -> annotated `vX.Y.Z` tag and release with SemVer. Do not commit
-directly to `main`, do not force-push shared branches, and never move or delete a published tag; a bad
-release gets a new patch release.
+In short: user-triggered, batched issue -> branch from `main` -> author/optimize -> tests + evidence ->
+conventional commit -> PR when requested (`Closes #<issue>`) -> green checks + independent review where
+required -> merge -> watch post-merge CI -> sync `main` -> annotated `vX.Y.Z` tag and release with SemVer.
+Do not commit directly to `main`, do not force-push shared branches, and never move or delete a
+published tag; a bad release gets a new patch release. Do not open an issue or PR per conversation
+turn; related fixes may share one issue/PR.
 
 ## Pull requests
 
-- One focused change per PR; keep unrelated reformatting out.
+- One coherent workstream per PR; related fixes may batch; keep unrelated reformatting out.
 - Fill the PR template: `Closes #<issue>`, summary, test evidence, risk/rollback and release/tag plan.
 - Behavior, security, gate or CI changes need an independent reviewer (not the author); docs-only
   changes may self-merge only if branch protection permits it.

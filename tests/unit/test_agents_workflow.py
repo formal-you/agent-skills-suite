@@ -13,7 +13,7 @@ PR_TEMPLATE = ROOT / ".github" / "pull_request_template.md"
 
 REQUIRED_AGENTS_PHRASES = (
     "## 4. Skill change workflow",
-    "Intent and issue (risk-based)",
+    "Intent and issue (user-triggered, batched)",
     "Branch and write scope",
     "Author or optimize",
     "Test and evidence before commit",
@@ -49,6 +49,12 @@ class AgentsWorkflowTests(unittest.TestCase):
         self.assertIn("independent reviewer", text_flat)
         self.assertIn("disjoint write scopes", text_flat)
         self.assertIn("post-merge", text_flat.lower())
+
+    def test_agents_batches_issue_and_pr_work(self) -> None:
+        text = flat(read(AGENTS))
+        self.assertIn("Do not open an issue or PR for every change", text)
+        self.assertIn("one issue/PR", text)
+        self.assertIn("never create issues or PRs on your own initiative", text)
 
     def test_agents_is_concise_and_scannable(self) -> None:
         text = read(AGENTS)

@@ -80,14 +80,15 @@ This section applies when changing the suite itself (`SKILL.md`, `references/`, 
 rules, templates, manifests, CI or docs). It does not replace §2.2. Principles: small, reviewable,
 reversible; evidence over claims; one writer per file; no bypassed gates.
 
-1. **Intent and issue (risk-based).** Behavior, security, gate, CI, release or multi-file changes
-   start with an issue containing problem, scope, acceptance criteria, test plan and risk. A trivial
-   typo or docs-only PR may skip the issue only when the PR explains why; never use that exception
-   for code, gates, CI or release changes.
+1. **Intent and issue (user-triggered, batched).** Do not open an issue or PR for every change or
+   conversation turn. Accumulate related fixes and open one issue/PR when the user asks or the work
+   is release-worthy; that issue may cover several fixes from the same development effort. Behavior,
+   security, gate or CI changes still need a problem statement, acceptance criteria, test plan and
+   risk in that issue (or in the PR when the user skips the issue).
 2. **Branch and write scope.** Branch from an up-to-date `main` using `feat/<topic>`, `fix/<topic>`,
-   `docs/<topic>`, `chore/<topic>` or `security/<topic>`. One logical change per branch; never commit
-   directly to `main`. Parallel agents must use disjoint write scopes and the Lead integrates and
-   reviews the final diff; two agents must not edit the same file.
+   `docs/<topic>`, `chore/<topic>` or `security/<topic>`. Keep one coherent workstream per branch;
+   related fixes may share it. Never commit directly to `main`. Parallel agents must use disjoint
+   write scopes; the Lead integrates and reviews, and two agents must not edit the same file.
 3. **Author or optimize.** Edit canonical `.agents/skills/<name>/` and the byte-identical mirror
    `skills/workflow/<name>/`; keep `SKILL.md` under 200 lines, canonical English, self-contained;
    put detail in `references/`/`assets/`; keep templates token-free where Gate 1 scans them. Compose
@@ -104,30 +105,29 @@ reversible; evidence over claims; one writer per file; no bypassed gates.
 5. **Commit.** Use conventional commits (`feat(scope): ...`, `fix(scope): ...`, `docs(scope): ...`,
    `security(scope): ...`). Keep commits atomic; stage only intended files; never commit secrets,
    credentials, generated caches or unrelated reformatting.
-6. **Pull request and review.** Push the branch and open a PR against `main` using the PR template:
-   `Closes #<issue>`, summary, test evidence, risk/rollback, release/tag plan. Keep it reviewable;
-   open a draft PR early for long work. Required checks must be green, and behavior/security/gate/CI
-   changes need approval from an independent reviewer who is not the author (CODEOWNERS/branch
-   protection where configured). Docs-only changes may self-merge only if branch protection permits.
+6. **Pull request and review (when triggered).** Push the branch and open a PR against `main` using
+   the PR template: `Closes #<issue>`, summary, test evidence, risk/rollback, release/tag plan.
+   Required checks must be green; behavior/security/gate/CI changes need an independent reviewer
+   (CODEOWNERS/branch protection where configured). Docs-only changes may self-merge when permitted.
 7. **Merge, sync and post-merge verification.** Merge only with required checks and review complete;
-   use the configured merge method; do not force-push a reviewed branch; delete the branch and
-   `git switch main && git pull --ff-only`. Watch post-merge CI; if `main` is red, fix forward with a
-   new PR or revert with a PR — never rewrite `main`.
+   do not force-push a reviewed branch; delete the branch and `git switch main && git pull --ff-only`.
+   Watch post-merge CI; if `main` is red, fix forward with a new PR or revert with a PR.
 8. **Tag and release (SemVer).** Release only from merged `main`. Breaking -> major, feature ->
    minor, fix -> patch; docs/chore only when user-visible or bundled with a release. Update
    `VERSION`, `CHANGELOG.md`, plugin manifests and skill metadata, create an annotated `vX.Y.Z` tag
    (sign it if required), push it, and verify the release workflow, assets, GitHub release and
    install smoke. Never move or delete a published tag; a bad release gets a new patch release.
-9. **Definition of done.** Issue linked; tests and CI green; independent review where required;
-   mirrors byte-identical; docs, version, changelog and manifests agree; PR merged; post-merge CI
-   watched; tag/release verified when released; rollback path documented.
+9. **Definition of done.** Issue/PR linked when one was opened; tests and CI green; independent
+   review where required; mirrors byte-identical; docs, version, changelog and manifests agree; PR
+   merged; post-merge CI watched; tag/release verified when released; rollback path documented.
 10. **Prohibited shortcuts.** Direct commits to `main`; force-pushing shared branches; bypassing
     required checks (`|| true`, `continue-on-error`, `[skip ci]` on required gates); deleting or
     skipping tests; editing only one tree; committing secrets; self-approving behavior/security/gate
     changes; tagging before merge; moving published tags; declaring done without evidence.
 
-When the user says "standard open-source workflow", "git flow", "issue/PR", "commit/push/PR/tag" or
-equivalent, execute this section without asking for a separate process description.
+Only when the user says "standard open-source workflow", "git flow", "issue/PR", "commit/push/PR/tag"
+or equivalent do you open the issue/PR and execute this section without asking again. Otherwise work
+and commit locally; never create issues or PRs on your own initiative.
 
 ## 5. Commands
 
