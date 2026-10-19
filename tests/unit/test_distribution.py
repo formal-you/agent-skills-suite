@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the distribution layer: tools/quickstart.py and templates/ci/*.
+"""Tests for the distribution layer: tools/quickstart.py and the bundled CI skill assets.
 
 Run from the repository root:
     python -m unittest tests.unit.test_distribution -v
@@ -21,8 +21,15 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 QUICKSTART = REPO_ROOT / "tools" / "quickstart.py"
 SKILLS_ROOT = REPO_ROOT / ".agents" / "skills"
 RULES_ROOT = REPO_ROOT / ".agents" / "rules"
-TEMPLATES = REPO_ROOT / "templates" / "ci"
+QUALITY_ENGINEERING = SKILLS_ROOT / "quality-engineering"
+TEMPLATES = QUALITY_ENGINEERING / "assets" / "templates" / "ci"
 CI_FILES = ("plan-gate.yml", "quality-gate.yml", "rbac-gate.yml")
+GATE_SCRIPTS = (
+    "complexity_check.py",
+    "verification_linter.py",
+    "rbac_audit.py",
+    "mutation_gate.py",
+)
 
 
 def run_quickstart(*arguments, cwd=None):
@@ -108,9 +115,13 @@ class QuickstartTests(unittest.TestCase):
         installed_rules = sorted(path.name for path in (self.target / ".agents" / "rules").glob("*.md"))
         self.assertEqual(installed_rules, expected_rules)
 
-        self.assertTrue((self.target / "tools" / "rbac_audit.py").is_file())
-        self.assertTrue((self.target / "tools" / "mutation_gate.py").is_file())
+        quality_engineering = skills_dest / "quality-engineering"
+        for script in GATE_SCRIPTS:
+            self.assertTrue((quality_engineering / "scripts" / script).is_file(), script)
+        self.assertTrue((quality_engineering / "assets" / "templates" / "ci" / "quality-gate.yml").is_file())
+        self.assertFalse((self.target / "tools").exists(), "install must not create a repo-level tools/ directory")
         self.assertFalse((self.target / ".github").exists())
+        self.assertEqual(sorted(path.name for path in self.target.iterdir()), [".agents"])
         self.assertEqual([path.name for path in self.root.iterdir()], ["target"])
 
     def test_with_ci_installs_both_workflows(self):
@@ -118,6 +129,7 @@ class QuickstartTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         workflows = self.target / ".github" / "workflows"
         self.assertEqual(sorted(path.name for path in workflows.iterdir()), sorted(CI_FILES))
+        self.assertEqual(sorted(path.name for path in self.target.iterdir()), [".agents", ".github"])
         for name in CI_FILES:
             self.assertEqual(
                 (workflows / name).read_text(encoding="utf-8"),
@@ -169,9 +181,7 @@ class QuickstartTests(unittest.TestCase):
         self.assertEqual(skill_file.read_text(encoding="utf-8"), original)
 
     def test_skills_subset_and_optional_layers(self):
-        payload = self.install_json(
-            "--skills", "plan-linter", "--no-with-rules", "--no-with-audit"
-        )
+        payload = self.install_json("--skills", "plan-linter", "--no-with-rules")
         skills_dest = self.target / ".agents" / "skills"
         self.assertEqual(sorted(path.name for path in skills_dest.iterdir()), ["plan-linter"])
         self.assertFalse((self.target / ".agents" / "rules").exists())
@@ -179,6 +189,44 @@ class QuickstartTests(unittest.TestCase):
         self.assertFalse((self.target / "tools").exists())
         self.assertEqual(payload["failures"], 0)
         self.assertTrue(payload["ok"])
+
+    def test_with_ci_implies_quality_engineering(self):
+        payload = self.install_json("--skills", "plan-linter", "--with-ci")
+        skills_dest = self.target / ".agents" / "skills"
+        self.assertEqual(sorted(path.name for path in skills_dest.iterdir()), ["plan-linter", "quality-engineering"])
+        workflows = self.target / ".github" / "workflows"
+        self.assertEqual(sorted(path.name for path in workflows.iterdir()), sorted(CI_FILES))
+        self.assertTrue(
+            (skills_dest / "quality-engineering" / "scripts" / "rbac_audit.py").is_file()
+        )
+        self.assertTrue(payload["ok"], payload)
+
+    def test_with_ci_rejects_custom_dest(self):
+        result = self.install("--copy", "--with-ci", "--dest", "custom/skills")
+        self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+        self.assertIn("--with-ci requires the default --dest", result.stderr)
+        self.assertEqual(list(self.target.iterdir()), [])
+
+    def test_installed_quality_engineering_runs_from_a_relocated_copy(self):
+        result = self.install("--copy", "--skills", "quality-engineering")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        skill = self.target / ".agents" / "skills" / "quality-engineering"
+        environment = os.environ.copy()
+        environment.pop("PYTHONPATH", None)
+        for script in GATE_SCRIPTS:
+            help_result = subprocess.run(
+                [sys.executable, str(skill / "scripts" / script), "--help"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=environment,
+                timeout=120,
+            )
+            self.assertEqual(help_result.returncode, 0, script + ": " + help_result.stderr)
+        for name in CI_FILES:
+            self.assertTrue((skill / "assets" / "templates" / "ci" / name).is_file(), name)
+        self.assertTrue((skill / "assets" / "templates" / "ci" / "profiles" / "index.json").is_file())
 
     def test_quickstart_is_self_contained(self):
         portable = self.root / "portable"
@@ -200,7 +248,6 @@ class QuickstartTests(unittest.TestCase):
                 str(isolated_target),
                 "--copy",
                 "--no-with-rules",
-                "--no-with-audit",
             ],
             cwd=str(portable),
             capture_output=True,
@@ -284,7 +331,7 @@ class QuickstartTests(unittest.TestCase):
         target = Path(payload["target"])
         for item in payload["results"]:
             self.assertIn(item["status"], ("linked", "copied"), item)
-            self.assertIn(item["kind"], ("skill", "rule", "audit", "ci"), item)
+            self.assertIn(item["kind"], ("skill", "rule", "ci"), item)
             self.assertTrue(Path(item["destination"]).is_relative_to(target), item)
 
     def test_print_oneliner(self):
@@ -341,7 +388,7 @@ class CiTemplateTests(unittest.TestCase):
     def test_rbac_gate_invokes_audit_with_event_shas(self):
         text = self.files["rbac-gate.yml"]
         self.assertIn("fetch-depth: 0", text)
-        self.assertIn("tools/rbac_audit.py", text)
+        self.assertIn(".agents/skills/quality-engineering/scripts/rbac_audit.py", text)
         self.assertIn("--base", text)
         self.assertIn("--head", text)
         self.assertIn("--tasks-dir tasks", text)
@@ -373,6 +420,11 @@ class CiTemplateTests(unittest.TestCase):
         for token in ("TODO", "TBD", "{{"):
             self.assertNotIn(token, self.readme)
 
+    def test_workflow_templates_have_no_repo_level_tool_paths(self):
+        for name, text in self.files.items():
+            self.assertNotIn("tools/", text, name)
+            self.assertNotIn("templates/ci", text, name)
+
     def test_readme_documents_both_workflows(self):
         for name in CI_FILES:
             self.assertIn(name, self.readme)
@@ -393,7 +445,9 @@ class SkillSelfContainmentTests(unittest.TestCase):
     """A skill must keep working when installed alone (plugin / npx / Gemini --path)."""
 
     SKILLS_ROOT = REPO_ROOT / ".agents" / "skills"
-    FORBIDDEN_TOKENS = ("docs/", "tools/", ".agents/rules", ".agents/scripts", "templates/ci")
+    FORBIDDEN_TOKENS = ("docs/", "tools/", ".agents/rules", ".agents/scripts")
+    ALLOWED_SIBLING_SKILLS = {"plan-linter"}
+    REPO_LEVEL_CI = re.compile(r"(?<!assets/)(?<!skills/)templates/ci")
 
     def skill_directories(self):
         return sorted(
@@ -411,14 +465,56 @@ class SkillSelfContainmentTests(unittest.TestCase):
                 for token in self.FORBIDDEN_TOKENS:
                     if token in text:
                         offenders.append(relative + " -> " + token)
+                if self.REPO_LEVEL_CI.search(text):
+                    offenders.append(relative + " -> repo-level templates/ci")
                 for match in re.finditer(r"\.agents/skills/([A-Za-z0-9_-]+)/", text):
-                    if match.group(1) != skill.name:
-                        offenders.append(relative + " -> .agents/skills/" + match.group(1))
+                    name = match.group(1)
+                    if name == skill.name:
+                        continue
+                    if name in self.ALLOWED_SIBLING_SKILLS and re.search(r"\binstalled\b", text):
+                        # A pipeline skill may call Gate 1 from the plan-linter skill when installed.
+                        continue
+                    offenders.append(relative + " -> .agents/skills/" + name)
         self.assertEqual(
             offenders,
             [],
             "SKILL.md and references must be self-contained; move shared content into the skill",
         )
+
+    def test_skill_docs_never_use_a_bare_relative_script_path(self):
+        """`python scripts/x.py` only works if cwd is the skill dir; project-root form must be used."""
+        bare = re.compile(
+            r"\bpython3?\s+(?:-[A-Za-z]+\s+)*scripts/([A-Za-z0-9_.-]+\.(?:py|ps1))"
+        )
+        offenders = []
+        for skill in self.skill_directories():
+            for path in sorted(skill.rglob("*.md")):
+                text = path.read_text(encoding="utf-8", errors="replace")
+                relative = path.relative_to(REPO_ROOT).as_posix()
+                for match in bare.finditer(text):
+                    script = match.group(1)
+                    if not (skill / "scripts" / script).is_file():
+                        offenders.append(relative + " -> scripts/" + script + " is not in this skill")
+                    else:
+                        offenders.append(
+                            relative + " -> bare scripts/" + script
+                            + " (use .agents/skills/" + skill.name + "/scripts/" + script + ")"
+                        )
+        self.assertEqual(
+            offenders,
+            [],
+            "skill commands must resolve from the repository root:\n" + "\n".join(offenders),
+        )
+
+    def test_repository_has_no_repo_level_templates_or_gate_scripts(self):
+        self.assertFalse((REPO_ROOT / "templates").exists(), "templates must live inside a skill")
+        self.assertFalse((REPO_ROOT / "tools" / "rbac_audit.py").exists(), "rbac_audit belongs to quality-engineering")
+        self.assertFalse((REPO_ROOT / "tools" / "mutation_gate.py").exists(), "mutation_gate belongs to quality-engineering")
+        for script in GATE_SCRIPTS:
+            self.assertTrue((QUALITY_ENGINEERING / "scripts" / script).is_file(), script)
+        for name in CI_FILES + ("README.md", "quality-gate.config.example.json"):
+            self.assertTrue((TEMPLATES / name).is_file(), name)
+        self.assertTrue((TEMPLATES / "profiles" / "index.json").is_file())
 
     def test_skill_markdown_relative_links_stay_inside_the_skill(self):
         broken = []

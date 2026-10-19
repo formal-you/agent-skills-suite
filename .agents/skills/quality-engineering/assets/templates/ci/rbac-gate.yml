@@ -2,7 +2,7 @@ name: RBAC Audit
 
 # Authoritative enforcement layer (L1).
 # Copy this file to .github/workflows/rbac-gate.yml in the adopting repository.
-# See templates/ci/README.md for installation, permissions and troubleshooting.
+# See README.md in this directory for installation, permissions and troubleshooting.
 
 on:
   pull_request:
@@ -36,7 +36,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           # Optional: pin one role for the pull request through a repository variable.
-          # Leave it unset to let tools/rbac_audit.py read the 'Agent-Role: <role>' trailer.
+          # Leave it unset to let scripts/rbac_audit.py read the 'Agent-Role: <role>' trailer.
           RBAC_ROLE: ${{ vars.RBAC_ROLE }}
         run: |
           set -uo pipefail
@@ -45,7 +45,7 @@ jobs:
             args+=(--role "$RBAC_ROLE")
           fi
           status=0
-          python tools/rbac_audit.py "${args[@]}" > rbac-report.json 2> rbac-error.log || status=$?
+          python .agents/skills/quality-engineering/scripts/rbac_audit.py "${args[@]}" > rbac-report.json 2> rbac-error.log || status=$?
           {
             echo "## RBAC audit report"
             echo ""

@@ -32,7 +32,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SKILLS_DIR = ROOT / "skills"
 AGENTS_SKILLS_DIR = ROOT / ".agents" / "skills"
 RULES_DIR = ROOT / ".agents" / "rules"
-CI_DIR = ROOT / "templates" / "ci"
+CI_DIR = AGENTS_SKILLS_DIR / "quality-engineering" / "assets" / "templates" / "ci"
 PLAN_LINTER_PATH = AGENTS_SKILLS_DIR / "plan-linter" / "scripts" / "plan_linter.py"
 SCAFFOLD_PATH = AGENTS_SKILLS_DIR / "task-decomposition" / "scripts" / "scaffold_task.py"
 
@@ -625,7 +625,7 @@ def sample_logic(a, b):
         self.assertEqual(parsed["errors"][0]["code"], "BDD_MISSING_PRECONDITION")
 
     def test_f24_quality_engineering_ci_template_structure(self) -> None:
-        """Feature 24: Validate CI workflow template structure and commands under templates/ci/."""
+        """Feature 24: Validate bundled CI workflow templates and sibling gate scripts."""
         self.assertTrue(CI_DIR.is_dir(), f"Missing CI directory: {CI_DIR}")
         plan_gate = CI_DIR / "plan-gate.yml"
         rbac_gate = CI_DIR / "rbac-gate.yml"
@@ -668,7 +668,7 @@ def sample_logic(a, b):
 
         mutation = yaml_job_block(text, "mutation-active-check")
         self.assertNotIn("|| true", mutation)
-        self.assertIn("tools/mutation_gate.py", mutation)
+        self.assertIn(".agents/skills/quality-engineering/scripts/mutation_gate.py", mutation)
         self.assertIn("--min-msi 80", mutation)
         self.assertNotIn("continue-on-error", text)
 

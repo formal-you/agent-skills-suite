@@ -1,8 +1,8 @@
-# Agent Skills Suite v3.4.7
+# Agent Skills Suite v4.0.0
 
 [![CI](https://github.com/formal-you/agent-skills-suite/actions/workflows/ci.yml/badge.svg)](https://github.com/formal-you/agent-skills-suite/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.4.7-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](CHANGELOG.md)
 
 Eleven prompt-first, harness-neutral skills that turn an idea or an existing codebase into
 planned, reviewed, implemented and spec-converged work - plus the rules, helper scripts and
@@ -81,8 +81,8 @@ from one source).
 | `skills/` | **installable layout**: `skills/<category>/<skill>/SKILL.md` (categories: `workflow`, `platform`). This is what skills.sh, Gemini and the plugin manifest read. |
 | `.agents/skills/` | The same skill files under the AGENTS discovery path, kept byte-identical by the upstream packaging build (used by tests and local installers) |
 | `.agents/rules/` | Role rules (Planner, Dev, QA, Test Engineering, Reviewer, Orchestrator, PM, Architect) plus the `enforcement.md` role matrix and honest enforcement model |
-| `tools/` | `quickstart.py`, `install_skills.py`, `rbac_audit.py`, `mutation_gate.py` |
-| `templates/ci/` | GitHub Actions: full quality gate (Python reference), RBAC gate, Gate 1 plan gate, and per-stack profiles |
+| `tools/` | Maintainer installers: `quickstart.py`, `install_skills.py` |
+| `.agents/skills/quality-engineering/` | Self-contained CI toolbox: `scripts/` (complexity, Gate 3, RBAC, mutation gates) + `assets/templates/ci/` workflows, stack profiles and config example |
 | `docs/` | User guides: skills guide, brownfield/convergence guide, harness compatibility, benchmark report |
 | `tests/unit/` | Black-box tests for the skills and helpers |
 | `.claude-plugin/` | Claude Code plugin and marketplace manifests (skills point at `skills/`) |
@@ -118,8 +118,8 @@ standalone `test-engineering` install.
 2. **Gate 2 (semantic):** an independent read-only reviewer audits truthfulness to the spec.
 3. **Gate 3 (evidence):** `verification_linter.py` cross-checks `03` V(G) against the live AST
    artifact and audits basis-path coverage plus MSI (80%, 90% for `risk_level: core`).
-4. **Mutation gate:** `tools/mutation_gate.py` runs the project's mutation command on trunk and
-   fails closed on a missing report or low MSI.
+4. **Mutation gate:** `.agents/skills/quality-engineering/scripts/mutation_gate.py` runs the
+   project's mutation command on trunk and fails closed on a missing report or low MSI.
 5. **Convergence:** after `QA_PASSED`, `converge` appends confirmed deviations to the spec,
    archives the task bundle and closes the change proposal.
 

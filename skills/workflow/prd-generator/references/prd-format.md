@@ -43,4 +43,4 @@ The PRD has two synchronized forms. The aggregate file is authoritative.
 ## Gate
 
 - Manual: use the checklist in `SKILL.md`.
-- Script: `python scripts/lint_prd.py .specs/01-prd.md` (or `.specs`) and fix all errors.
+- Script: `python .agents/skills/prd-generator/scripts/lint_prd.py .specs/01-prd.md` (or `.specs`) and fix all errors.

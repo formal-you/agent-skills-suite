@@ -23,9 +23,9 @@
 1. 需求摄入与澄清，只向用户询问真正阻塞决策的问题。
 2. 四角色评审（产品架构、商业合规、用户体验、可行性/YAGNI）。宿主支持子代理工具时派发独立评审；否则在同一会话中按角色逐一评审。合规角色仅对用户明确给出的硬约束拥有一票否决。
 3. 收敛并记录 `FORK-*`（至少两个可行方案与决策动因），不在 PRD 中预选方案。
-4. 可选：`python scripts/scaffold.py --out .specs` 生成骨架。
+4. 可选：在仓库根目录执行 `python .agents/skills/prd-generator/scripts/scaffold.py --out .specs` 生成骨架。
 5. 按 `references/prd-format.md` 撰写产物；替换所有 `{{UPPER_SNAKE}}` 占位符。
-6. 可选：`python scripts/lint_prd.py .specs` 做结构校验，全部通过再交接。
+6. 可选：`python .agents/skills/prd-generator/scripts/lint_prd.py .specs` 做结构校验，全部通过再交接。
 7. 交接给 `spec-generator`。
 
 ## 底线

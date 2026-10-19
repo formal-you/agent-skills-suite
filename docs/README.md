@@ -11,7 +11,7 @@
 | 第一次接触套件 | [技能使用指南](skills-guide.zh-CN.md) | [宿主兼容与安装](skills-compatibility.md) |
 | Dev / Planner | 指南 §3–§6 | [AGENTS.md](../AGENTS.md) 的任务流程与角色边界 |
 | QA | 指南 §7.5 | [Gate 3 本地预检](gate3-precheck.zh-CN.md)、[测试策略](testing-strategy.md) |
-| Quality Engineering | 指南 §7.6 | [CI 模板](../templates/ci/README.md)、[多语言 Stack Profiles](ci-stack-profiles.zh-CN.md) |
+| Quality Engineering | 指南 §7.6 | [CI 模板](../.agents/skills/quality-engineering/assets/templates/ci/README.md)、[多语言 Stack Profiles](ci-stack-profiles.zh-CN.md) |
 | 维护技能本身 | [AGENTS.md](../AGENTS.md) §6 | [CONTRIBUTING.md](../CONTRIBUTING.md) |
 | 评估选型 | [评分与开源对标](skills-benchmark.zh-CN.md) | 注意它是 v3.1.0 基线快照，不是当前分数 |
 

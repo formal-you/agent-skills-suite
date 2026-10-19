@@ -23,16 +23,18 @@ Every skill is self-contained: its `SKILL.md` references only files inside its o
 (`references/`, `assets/`, `scripts/`). Role boundaries are bundled per skill (for example
 `references/role-boundaries.md`), so a skill installed on its own still works.
 
-Repository role rules (`.agents/rules/*.md`, including `enforcement.md`), `AGENTS.md`, `tools/`,
-`templates/ci/` and the guides under `docs/` are an **optional suite layer**. Skills follow them
-when the adopting repository has them, but they are not runtime dependencies.
+Repository role rules (`.agents/rules/*.md`, including `enforcement.md`), `AGENTS.md`, the
+maintainer helpers under `tools/` and the guides under `docs/` are an **optional suite layer**.
+The CI templates and the four gate scripts live inside the `quality-engineering` skill, so they
+travel with it rather than forming a separate layer. Skills follow the optional layer when the
+adopting repository has it, but they are not runtime dependencies.
 
 | Install path | What is shipped | Why it works |
 | :--- | :--- | :--- |
 | Claude Code / Codex / Copilot plugin | the plugin tree; each listed skill directory is loaded with its bundled files | `SKILL.md` only reaches into its own directory |
 | `npx skills add` / Gemini `--path skills/<category>` | one skill directory | the same bundled files travel with it |
 | `tools/install_skills.py` | skill directories only | rules and docs are not required |
-| `tools/quickstart.py --with-rules --with-ci` | skills + rules + CI templates | adds the optional suite layer for adopters |
+| `tools/quickstart.py --with-rules --with-ci` | skills (incl. the bundled CI templates) + rules + workflows | adds the optional suite layer for adopters |
 
 Command examples inside a `SKILL.md` use the repository-adoption path
 (`.agents/skills/<name>/scripts/...`). When a skill is installed elsewhere, run the same script from
@@ -102,17 +104,19 @@ Exit codes: `0` success, `1` install failure, `2` usage error.
 uv run tools/quickstart.py --target ../adopting-repo --copy --with-ci
 ```
 
-It installs skills into `--dest` (default `.agents/skills/`), the rules,
-`tools/rbac_audit.py`, `tools/mutation_gate.py`, and, with `--with-ci`, the GitHub Actions workflows
-from `templates/ci/`: `rbac-gate.yml` (L1 RBAC audit on every pull request),
+It installs skills into `--dest` (default `.agents/skills/`) and the rules, then, with `--with-ci`,
+the GitHub Actions workflows bundled in the `quality-engineering` skill
+(`assets/templates/ci/`): `rbac-gate.yml` (L1 RBAC audit on every pull request),
 `plan-gate.yml` (Gate 1 on `tasks/**` and `.specs/**` changes), and `quality-gate.yml`
 (multi-stage quality gate owned by `quality-engineering`: Gate 1, RBAC, complexity artifact,
-acceptance tests + JUnit, Gate 3 cross-validation, and the fail-closed mutation gate). All workflows
+acceptance tests + JUnit, Gate 3 cross-validation, and the fail-closed mutation gate). The gate
+scripts (`complexity_check.py`, `verification_linter.py`, `rbac_audit.py`, `mutation_gate.py`) ship
+inside the same skill's `scripts/` directory, so no separate toolbox install is needed. All workflows
 need only `permissions: contents: read`; `rbac-gate.yml` and `quality-gate.yml` also need
 `fetch-depth: 0`. The audit
 workflow resolves the role from the repository variable `RBAC_ROLE` or from the
 `Agent-Role:` commit trailer. Installation, pinning and troubleshooting are documented
-in `templates/ci/README.md`.
+in `.agents/skills/quality-engineering/assets/templates/ci/README.md`.
 
 CI is the authoritative layer. Pin adoption to
 a tag or commit SHA and commit the copies, so upgrades stay reviewable diffs.
@@ -125,7 +129,7 @@ layered, and only the lower layers are authoritative:
 | Layer | Mechanism | Scope | Guarantee |
 | :--- | :--- | :--- | :--- |
 | L0 | Prompt rules (`AGENTS.md`, role rules) and skill instructions | every harness | advisory |
-| L1 | `tools/rbac_audit.py` and `tools/mutation_gate.py` in CI (git diff + declared role; fail-closed mutation report) | any git repository | authoritative for committed changes |
+| L1 | `.agents/skills/quality-engineering/scripts/rbac_audit.py` and `.agents/skills/quality-engineering/scripts/mutation_gate.py` in CI (git diff + declared role; fail-closed mutation report) | any git repository | authoritative for committed changes |
 | L2 | Branch protection, required reviewers, CODEOWNERS | repository settings | authoritative |
 
 Prompt rules are **not** physical enforcement. The authoritative protection is L1 plus repository

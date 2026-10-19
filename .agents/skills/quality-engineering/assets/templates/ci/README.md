@@ -1,19 +1,26 @@
 # CI Templates — Modern Quality Engineering Gates and RBAC Enforcement
 
-This directory provides production-ready, copy-paste GitHub Actions workflows that enforce
-the Agent Skills Suite and Modern Quality Engineering standards on pull requests. Core linters and
-helpers are standard-library only; the complexity checker optionally uses tree-sitter/lizard for
-multi-language analysis. The workflows use the official `actions/checkout`,
-`actions/setup-python`, `actions/upload-artifact` and `actions/download-artifact` actions. No
-third-party marketplace action is required.
+This directory is bundled inside the `quality-engineering` skill (`assets/templates/ci/`), so the
+templates and the four gate scripts under the skill's `scripts/` directory travel together: a global
+skill install needs no repository checkout. The files are production-ready, copy-paste GitHub
+Actions workflows that enforce the Agent Skills Suite and Modern Quality Engineering standards on
+pull requests. Core linters and helpers are standard-library only; the complexity checker optionally
+uses tree-sitter/lizard for multi-language analysis. The workflows use the official
+`actions/checkout`, `actions/setup-python`, `actions/upload-artifact` and
+`actions/download-artifact` actions. No third-party marketplace action is required.
+
+The templates invoke the skill scripts by their project-relative path
+(`.agents/skills/quality-engineering/scripts/...` and `.agents/skills/plan-linter/scripts/...`), so
+the skill must be installed at the default `.agents/skills/` location in the adopting repository.
+The suite's `quickstart.py --with-ci` installer does exactly that.
 
 ## Shipped Workflow Templates
 
 | File | Primary Trigger | Core Commands | Fails When |
 | :--- | :--- | :--- | :--- |
 | `quality-gate.yml` | `pull_request` & `push` to `main` | `plan_linter.py`, `rbac_audit.py`, McCabe AST check + artifact, acceptance tests + JUnit, cross-validated `verification_linter.py`, `mutation_gate.py` | Any gate fails (BDD, RBAC, Complexity $V(G) > 15$, missing/failing acceptance tests, Gate 3 mismatch/MSI, missing mutation report or MSI $< 80\%$) |
-| `plan-gate.yml` | `pull_request` touching `tasks/**` or `.specs/**` | `python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks --spec .specs/02-tech-spec.md --json` | Gate 1 finds structural, BDD format, size, DAG, or spec anchor violations |
-| `rbac-gate.yml` | every `pull_request` | `python tools/rbac_audit.py --base <base.sha> --head <head.sha> --tasks-dir tasks --json` | A role touched files outside its authorized write scope (L1 audit) |
+| `plan-gate.yml` | `pull_request` touching `tasks/**` or `.specs/**` | `python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks --spec .specs/02-tech-spec.md --json` | Gate 1 finds structural, BDD format, size, DAG, or spec anchor violations |
+| `rbac-gate.yml` | every `pull_request` | `python .agents/skills/quality-engineering/scripts/rbac_audit.py --base <base.sha> --head <head.sha> --tasks-dir ./tasks --json` | A role touched files outside its authorized write scope (L1 audit) |
 
 - **`quality-gate.yml`** is the recommended master pipeline: it orchestrates the quality
   engineering stages in a single unified workflow.
@@ -39,7 +46,6 @@ The `profiles/` directory ships per-stack reference fragments for the invariant 
   your adapted `quality-gate.yml`; they do not run standalone.
 - `profiles/index.json` is the machine-readable catalog.
 - `quality-gate.config.example.json` shows the profile/config shape.
-- Adoption guide: [`docs/ci-stack-profiles.zh-CN.md`](../../docs/ci-stack-profiles.zh-CN.md).
 - Profiles do not provision real middleware. Add GitHub Actions `services:` or testcontainers when
   acceptance tests need a real database/queue/cache.
 
@@ -99,7 +105,7 @@ standardized 4-stage layered testing pipeline:
 - Enforces Gate 3 verification evidence via `verification_linter.py --actual-complexity ... \
   --require-actual-complexity --strict --json`: cross-checks the `03` V(G) values against the real
   AST artifact and verifies basis path coverage and $\text{MSI} \ge 80\%$ (90% for core tasks).
-- Runs a fail-closed mutation gate on trunk pushes via `tools/mutation_gate.py`; a missing
+- Runs a fail-closed mutation gate on trunk pushes via `scripts/mutation_gate.py`; a missing
   `MUTATION_COMMAND`, missing report, or low MSI fails the build.
 - Gate 2 semantic audit remains a human/reviewer step (branch protection / CODEOWNERS); the shipped
   workflow template does not contain a Gate 2 job.
@@ -107,7 +113,7 @@ standardized 4-stage layered testing pipeline:
 ### Stage 4: Post-Merge & Staging / Release (Quality Engineering Automation)
 - Executes full mainline regression test suites on push to trunk.
 - `converge` (spec write-back and bundle archive) is a manual/optional workflow in the template;
-  run `python .agents/skills/converge/scripts/converge.py apply --task tasks/<task-id>` after QA_PASSED.
+  run the bundled `converge` skill's `converge.py apply --task tasks/<task-id>` after QA_PASSED.
 - Updates repository mutation testing baselines and performance benchmarks.
 
 ---
@@ -127,7 +133,7 @@ standardized 4-stage layered testing pipeline:
 - **Exit Codes**: `0` Pass, `1` Contract/BDD violations, `2` Configuration/CLI error.
 
 ### 2. RBAC Audit — Role Boundary Enforcement
-- **Tool**: `python tools/rbac_audit.py`
+- **Tool**: `python .agents/skills/quality-engineering/scripts/rbac_audit.py`
 - **Scope**: Git range diff between PR base and head commit.
 - **Validation Rules**:
   - Diffs changed files against the declared role from the `Agent-Role: dev|qa|planner` commit
@@ -191,7 +197,7 @@ standardized 4-stage layered testing pipeline:
   $$\text{MSI} = \frac{\text{Killed} + \text{TimedOut}}{\text{Total} - \text{Equivalent}} \times 100\% \ge 80\%$$
 
 ### 6. Mutation Gate — Active, Fail-Closed
-- **Tool**: `python tools/mutation_gate.py run --command "$MUTATION_COMMAND" --report artifacts/mutation-report.json --min-msi 80`
+- **Tool**: `python .agents/skills/quality-engineering/scripts/mutation_gate.py run --command "$MUTATION_COMMAND" --report artifacts/mutation-report.json --min-msi 80`
 - **Scope**: trunk pushes (`main`/`master`). The project exposes a `MUTATION_COMMAND` repository
   variable that runs its stack tool and writes the normalized JSON report (schema in
   `quality-engineering/references/verification-protocol.md`).
@@ -213,7 +219,7 @@ The repository follows an honest, multi-tiered enforcement model:
 
 | Layer | Mechanism | Scope | Guarantee |
 | :--- | :--- | :--- | :--- |
-| **L0** | Prompt rules (`AGENTS.md`, `.agents/rules/*.md`) | Local agent context | **Advisory**; guides generation but is bypassable |
+| **L0** | Prompt rules (the repository's `AGENTS.md` and role rules) | Local agent context | **Advisory**; guides generation but is bypassable |
 | **L1** | Automated CI Gates (`quality-gate.yml`, `rbac-gate.yml`) | Pull requests | **Authoritative**; strictly blocks unauthorized diffs |
 | **L2** | Branch protection & CODEOWNERS | GitHub repository settings | **Authoritative**; guarantees no merge without CI green |
 
@@ -226,46 +232,39 @@ passing CI quality gates.
 
 ## Installation and Adoption
 
-### Option A — One command with quickstart
+### Option A — one command with quickstart
+
+Run the suite's `quickstart.py` installer from the suite checkout with `--copy --with-ci`. It copies
+the selected skills, the role rules and these three workflows into the adopting repository; the four
+gate scripts travel inside the `quality-engineering` skill directory, so no separate copy is needed.
+`--with-ci` reads `quality-gate.yml`, `plan-gate.yml` and `rbac-gate.yml` from this directory and
+writes them to `<target>/.github/workflows/`. It guarantees that `quality-engineering` is selected,
+because the workflows call its scripts.
+
+### Option B — manual copy
+
+With the skill already present at `.agents/skills/quality-engineering/`, copy the workflows from
+this directory into `.github/workflows/`:
 
 ```bash
-# Symlink adoption (default, POSIX)
-python tools/quickstart.py --target /path/to/your-repo --with-ci
-
-# Real files copy (recommended for Windows or standalone repositories)
-python tools/quickstart.py --target /path/to/your-repo --copy --with-ci
-```
-
-`--with-ci` copies workflow templates from `templates/ci/` into `<target>/.github/workflows/`
-alongside the skills, rules, `tools/rbac_audit.py`, and `tools/mutation_gate.py`.
-
-### Option B — Manual copy
-
-Run from the suite checkout, with `TARGET` pointing at the adopting repository:
-
-```bash
-TARGET=/path/to/your-repo
-mkdir -p "$TARGET/.github/workflows" "$TARGET/tools"
-cp templates/ci/quality-gate.yml "$TARGET/.github/workflows/quality-gate.yml"
-cp templates/ci/rbac-gate.yml "$TARGET/.github/workflows/rbac-gate.yml"
-cp templates/ci/plan-gate.yml "$TARGET/.github/workflows/plan-gate.yml"
-cp tools/rbac_audit.py "$TARGET/tools/rbac_audit.py"
-cp tools/mutation_gate.py "$TARGET/tools/mutation_gate.py"
+SKILL=.agents/skills/quality-engineering
+mkdir -p .github/workflows
+cp "$SKILL"/assets/templates/ci/quality-gate.yml .github/workflows/
+cp "$SKILL"/assets/templates/ci/rbac-gate.yml .github/workflows/
+cp "$SKILL"/assets/templates/ci/plan-gate.yml .github/workflows/
 ```
 
 PowerShell:
 
 ```powershell
-$Target = "C:\path\to\your-repo"
-New-Item -ItemType Directory -Force "$Target\.github\workflows", "$Target\tools" | Out-Null
-Copy-Item templates/ci/quality-gate.yml "$Target\.github\workflows\quality-gate.yml"
-Copy-Item templates/ci/rbac-gate.yml "$Target\.github\workflows\rbac-gate.yml"
-Copy-Item templates/ci/plan-gate.yml "$Target\.github\workflows\plan-gate.yml"
-Copy-Item tools/rbac_audit.py "$Target\tools\rbac_audit.py"
-Copy-Item tools/mutation_gate.py "$Target\tools\mutation_gate.py"
+$Skill = ".agents\skills\quality-engineering"
+New-Item -ItemType Directory -Force ".github\workflows" | Out-Null
+Copy-Item "$Skill\assets\templates\ci\quality-gate.yml" ".github\workflows\quality-gate.yml"
+Copy-Item "$Skill\assets\templates\ci\rbac-gate.yml" ".github\workflows\rbac-gate.yml"
+Copy-Item "$Skill\assets\templates\ci\plan-gate.yml" ".github\workflows\plan-gate.yml"
 ```
 
-Commit the workflows alongside `.agents/skills/`, `.agents/rules/`, and `tools/` so CI runs against
+Commit the workflows together with the adopted skill directories and role rules so CI runs against
 the exact reviewed suite version.
 
 ---
@@ -299,13 +298,14 @@ the exact reviewed suite version.
 
 The workflows are plain repository files, so the version they enforce is the version you commit:
 
-1. Adopt from a tagged release or a recorded commit SHA of the suite repository, not from a moving branch: `git checkout <release-tag-or-sha>` in the suite checkout, then run `quickstart.py --copy --with-ci`.
-2. Commit the resulting `.agents/skills/`, `.agents/rules/`, `tools/rbac_audit.py`, `tools/mutation_gate.py` and `.github/workflows/` files in one reviewable pull request.
-3. Record the versions in that pull request: `python tools/quickstart.py --version`, `python tools/rbac_audit.py --version`, `python tools/mutation_gate.py --version`, `python .agents/skills/plan-linter/scripts/plan_linter.py --version`, and the `metadata.version` values in each `SKILL.md`.
-4. To upgrade, re-adopt from the new tag with `--force` (`quickstart.py --target . --copy --force --with-ci`) and review the diff. The diff is the audit trail.
+1. Adopt from a tagged release or a recorded commit SHA of the suite repository, not from a moving branch: check out the tag in the suite checkout, then run the quickstart installer with `--copy --with-ci`.
+2. Commit the resulting skill directories and `.github/workflows/` files in one reviewable pull request.
+3. Record the versions in that pull request: the installer `--version`, `python .agents/skills/quality-engineering/scripts/rbac_audit.py --version`, `python .agents/skills/quality-engineering/scripts/mutation_gate.py --version`, `python .agents/skills/plan-linter/scripts/plan_linter.py --version`, and the `metadata.version` values in each `SKILL.md`.
+4. To upgrade, re-adopt from the new tag with `--force` and review the diff. The diff is the audit trail.
 5. For a stricter supply chain, pin `actions/checkout` and `actions/setup-python` to a full commit SHA instead of `v4` / `v5`. Dependabot-style upgrades are then explicit.
 
-Do not edit the copied workflows without recording why; they are the enforcement layer from Section "Authoritative Enforcement Hierarchy".
+Do not edit the copied workflows without recording why; they are the enforcement layer from the
+"Authoritative Enforcement Hierarchy" section.
 
 ## Developer Commands: Local Verification Before Pushing
 
@@ -314,13 +314,13 @@ Run these commands locally to verify all gates pass before pushing:
 ```bash
 # 1. Gate 1 Plan Linter (BDD scenarios & contract validation)
 python .agents/skills/plan-linter/scripts/plan_linter.py \
-  --tasks-dir tasks \
+  --tasks-dir ./tasks \
   --spec .specs/02-tech-spec.md \
   --json
 
 # 2. RBAC Audit over the pull request range
 git fetch origin main
-python tools/rbac_audit.py --base origin/main --head HEAD --role dev --json
+python .agents/skills/quality-engineering/scripts/rbac_audit.py --base origin/main --head HEAD --role dev --json
 
 # 3. Cyclomatic Complexity Check (McCabe V(G) <= 10)
 python .agents/skills/quality-engineering/scripts/complexity_check.py \
@@ -331,7 +331,7 @@ python -m pytest tests/acceptance -q --junitxml=artifacts/acceptance-junit.xml
 
 # 5. Gate 3 Acceptance & MSI Audit (once QA_PASSED is checked)
 python .agents/skills/quality-engineering/scripts/verification_linter.py \
-  --tasks-dir tasks \
+  --tasks-dir ./tasks \
   --actual-complexity artifacts/complexity-report.json \
   --require-actual-complexity \
   --strict --json

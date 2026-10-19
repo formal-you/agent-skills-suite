@@ -32,7 +32,7 @@ Chinese Guide: [docs/skills-guide.zh-CN.md](../../docs/skills-guide.zh-CN.md).
 | [`review`](review/SKILL.md) | Independently review a plan (Gate 2) or a code change | plans/tasks, or diff + evidence | Findings + `PASS`/`REQUEST CHANGES`/`BLOCKED` | none (prompt workflow) |
 | [`dev`](dev/SKILL.md) | Implement one task bundle within its blast radius, maintaining cyclomatic complexity V(G) <= 10, and hand off to QA | `tasks/<task-id>/01-contract.md` + project commands | Code changes, filled `02`, `WAITING_FOR_QA` | none (prompt workflow) |
 | [`qa`](qa/SKILL.md) | Local development stage testing: integration, BDD E2E, mutation testing (MSI >= 80%), static lint/complexity analysis, autonomous review, local Gate 3 pre-check | `01`, filled `02`, project test command, project test strategy | `tests/acceptance/**`, `tests/integration/**`, filled `03`, `QA_PASSED`/`REWORK_REQUIRED` | `verification_linter.py` (vendored, stdlib) |
-| [`quality-engineering`](quality-engineering/SKILL.md) | Build CI pipelines, validate test environments, enforce pre-merge PR checks and post-merge automated verification | CI workflow configs, PR diff, `03-qa-verification.md` | CI workflow statuses, Gate 3 audit report | `complexity_check.py`, `verification_linter.py` |
+| [`quality-engineering`](quality-engineering/SKILL.md) | Build CI pipelines, validate test environments, enforce pre-merge PR checks and post-merge automated verification | CI workflow configs, PR diff, `03-qa-verification.md` | CI workflow statuses, Gate 3 audit report | `complexity_check.py`, `verification_linter.py`, `rbac_audit.py`, `mutation_gate.py`, plus `assets/templates/ci/` workflows and stack profiles |
 | [`test-engineering`](test-engineering/SKILL.md) | Define the repository-wide test system: test strategy, risk-based test design methods, data/environment/flakiness policy, metrics and independent test-design review | Quality attributes, existing suites, defect history, task contracts (read-only) | Agreed test-strategy document, test-design review notes (`DESIGN_READY`/`DESIGN_GAPS`) | none (prompt workflow) |
 | [`converge`](converge/SKILL.md) | Fold QA-confirmed deviations back into the spec and archive the bundle | `01`, filled `02` deviation log, checked `03` | Updated `.specs/02-tech-spec.md`, `CONVERGED` status, archived bundle | `converge.py` |
 
@@ -140,11 +140,11 @@ Quality enforcement spans four distinct stages:
 
 3. **Stage 3: Pre-merge / PR Gate (L2 Authoritative Layer)**:
    - Mandatory CI gating triggered on every pull request:
-     1. RBAC boundary audit: `python tools/rbac_audit.py --base <base> --head <head> --tasks-dir tasks --json`
-     2. Gate 1 static plan & BDD check: `python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir tasks --json`
+     1. RBAC boundary audit: `python .agents/skills/quality-engineering/scripts/rbac_audit.py --base <base> --head <head> --tasks-dir ./tasks --json`
+     2. Gate 1 static plan & BDD check: `python .agents/skills/plan-linter/scripts/plan_linter.py --tasks-dir ./tasks --json`
      3. Cyclomatic complexity static check: Enforces single-function $V(G) \le 10$ across changed lines.
      4. Full acceptance test execution: Runs `tests/acceptance/**`.
-     5. Mutation testing kill ratio audit: fail-closed on trunk via `tools/mutation_gate.py`
+     5. Mutation testing kill ratio audit: fail-closed on trunk via `mutation_gate.py` (bundled in `quality-engineering`)
         (normalized report + $\text{MSI} \ge 80\%$); PR Gate 3 audits the recorded evidence.
      6. Gate 3 QA verification audit: `python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir tasks --actual-complexity artifacts/complexity-report.json --require-actual-complexity --strict --json`
      7. Gate 2 Reviewer signoff: independent reviewer approves PR semantics (human/branch-protection
@@ -163,12 +163,17 @@ Quality enforcement spans four distinct stages:
 
 Prompt rules are advisory (L0/L1); **CI is the authoritative enforcement layer (L2)**.
 
-Ready-to-use GitHub Actions workflow templates live under `templates/ci/`:
+Ready-to-use GitHub Actions workflow templates ship inside the `quality-engineering` skill:
+`.agents/skills/quality-engineering/assets/templates/ci/`:
 - `quality-gate.yml`: Integrated end-to-end quality engineering pipeline (RBAC + Gate 1 + Tests + Gate 3).
 - `rbac-gate.yml`: Standalone role permission and write-scope boundary audit.
 - `plan-gate.yml`: Standalone Gate 1 plan linter workflow.
 
-See [`templates/ci/README.md`](../../templates/ci/README.md) for full setup instructions and branch protection guidance.
+The four gate scripts (`complexity_check.py`, `verification_linter.py`, `rbac_audit.py`,
+`mutation_gate.py`) live in the same skill's `scripts/` directory, so a single skill install is
+self-contained. See
+[`.agents/skills/quality-engineering/assets/templates/ci/README.md`](quality-engineering/assets/templates/ci/README.md)
+for setup instructions and branch protection guidance.
 
 ---
 
@@ -194,7 +199,7 @@ python tools/quickstart.py --target ../another-repo --copy --with-ci
 | :--- | :--- | :--- | :--- |
 | L0 | Prompt rules + role instructions | every harness | advisory |
 | L1 | Local linter pre-checks (`plan_linter.py`, `verification_linter.py`) | local development | advisory / early feedback |
-| L2 | `tools/rbac_audit.py` & Quality Gate in CI | every harness with git | authoritative for committed changes |
+| L2 | `quality-engineering` skill's `rbac_audit.py` & Quality Gate in CI | every harness with git | authoritative for committed changes |
 | L3 | Branch protection / required status checks | repository settings | authoritative repository barrier |
 
 **Do not** describe prompt rules or local hooks as physical enforcement. The authoritative protection

@@ -16,12 +16,11 @@
 
 | Path | Purpose |
 | :--- | :--- |
-| `.agents/skills/` | Canonical skill sources: `SKILL.md`, `references/`, `assets/`, `scripts/` |
+| `.agents/skills/` | Canonical skills: `SKILL.md`, `references/`, `assets/` (incl. CI templates), `scripts/` |
 | `skills/workflow/` | Installable mirror; byte-identical to `.agents/skills/` |
 | `.agents/rules/` | Role permissions and enforcement model |
 | `tests/unit/` | Black-box tests for skills, tools, templates and distribution |
-| `templates/ci/` | Copy-paste CI gates and stack profiles |
-| `tools/` | Maintainer helpers (`quickstart.py`, audit tools) |
+| `tools/` | Maintainer helpers (`quickstart.py`, `install_skills.py`) |
 | `docs/`, `tasks/` | Guides/strategy; per-task bundles used by the delivery pipeline |
 
 ## 2. Work types
@@ -62,8 +61,9 @@ the suite rather than delivering one task bundle.
   follows its `.agents/rules/<role>.md`.
 - **Gates:** Gate 1 `plan-linter` validates contracts/anchors/DAG; Gate 2 is independent `review`;
   Gate 3 `verification_linter.py` audits V(G)/basis paths/MSI/provenance; mutation runs on trunk via
-  `tools/mutation_gate.py`; RBAC uses `tools/rbac_audit.py`. Canonical details:
-  [`templates/ci/README.md`](templates/ci/README.md) and the owning skills (`quality-engineering`, `qa`).
+  `mutation_gate.py`; RBAC uses `rbac_audit.py`. Gate scripts and CI templates live inside the
+  `quality-engineering` skill; canonical details:
+  [`.agents/skills/quality-engineering/assets/templates/ci/README.md`](.agents/skills/quality-engineering/assets/templates/ci/README.md).
 - **Quality bar:** PRD/spec have no unresolved placeholders, stable IDs/anchors and every ADR fork
   resolved or explicitly open before decomposition. Code: `V(G) <= 10` per function (`11-15` waiver,
   `>15` rejected); `Test Cases >= V(G)`; `MSI >= 80%` (`>= 90%` for `risk_level: core`); no critical
@@ -88,10 +88,11 @@ reversible; evidence over claims; one writer per file; no bypassed gates.
    reviews the final diff; two agents must not edit the same file.
 3. **Author or optimize.** Edit canonical `.agents/skills/<name>/` and the byte-identical mirror
    `skills/workflow/<name>/`; keep `SKILL.md` under 200 lines, canonical English, self-contained;
-   put detail in `references/`/`assets/`; keep templates token-free where Gate 1 scans them. Update
-   the role rule, docs, skill `metadata.version`, `CHANGELOG.md`, `VERSION` and plugin manifests for
-   behavior changes; document breaking changes and migration. Never weaken a gate, test or role
-   boundary.
+   put detail in `references/`/`assets/`; keep templates token-free where Gate 1 scans them. Compose
+   with other skills by name, never by copying their scripts or using a bare `scripts/...` path.
+   Update the role rule, docs, skill `metadata.version`, `CHANGELOG.md`, `VERSION` and plugin
+   manifests for behavior changes; document breaking changes and migration. Never weaken a gate,
+   test or role boundary.
 4. **Test and evidence before commit.** Run targeted tests, then the full suite:
    `python -m unittest discover -s tests/unit -p "test_*.py"`. Verify dual-tree parity,
    self-containment, line limits, YAML/JSON parse, `git diff --check` and the CI matrix
@@ -131,7 +132,8 @@ equivalent, execute this section without asking for a separate process descripti
 
 ```bash
 python -m unittest discover -s tests/unit -p "test_*.py"
-python -m compileall -q .agents tools templates
+python -m compileall -q .agents tools
+python tools/gen_manifest.py --check      # tracked-file SHA-256 manifest
 claude plugin validate .                  # when manifests change; optional if unavailable
 python tools/quickstart.py --target .tmp-smoke --dry-run   # distribution smoke
 git diff --check
@@ -147,7 +149,7 @@ git diff --check
 
 - [`enforcement.md`](.agents/rules/enforcement.md) — canonical role matrix and enforcement model.
 - [`skills/README.md`](.agents/skills/README.md) — skill index, discovery and per-skill contract.
-- [`templates/ci/README.md`](templates/ci/README.md) — CI gates, RBAC audit and four-stage pipeline.
+- [`quality-engineering` CI guide](.agents/skills/quality-engineering/assets/templates/ci/README.md) — bundled gates, stack profiles and four-stage pipeline.
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — contributor setup, tests and PR conventions.
 - [`docs/README.md`](docs/README.md) — user-facing docs index; `docs/archive/` — historical notes.
 - [`docs/skills-guide.zh-CN.md`](docs/skills-guide.zh-CN.md) — usage walkthrough.

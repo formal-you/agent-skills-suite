@@ -16,12 +16,11 @@ and tests.
 ```text
 .agents/skills/<name>/SKILL.md   # one skill; frontmatter name MUST equal the directory name
 .agents/skills/<name>/references/
-.agents/skills/<name>/assets/templates/
+.agents/skills/<name>/assets/templates/   # incl. quality-engineering's CI workflows and profiles
 .agents/skills/<name>/scripts/   # optional helpers, --help/--version, exit 0/1/2/3
                                  # stdlib-only except complexity_check.py's optional tree-sitter/lizard engines
 .agents/rules/                   # role rules + enforcement model
-tools/                           # install, adoption, audit helpers
-templates/ci/                    # copy-paste GitHub Actions
+tools/                           # maintainer installers (quickstart, install_skills)
 docs/                            # user guides, harness compatibility, benchmark report
 tests/unit/                      # black-box tests for the skills and tools
 ```
@@ -46,12 +45,18 @@ this tree is its generated output. Do not add packaging logic here.
    files inside that skill directory. Repository rules (`AGENTS.md`, `.agents/rules/`), `docs/` and
    `tools/` are optional context, never required runtime files — plugin and per-skill installs only
    ship the skill directory.
+7. Compose with other skills by name, never by copying their scripts. A downstream helper (for
+   example Gate 1 from `plan-linter`) is invoked with the project-root path
+   `.agents/skills/<skill>/scripts/<script>`, marked as conditional on that skill being installed,
+   and paired with a manual fallback. `python scripts/x.py` is only valid when the user is already
+   inside the skill directory, so do not use it in instructions.
 
 ## Run the checks
 
 ```bash
 python -m unittest discover -s tests/unit -p "test_*.py"
-python -m compileall -q .agents tools templates
+python -m compileall -q .agents tools
+python tools/gen_manifest.py --check
 claude plugin validate .          # optional; validates plugin.json + marketplace.json
 ```
 

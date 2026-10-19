@@ -4,7 +4,7 @@ description: "Build CI pipelines and manage multi-stage testing gates: configure
 license: MIT
 compatibility: "Harness-agnostic. Core linters standard library only; multi-language complexity uses optional tree-sitter/lizard with a Python AST fallback. Python >= 3.9."
 metadata:
-  version: "2.1.0"
+  version: "2.2.0"
   category: execution
 ---
 
@@ -42,10 +42,13 @@ Stage 1: Local Testing (Dev & QA)
    - Execute full trunk regression suites upon branch merge (`push` to main/master).
    - Automate spec convergence (`converge.py apply`) to fold confirmed deviations back into specs.
    - Maintain long-term mutation score baselines, test efficacy trends, and performance benchmarks.
-4. **Authoritative CI templates & tooling**:
-   - Maintain production-ready CI workflows (`quality-gate.yml`, `plan-gate.yml`, `rbac-gate.yml`).
-   - Maintain the Tree-sitter powered multi-language cyclomatic complexity checker (`complexity_check.py`).
-   - Maintain the deterministic Gate 3 verification auditor (`verification_linter.py`).
+4. **Self-contained CI toolbox (bundled, no external checkout)**:
+   - Ship the four gate scripts under `scripts/`: `complexity_check.py` (Tree-sitter/Lizard/AST),
+     `verification_linter.py` (Gate 3), `rbac_audit.py` (role boundaries), `mutation_gate.py`
+     (fail-closed MSI).
+   - Ship the production-ready workflows (`quality-gate.yml`, `plan-gate.yml`, `rbac-gate.yml`),
+     stack profiles and config example under `assets/templates/ci/`. On adoption, read them from
+     this skill directory and write them into the project's `.github/workflows/`.
 5. **Test-strategy mapping (implementation, not definition)**:
    - Map the approved test strategy to CI profiles/job selection/thresholds/environment services; do not invent test standards.
    - The `test-engineering` skill defines risk classes, levels, data/environment, flakiness and metric definitions; this skill implements them in CI.
@@ -57,8 +60,9 @@ Stage 1: Local Testing (Dev & QA)
 - Running or debugging automated pre-merge quality gates on pull requests.
 - Running post-merge regression, spec convergence, or mutation baseline tracking on trunk.
 - Auditing QA verification artifacts (`03-qa-verification.md`) via Gate 3 (`verification_linter.py`).
-- Adapting the reference CI workflow to a non-Python stack: start from the stack profile catalog
-  shipped alongside the CI template (Python, Node/TS, Go, Java, Rust, .NET, C/C++).
+- Adopting the bundled CI templates: read them from `assets/templates/ci/` and write them into the
+  project's `.github/workflows/`; other stacks start from the shipped profile fragments (Python,
+  Node/TS, Go, Java, Rust, .NET, C/C++).
 
 ## Do not use when
 
@@ -81,43 +85,45 @@ Stage 1: Local Testing (Dev & QA)
 
 - CI pipeline definitions, workflow execution logs, and step summaries.
 - Machine-readable Gate 3 audit report (`--json`) and pass/fail exit codes.
-- Pre-merge check statuses (Gate 1, RBAC, Complexity, Acceptance, Gate 3).
-- Post-merge regression and convergence triggers.
+- Pre-merge check statuses (Gate 1, RBAC, Complexity, Acceptance, Gate 3); post-merge triggers.
 
 ## CLI & Tooling
 
+Every script is standard-library Python >= 3.9 and resolves data from the skill directory, so a
+global install works without a repository checkout. Run them from the project root:
+
 ```bash
-# Gate 3 verification linter (human-readable)
-python .agents/skills/quality-engineering/scripts/verification_linter.py \
-  --tasks-dir ./tasks
+# Gate 3 audit (human-readable), then cross-validated with the live AST artifact
+python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir ./tasks
+python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir ./tasks --actual-complexity artifacts/complexity-report.json --require-actual-complexity --strict --json
 
-# Cyclomatic complexity check (fail-closed; explicit source directory)
-python .agents/skills/quality-engineering/scripts/complexity_check.py \
-  --src-dir src --json > artifacts/complexity-report.json
+# Gate 3 audit requiring evidence provenance (artifact path + SHA-256)
+python .agents/skills/quality-engineering/scripts/verification_linter.py --tasks-dir ./tasks --require-provenance --strict --json
 
-# Machine-readable JSON for CI gating, cross-validated with the live AST report
-python .agents/skills/quality-engineering/scripts/verification_linter.py \
-  --tasks-dir ./tasks \
-  --actual-complexity artifacts/complexity-report.json \
-  --require-actual-complexity --strict --json
+# Complexity report (fail-closed; explicit source directory)
+python .agents/skills/quality-engineering/scripts/complexity_check.py --src-dir src --json > artifacts/complexity-report.json
 
-# Require evidence provenance (artifact path + SHA-256; equivalent justification)
-python .agents/skills/quality-engineering/scripts/verification_linter.py \
-  --tasks-dir ./tasks --require-provenance --strict --json
+# RBAC boundary audit across a git range (authoritative L1 in CI)
+python .agents/skills/quality-engineering/scripts/rbac_audit.py --base origin/main --head HEAD --tasks-dir ./tasks --json
 
-# Local-only escape hatches (never use them in authoritative CI)
-#   --min-msi 60      relax the threshold for legacy code
-#   --no-mutation     skip Section 4 (only when no mutation tool exists)
+# Fail-closed mutation gate on trunk (runs the project's mutation command)
+python .agents/skills/quality-engineering/scripts/mutation_gate.py run --command "$MUTATION_COMMAND" --report artifacts/mutation-report.json --min-msi 80
 ```
+
+Local-only `verification_linter.py` escape hatches (`--min-msi`, `--no-mutation`) never belong in
+authoritative CI.
+
+## Bundled CI templates
+
+Read the workflows from `assets/templates/ci/` and write them into the project's
+`.github/workflows/`. The templates invoke `.agents/skills/quality-engineering/scripts/...`, so
+install the skill at the default `.agents/skills/` location; `quickstart.py --with-ci` installs both.
+Details, stack profiles and troubleshooting:
+[`assets/templates/ci/README.md`](assets/templates/ci/README.md).
 
 ## Exit codes
 
-| Code | Meaning |
-| :--- | :--- |
-| `0` | All audited checks and task bundles pass |
-| `1` | One or more gate violations (fails CI build) |
-| `2` | Usage or configuration error |
-| `3` | Unexpected internal error |
+`0` pass, `1` gate violation, `2` usage/configuration error, `3` unexpected internal error.
 
 ## Error codes (Gate 3 `errors[].code`)
 
@@ -148,12 +154,9 @@ python .agents/skills/quality-engineering/scripts/verification_linter.py \
 
 ## Multi-Stage CI Pipeline Architecture
 
-| Stage | Responsibility | Enforcement Tool | Scope |
-| :--- | :--- | :--- | :--- |
-| **Stage 1: Local Test** | Integration, BDD E2E, Mutation, Lint, Complexity | Dev & QA local tools | Pre-commit |
-| **Stage 2: Test Env** | Dependency install, acceptance-collection probe, advisory network isolation | `quality-gate.yml` steps | PR setup |
-| **Stage 3: Pre-merge PR** | Gate 1, RBAC, Complexity artifact, Acceptance + JUnit, Gate 3 cross-validation | `quality-gate.yml` | Pull Request |
-| **Stage 4: Post-merge** | Trunk regression, fail-closed mutation gate, manual spec convergence | Mainline CI workflows | Post-merge |
+The four stages (local test -> test environment -> pre-merge PR gate -> post-merge) and their
+enforcement tools are defined in [`references/verification-protocol.md`](references/verification-protocol.md)
+section 2; this skill owns the workflows and scripts that implement them.
 
 ## Failure Triage & Routing
 
@@ -176,10 +179,11 @@ fabrication or an unresolvable spec conflict -> escalate to the orchestrator.
   tree-sitter/lizard engines for multi-language analysis (Python >= 3.9).
 - Gate 3 auditor: [`scripts/verification_linter.py`](scripts/verification_linter.py) — deterministic
   audit tool (standard library only, Python >= 3.9).
-- CI workflow template: `quality-gate.yml` — Python reference implementation of the unified
-  multi-stage CI quality gate. The suite also ships per-stack reference profile fragments
-  (Python, Node/TS, Go, Java, Rust, .NET, C/C++) plus a profile/config example; they are fragments
-  to adapt, not standalone workflows.
+- Gate helpers: [`scripts/rbac_audit.py`](scripts/rbac_audit.py) (git-diff role boundaries) and
+  [`scripts/mutation_gate.py`](scripts/mutation_gate.py) (fail-closed MSI gate).
+- CI workflows and stack profiles: [`assets/templates/ci/`](assets/templates/ci/README.md) — the
+  `quality-gate.yml` reference pipeline plus `plan-gate.yml`, `rbac-gate.yml`, seven stack profile
+  fragments and a config example. They are copy-and-adapt templates, not standalone workflows.
 - Sister skill: `qa` — local development stage testing and verification evidence generation.
 
 ## Honest limits
@@ -189,6 +193,7 @@ phantom or mismatched functions. It still trusts the mutation evidence recorded 
 fail-closed `mutation_gate.py` run on trunk is what actually executes the mutation tool.
 Local prompt rules and `--no-mutation`/relaxed thresholds are advisory escape hatches, not
 enforcement. True quality assurance requires combining local QA execution with authoritative CI
-enforcement plus branch protection.
+enforcement plus branch protection. The suite no longer ships duplicate repo-level copies of the
+gate scripts: install this skill, not a separate toolbox.
 
 [![](https://img.shields.io/badge/powered_by-dsh-4D6BFE?style=flat-square&logo=deepseek&logoColor=white)](https://github.com/deepseek-ai/deepseek-harness)

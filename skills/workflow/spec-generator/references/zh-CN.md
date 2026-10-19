@@ -24,9 +24,9 @@
 1. 摄入 PRD，复用全部 `REQ/CON/NFR/FORK` 与 `#sec-*` 锚点，不重命名下游消费的锚点。
 2. 四角色架构评审（架构、安全合规、性能、YAGNI/极简）。支持子代理工具时派发独立评审；否则同会话逐一评审。仅安全合规角色对用户明确的硬约束拥有一票否决。
 3. 每个 `FORK-*` 形成 ADR：至少两个方案、决策理由、后果与接受的权衡。未决分歧必须上报，不得静默选择。
-4. 可选：`python scripts/scaffold.py --out .specs` 生成骨架。
+4. 可选：在仓库根目录执行 `python .agents/skills/spec-generator/scripts/scaffold.py --out .specs` 生成骨架。
 5. 按 `references/spec-format.md` 与 `references/project-conventions.md` 撰写；替换全部 `{{UPPER_SNAKE}}`。
-6. 可选：`python scripts/lint_spec.py .specs` 校验，全部通过再交接。
+6. 可选：`python .agents/skills/spec-generator/scripts/lint_spec.py .specs` 校验，全部通过再交接。
 7. 交接给 `task-decomposition`。
 
 ## 底线

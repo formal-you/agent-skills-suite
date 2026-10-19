@@ -2,7 +2,7 @@
 
 > 适用对象：使用 `.agents/skills/` 的开发者、Planner、Dev、QA、Reviewer Agent 与 CI/CD 运维工程师。  
 > 对应版本：技能 `metadata.version` 2.x（基础流程）、3.x（brownfield/收敛/分发）与 4.x（现代质量工程：BDD + 圈复杂度 + 变异测试 + 4 阶段分层测试流水线）。  
-> v3 用法见 [`brownfield-convergence.zh-CN.md`](brownfield-convergence.zh-CN.md)；CI 门禁与工作流模板见 [`templates/ci/README.md`](../templates/ci/README.md)。  
+> v3 用法见 [`brownfield-convergence.zh-CN.md`](brownfield-convergence.zh-CN.md)；CI 门禁与工作流模板见 [`.agents/skills/quality-engineering/assets/templates/ci/README.md`](../.agents/skills/quality-engineering/assets/templates/ci/README.md)。  
 > **v3.2.0 加固**：Gate 3 与真实 AST artifact 交叉核验、变异测试 fail-closed、错误码注册表与 triage、证据 provenance 与 Appeal/仲裁；历史记录见 [`archive/skills-remediation.zh-CN.md`](archive/skills-remediation.zh-CN.md)（归档，不是当前规范）。
 > **v3.3.0 新增**：`test-engineering` 全局测试方法学技能（测试策略、测试设计方法、数据/环境与 flakiness 策略、测试指标与独立测试设计评审）；它不接收单任务、不写测试与 `03`、不运行 CI 门禁，详见 §7.8。
 > **v3.4.0 策略接线**：本仓库的测试策略示例落盘为 [`testing-strategy.md`](testing-strategy.md)，采用方应从技能内置模板生成自己的策略；QA 在测试设计前只读读取并在 `03` 记录测试设计摘要，`quality-engineering` 负责把策略映射为 CI 画像/作业选择/阈值/环境服务。该示例文件不属于技能安装包，单独安装 `test-engineering` 不依赖它。
@@ -33,7 +33,7 @@
   - **Gate 2（语义审查门禁）**：只读 Reviewer Agent 审查正向覆盖率、反幻觉与 ADR 架构合规性；
   - **Gate 3（验收期门禁）**：`verification_linter.py` 专职审计 `03-qa-verification.md` 中的圈复杂度覆盖与变异测试杀伤力证据；
 - **全局测试方法学（跨任务）**：`test-engineering` 负责仓库级测试策略、测试设计方法（等价类/边界值/判定表/状态迁移/成对组合等）与独立测试设计评审；其 `DESIGN_READY` / `DESIGN_GAPS` 仅是设计质量标记，不是任务裁决，单任务验收仍归 `qa`，CI 门禁仍归 `quality-engineering`；
-- **四阶段分层测试流水线**：涵盖本地测试、测试环境、合并前 PR 权威门禁与合并后主干回归/规格收敛，提供开箱即用的 GitHub Actions 工作流模板（`templates/ci/quality-gate.yml`）。
+- **四阶段分层测试流水线**：涵盖本地测试、测试环境、合并前 PR 权威门禁与合并后主干回归/规格收敛，提供开箱即用的 GitHub Actions 工作流模板（`.agents/skills/quality-engineering/assets/templates/ci/quality-gate.yml`）。
 
 ---
 
@@ -78,7 +78,8 @@
 ├── quality-engineering/    # CI 质量工程：构建 CI 流水线、测试环境准备、代码合并前/后门禁与测试
 │   ├── SKILL.md
 │   ├── references/verification-protocol.md
-│   └── scripts/            # complexity_check.py (圈复杂度门禁) / verification_linter.py (Gate 3 审计)
+│   ├── assets/templates/ci/ # 三个工作流模板 + 多语言 profiles + config 示例（自包含）
+│   └── scripts/            # complexity_check.py / verification_linter.py / rbac_audit.py / mutation_gate.py
 ├── test-engineering/       # 全局测试体系：测试策略、测试设计方法、数据/环境/flakiness 策略、独立测试设计评审
 │   ├── SKILL.md
 │   ├── assets/templates/test-strategy.template.md
@@ -118,7 +119,7 @@
 | **规划门禁 (Gate 1)** | 契约合法性、BDD 三段式格式、切片爆炸半径、DAG 无环 | `plan_linter.py` | 确定性脚本（exit 0/1） |
 | **语义门禁 (Gate 2)** | 正向覆盖、反幻觉审查、ADR 架构红线对齐 | `review` 技能 | 只读 Reviewer Agent |
 | **验收门禁 (Gate 3)** | 圈复杂度用例覆盖 $V(G) \le \text{用例数}$、变异测试得分 $\text{MSI} \ge 80\%$ | `verification_linter.py` | 确定性脚本（exit 0/1） |
-| **权威强制层 (CI / L2)** | 角色 RBAC 边界审计、全量门禁串联、分支合并保护 | `tools/rbac_audit.py` + `quality-gate.yml` | GitHub Actions / 平台 CI |
+| **权威强制层 (CI / L2)** | 角色 RBAC 边界审计、全量门禁串联、分支合并保护 | `.agents/skills/quality-engineering/scripts/rbac_audit.py` + `quality-gate.yml` | GitHub Actions / 平台 CI |
 
 > **关键原则**：本地提示词规则与 Agent 自律仅为辅助（L0），**权威强制层是 CI 与分支保护（L2）**。任何任务必须在 CI 中通过 RBAC 审计、Gate 1、Gate 3 及验收测试，才允许合入主干。
 
@@ -433,7 +434,7 @@ $$\text{MSI} = \frac{\text{Killed} + \text{TimedOut}}{\text{Total} - \text{Equiv
    │    └─ 契约验证：验证真实拓扑连通性与 ADR 架构契约兼容性
    │
    ├─► 阶段 3：合并前测试（Pre-merge / PR Gate — quality-engineering 自动化门禁）
-   │    ├─ 1. RBAC 越权审计：tools/rbac_audit.py (Dev 禁碰测试，QA 禁改源码)
+   │    ├─ 1. RBAC 越权审计：.agents/skills/quality-engineering/scripts/rbac_audit.py (Dev 禁碰测试，QA 禁改源码)
    │    ├─ 2. Gate 1 静态门禁：plan_linter.py --json (BDD 格式、切片、DAG)
    │    ├─ 3. 圈复杂度门禁：检查增量函数 V(G) <= 10
    │    ├─ 4. 验收测试执行：运行全量 tests/acceptance/ 与 tests/integration/ 用例
@@ -480,7 +481,7 @@ $$\text{MSI} = \frac{\text{Killed} + \text{TimedOut}}{\text{Total} - \text{Equiv
 - **门禁清单**：
   1. **RBAC 角色越权审计**：
      ```bash
-     python tools/rbac_audit.py --base origin/main --head HEAD --tasks-dir tasks --json
+     python .agents/skills/quality-engineering/scripts/rbac_audit.py --base origin/main --head HEAD --tasks-dir tasks --json
      ```
      严格拦截跨权限提交（如 Dev 修改了 `tests/acceptance/`，或 QA 修改了 `src/**`）。
   2. **Gate 1 规划与 BDD 契约检查**：
@@ -494,7 +495,7 @@ $$\text{MSI} = \frac{\text{Killed} + \text{TimedOut}}{\text{Total} - \text{Equiv
      ```
      由 `quality-engineering` 提供的静态分析脚本对源码执行控制流复杂度计算，若存在 $V(G) > 10$ 则告警，存在 $V(G) > 15$ 则直接构建失败。没有 `src/` 且未显式传 `--src-dir` 时退出码为 2（fail-closed），不会静默扫描 `.`。
   4. **验收与集成测试套件全量跑通**：模板先安装项目依赖并做 collection 探针，再执行 `tests/acceptance/**`；pytest 可用时产出 JUnit XML，否则回退 unittest。
-  5. **变异测试硬门禁（MSI $\ge 80\%$）**：主干 push 时由 `tools/mutation_gate.py` 执行项目 `MUTATION_COMMAND` 并校验归一化报告；命令/报告缺失或 MSI 不足均 fail-closed。PR 阶段 Gate 3 仍审计 QA 记录的证据。
+  5. **变异测试硬门禁（MSI $\ge 80\%$）**：主干 push 时由 `.agents/skills/quality-engineering/scripts/mutation_gate.py` 执行项目 `MUTATION_COMMAND` 并校验归一化报告；命令/报告缺失或 MSI 不足均 fail-closed。PR 阶段 Gate 3 仍审计 QA 记录的证据。
   6. **Gate 3 验收证据交叉核验**：
      ```bash
      python .agents/skills/quality-engineering/scripts/verification_linter.py \
@@ -518,10 +519,10 @@ $$\text{MSI} = \frac{\text{Killed} + \text{TimedOut}}{\text{Total} - \text{Equiv
 
 ### 6.5 CI 权威强制门禁实战指南
 
-仓库在 `templates/ci/` 提供了开箱即用的 GitHub Actions 门禁模板：
+仓库在 `.agents/skills/quality-engineering/assets/templates/ci/` 提供了开箱即用的 GitHub Actions 门禁模板：
 
 ```yaml
-# templates/ci/quality-gate.yml (simplified; see the template for full steps)
+# .agents/skills/quality-engineering/assets/templates/ci/quality-gate.yml (simplified; see the template for full steps)
 name: Quality Engineering Gate
 
 on:
@@ -548,7 +549,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: {fetch-depth: 0}
-      - run: python tools/rbac_audit.py --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --tasks-dir tasks --json
+      - run: python .agents/skills/quality-engineering/scripts/rbac_audit.py --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --tasks-dir tasks --json
 
   complexity-gate:
     runs-on: ubuntu-latest
@@ -595,10 +596,10 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
 
 #### 多语言项目：使用 Stack Profiles
 
-`quality-gate.yml` 是 **Python 参考实现**，不是跨栈通用 YAML。其他技术栈从 `templates/ci/profiles/`
+`quality-gate.yml` 是 **Python 参考实现**，不是跨栈通用 YAML。其他技术栈从 `.agents/skills/quality-engineering/assets/templates/ci/profiles/`
 选择参考片段（Python、Node/TS、Go、Java、Rust、.NET、C/C++），只替换工具链、安装、验收/JUnit、
 变异工具和 adapter，保留 Gate 1/3、RBAC、artifact、fail-closed 不变量。
-配置形状见 `templates/ci/quality-gate.config.example.json`；完整采纳说明见
+配置形状见 `.agents/skills/quality-engineering/assets/templates/ci/quality-gate.config.example.json`；完整采纳说明见
 [多语言 CI 参考模板](ci-stack-profiles.zh-CN.md)。
 
 ---
@@ -672,7 +673,7 @@ python tools/quickstart.py --target ../my-new-repo --copy --with-ci
     4. 验收与集成测试套件执行（100% 通过要求）；
     5. Gate 3 验收交叉审查（调用 `verification_linter.py --actual-complexity ... --require-actual-complexity`，将 `03` 的 V(G) 与真实 AST artifact 核对，并核查基本路径覆盖与 MSI $\ge 80\%$，core 为 90%）。
   - **代码合并后测试（Post-merge 流水线）**：主干合入后执行全量主干回归测试、按需手动触发规格收敛（Converge）、持续追踪变异基线与性能 Benchmark；
-  - **CI 资产与工具唯一归属**：权威维护 CI 工作流模板（`quality-gate.yml`、`plan-gate.yml`、`rbac-gate.yml`）与确定性门禁检查工具（`complexity_check.py`、`verification_linter.py`、`tools/mutation_gate.py`）。
+  - **CI 资产与工具唯一归属（自包含）**：权威维护 CI 工作流模板（`quality-gate.yml`、`plan-gate.yml`、`rbac-gate.yml`）、多语言 profiles 与确定性门禁工具（`complexity_check.py`、`verification_linter.py`、`rbac_audit.py`、`mutation_gate.py`）；模板在技能的 `assets/templates/ci/`，脚本在其 `scripts/`，随技能一起安装，不依赖仓库根目录。
 - **与 `test-engineering` 的边界**：仓库级测试策略、测试设计方法与测试数据/环境/flakiness 策略由 `test-engineering` 维护；`quality-engineering` 负责把这些标准落成 CI 流水线、环境与门禁，不改写测试方法学本身。
 
 ### 7.7 `converge`（规格收敛）
@@ -716,7 +717,7 @@ tasks/<task-id>/
 | **Planner** | `tasks/<id>/01-contract.md` | `src/**`, `tests/**`, `04` | 黄金切片、Given-When-Then BDD 规范 |
 | **Dev** | `src/**` (白名单), `02-dev-workspace.md` | `tests/acceptance/**`, `01`, `03`, `04` | 单函数圈复杂度 $V(G) \le 10$, DoD 全通 |
 | **QA** | `tests/acceptance/**`, `tests/integration/**`, `03-qa-verification.md` | `src/**`, `01`, `02`, `04` | 本地集成/BDD E2E、用例数 $\ge V(G)$, 变异得分 $\text{MSI} \ge 80\%$ |
-| **Quality Engineering** | CI 工作流 (`.github/workflows/*`, `templates/ci/*`) | `tasks/`, `src/`, `tests/` (CI 中只读门禁与回归) | 测试环境就绪、CI 门禁与回归全绿、Gate 3 审计全通 |
+| **Quality Engineering** | CI 工作流 (`.github/workflows/*`, `.agents/skills/quality-engineering/assets/templates/ci/*`) | `tasks/`, `src/`, `tests/` (CI 中只读门禁与回归) | 测试环境就绪、CI 门禁与回归全绿、Gate 3 审计全通 |
 | **Test Engineering** | 商定的测试策略文档、测试设计评审记录 | `tasks/`, `src/`, `tests/`, CI 产物（只读） | 测试策略覆盖、设计方法与风险匹配、`DESIGN_READY`/`DESIGN_GAPS` |
 | **Reviewer** | 只读（输出 Review 报告至独立终端/文件） | 任何工程与任务产物 | 反幻觉、正向覆盖率、ADR 架构红线 |
 
@@ -730,7 +731,7 @@ tasks/<task-id>/
 | :--- | :--- | :--- | :--- |
 | **L0** | 提示词规则（`AGENTS.md`、角色 rules、SKILL.md） | 所有 AI Agent / 宿主 | 建议性引导；Agent 易产生幻觉或越界 |
 | **L1** | 本地静态预检脚本（`plan_linter.py`、`verification_linter.py`） | 本地开发环境 | 快速排错；可被开发者手动跳过 |
-| **L2** | CI 自动化门禁流水线（`tools/rbac_audit.py` + `quality-gate.yml`） | Git 托管平台（GitHub/GitLab） | **绝对权威强制**；基于 commit diff，不可篡改 |
+| **L2** | CI 自动化门禁流水线（`.agents/skills/quality-engineering/scripts/rbac_audit.py` + `quality-gate.yml`） | Git 托管平台（GitHub/GitLab） | **绝对权威强制**；基于 commit diff，不可篡改 |
 | **L3** | 分支保护规则（Protected Branches & Required Checks） | 代码仓库设置 | 最终安全屏障；无绿标禁止 Merge |
 
 > **严禁声称**：切勿宣称本地提示词能实现“物理强制隔离”。团队的绝对安全必须建立在 L2 CI RBAC 审计与 L3 分支保护之上。
@@ -774,10 +775,10 @@ python .agents/skills/quality-engineering/scripts/verification_linter.py \
   --require-actual-complexity --strict --json
 
 # 5. 运行 RBAC 角色边界审计
-python tools/rbac_audit.py --base HEAD~1 --role dev --tasks-dir tasks
+python .agents/skills/quality-engineering/scripts/rbac_audit.py --base HEAD~1 --role dev --tasks-dir tasks
 
 # 6. 运行变异硬门禁（需要项目提供 MUTATION_COMMAND 与归一化报告）
-python tools/mutation_gate.py check --report artifacts/mutation-report.json --min-msi 80
+python .agents/skills/quality-engineering/scripts/mutation_gate.py check --report artifacts/mutation-report.json --min-msi 80
 ```
 
 ---
@@ -789,7 +790,7 @@ python tools/mutation_gate.py check --report artifacts/mutation-report.json --mi
 - [英文技能索引与流水线说明（README.md）](../.agents/skills/README.md)
 - [技能类别索引（skills/README.md）](../skills/README.md)
 - [Brownfield 增量变更与规格收敛指南](brownfield-convergence.zh-CN.md)
-- [CI 自动化门禁配置与工作流模板](../templates/ci/README.md)
+- [CI 自动化门禁配置与工作流模板](../.agents/skills/quality-engineering/assets/templates/ci/README.md)
 - [多语言 CI 参考模板（Stack Profiles）](ci-stack-profiles.zh-CN.md)
 - [文档索引](README.md)
 - [Gate 3 本地预检](gate3-precheck.zh-CN.md)

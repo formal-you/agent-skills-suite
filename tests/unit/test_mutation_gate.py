@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for tools/mutation_gate.py (fail-closed mutation gate)."""
+"""Tests for the quality-engineering mutation_gate.py script (fail-closed mutation gate)."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-TOOL = REPO_ROOT / "tools" / "mutation_gate.py"
+TOOL = REPO_ROOT / ".agents" / "skills" / "quality-engineering" / "scripts" / "mutation_gate.py"
 
 
 def run_tool(*args: str) -> subprocess.CompletedProcess:

@@ -13,9 +13,11 @@ The installer copies or links, from this checkout into --target:
 
     .agents/skills/<name>   (selected skills; --dest controls the destination root)
     .agents/rules/*.md      (unless --no-with-rules)
-    tools/rbac_audit.py     (unless --no-with-audit)
-    tools/mutation_gate.py  (unless --no-with-audit)
-    templates/ci/*.yml      (only with --with-ci, into <target>/.github/workflows/)
+    .github/workflows/*.yml (only with --with-ci)
+
+The gate scripts and CI templates live inside the quality-engineering skill, so --with-ci reads
+templates/ci/*.yml from <skill>/assets/templates/ci/ and guarantees that skill is selected. It
+never writes anything outside .agents/skills/, .agents/rules/ and .github/workflows/.
 
 It never writes outside --target, refuses to replace an existing item without --force, and
 skips symlinks that already point at the same source. The file is self-contained: it needs
@@ -37,13 +39,19 @@ import shutil
 import sys
 from pathlib import Path
 
-VERSION = "3.0.0"
+VERSION = "4.0.0"
 DEFAULT_DEST = ".agents/skills"
+QUALITY_ENGINEERING = "quality-engineering"
 SKIP_DIRS = {"__pycache__", ".git"}
 SHELL_SPECIAL = set(' \t"\'$&|;<>()' + chr(96))
 
 TOOL_PATH = Path(__file__).resolve()
 SOURCE_ROOT = TOOL_PATH.parent.parent
+
+
+def ci_templates_dir():
+    """CI workflow templates bundled inside the quality-engineering skill."""
+    return SOURCE_ROOT / ".agents" / "skills" / QUALITY_ENGINEERING / "assets" / "templates" / "ci"
 
 
 class UsageError(Exception):
@@ -166,7 +174,7 @@ def parse_skills(raw, names):
     return [name for name in names if name in requested]
 
 
-def build_items(target, dest_root, selected, with_rules, with_audit, with_ci):
+def build_items(target, dest_root, selected, with_rules, with_ci):
     """Return (items, problems) where problems are source-side failure messages."""
     items = []
     problems = []
@@ -182,22 +190,15 @@ def build_items(target, dest_root, selected, with_rules, with_audit, with_ci):
         for path in rule_files:
             items.append(InstallItem("rule", path.name, path, rules_dest / path.name))
 
-    if with_audit:
-        for tool_name in ("rbac_audit.py", "mutation_gate.py"):
-            tool_source = SOURCE_ROOT / "tools" / tool_name
-            if tool_source.is_file():
-                items.append(
-                    InstallItem("audit", tool_name, tool_source, target / "tools" / tool_name)
-                )
-            else:
-                problems.append("tools/" + tool_name + " is missing from the suite checkout")
-
     if with_ci:
-        ci_root = SOURCE_ROOT / "templates" / "ci"
+        ci_root = ci_templates_dir()
         workflows_dest = target / ".github" / "workflows"
         workflows = sorted(ci_root.glob("*.yml")) if ci_root.is_dir() else []
         if not workflows:
-            problems.append("no CI workflow templates found at " + str(ci_root))
+            problems.append(
+                "no CI workflow templates found at " + str(ci_root)
+                + " (is the quality-engineering skill present?)"
+            )
         for path in workflows:
             items.append(InstallItem("ci", path.name, path, workflows_dest / path.name))
     return items, problems
@@ -301,8 +302,6 @@ def print_oneliner_command(args):
         parts.append("--with-ci")
     if not args.with_rules:
         parts.append("--no-with-rules")
-    if not args.with_audit:
-        parts.append("--no-with-audit")
     return runner + " " + " ".join(_quote(part) for part in parts)
 
 
@@ -342,19 +341,16 @@ def build_parser():
     parser.add_argument(
         "--with-ci",
         action="store_true",
-        help="also install templates/ci/*.yml into <target>/.github/workflows/",
+        help=(
+            "install the quality-engineering skill's bundled CI workflows into "
+            "<target>/.github/workflows/ (implies --skills quality-engineering)"
+        ),
     )
     parser.add_argument(
         "--with-rules",
         action=argparse.BooleanOptionalAction,
         default=True,
         help="install .agents/rules (default: on)",
-    )
-    parser.add_argument(
-        "--with-audit",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="install tools/rbac_audit.py and tools/mutation_gate.py (default: on)",
     )
     parser.add_argument(
         "--print-oneliner",
@@ -377,10 +373,17 @@ def main(argv=None):
         target = resolve_target(args.target)
         dest = validate_dest(args.dest)
         dest_root = target / dest
+        if args.with_ci and dest != Path(DEFAULT_DEST):
+            raise UsageError(
+                "--with-ci requires the default --dest (" + DEFAULT_DEST + "): the workflow "
+                "templates call .agents/skills/... scripts"
+            )
 
         skills = available_skills()
         names = [skill.name for skill in skills]
         selected_names = parse_skills(args.skills, names)
+        if args.with_ci and QUALITY_ENGINEERING in names and QUALITY_ENGINEERING not in selected_names:
+            selected_names.append(QUALITY_ENGINEERING)
         selected = [skill for skill in skills if skill.name in selected_names]
 
         items, problems = build_items(
@@ -388,7 +391,6 @@ def main(argv=None):
             dest_root,
             selected,
             args.with_rules,
-            args.with_audit,
             args.with_ci,
         )
         if problems:
@@ -420,7 +422,6 @@ def main(argv=None):
             "dry_run": bool(args.dry_run),
             "with_ci": bool(args.with_ci),
             "with_rules": bool(args.with_rules),
-            "with_audit": bool(args.with_audit),
             "results": results,
             "installed": installed,
             "skipped": skipped,

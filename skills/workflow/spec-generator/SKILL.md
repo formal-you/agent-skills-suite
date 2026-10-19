@@ -55,12 +55,12 @@ The aggregate file is authoritative; the bundle is its modular copy.
 3. **Decide every fork.** For each `FORK-*`, evaluate at least two options, record the
    decision and its consequences as an ADR under `.specs/adr/`. An unresolved fork must
    be reported, not silently chosen.
-4. **Scaffold (optional).** From this skill directory:
-   `python scripts/scaffold.py --out .specs` (add `--dry-run` first).
+4. **Scaffold (optional).** From the repository root:
+   `python .agents/skills/spec-generator/scripts/scaffold.py --out .specs` (add `--dry-run` first).
 5. **Author the artifacts.** Follow [references/spec-format.md](references/spec-format.md)
    and the project conventions in [references/project-conventions.md](references/project-conventions.md).
    Replace every `{{UPPER_SNAKE}}` placeholder; keep anchors consistent with the PRD.
-6. **Lint (optional).** `python scripts/lint_spec.py .specs` (or the aggregate file).
+6. **Lint (optional).** `python .agents/skills/spec-generator/scripts/lint_spec.py .specs` (or the aggregate file).
    Fix every error before handing off.
 7. **Hand off.** State the ADR list, the spec paths, and any open technical questions.
    The next step is `task-decomposition`.
@@ -68,14 +68,14 @@ The aggregate file is authoritative; the bundle is its modular copy.
 ## Tooling (optional)
 
 All helpers are stdlib-only Python and resolve paths from their own location, so the
-skill directory can be copied anywhere. Run them with `--help` instead of reading the
-source.
+skill directory can be copied anywhere. Run them from the repository root with
+`--help` instead of reading the source.
 
 | Command | Purpose |
 | :--- | :--- |
-| `python scripts/scaffold.py --out .specs [--dry-run] [--force] [--json]` | Copy templates into the output tree; creates `.specs/adr/` |
-| `python scripts/lint_spec.py .specs [--json]` | Structural gate: placeholders, anchors, required tokens, Mermaid blocks, links, ADR sections |
-| `python scripts/engine.py run --prd .specs/01-prd.md --output-dir .specs` | Optional engine proxy |
+| `python .agents/skills/spec-generator/scripts/scaffold.py --out .specs [--dry-run] [--force] [--json]` | Copy templates into the output tree; creates `.specs/adr/` |
+| `python .agents/skills/spec-generator/scripts/lint_spec.py .specs [--json]` | Structural gate: placeholders, anchors, required tokens, Mermaid blocks, links, ADR sections |
+| `python .agents/skills/spec-generator/scripts/engine.py run --prd .specs/01-prd.md --output-dir .specs` | Optional engine proxy |
 
 Exit codes: `0` success, `1` content/gate failure, `2` optional dependency or usage
 unavailable, `3` unexpected error.
